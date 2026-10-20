@@ -1,6 +1,9 @@
-import { NotFoundError, delay } from '@/lib/mock-db'
+import { NotFoundError, db, delay } from '@/lib/mock-db'
 
-import type { NewSpace, OpeningHours, Space, SpaceFilters, SpaceHost } from '../types'
+import type { NewSpace, OpeningHours, Space, SpaceFilters, SpaceHost, Weekday } from '../types'
+
+// Spaces as stored; availableDesks is computed on every read.
+type StoredSpace = Omit<Space, 'availableDesks'>
 
 // Host accounts from the shared users table (src/lib/mock-db.ts).
 // The real backend takes the host of a new space from the session; the mock uses Marko.
@@ -16,9 +19,11 @@ const weekdays = (open: string, close: string, weekend: Pick<OpeningHours, 'sat'
   ...weekend,
 })
 
-const photos = (seed: string) => [1, 2, 3].map((n) => `https://picsum.photos/seed/zona-${seed}-${n}/800/500`)
+// Unsplash photos of real offices and halls (free to use); the first one is the cover.
+const photos = (...ids: string[]) =>
+  ids.map((id) => `https://images.unsplash.com/photo-${id}?w=800&h=500&fit=crop`)
 
-let spaces: Space[] = [
+let spaces: StoredSpace[] = [
   {
     id: 1,
     name: 'Hub Morača Coworking',
@@ -30,7 +35,7 @@ let spaces: Space[] = [
     pricePerHour: 3,
     capacity: 24,
     deskCount: 24,
-    images: photos('hub-moraca'),
+    images: photos('1527192491265-7e15c55b1ed2', '1604328698692-f76ea9498e76', '1556761175-5973dc0f32e7'),
     openingHours: weekdays('08:00', '20:00', { sat: { open: '10:00', close: '16:00' }, sun: null }),
     status: 'listed',
     host: MOCK_HOST,
@@ -47,7 +52,7 @@ let spaces: Space[] = [
     pricePerHour: 4,
     capacity: 2,
     deskCount: 2,
-    images: photos('njegoseva'),
+    images: photos('1497215842964-222b430dc094', '1497032628192-86f99bcd76bc', '1524758631624-e2822e304c36'),
     openingHours: weekdays('09:00', '18:00', { sat: null, sun: null }),
     status: 'listed',
     host: MOCK_HOST,
@@ -63,7 +68,7 @@ let spaces: Space[] = [
     address: 'Bulevar Džordža Vašingtona 98',
     pricePerHour: 18,
     capacity: 8,
-    images: photos('city-kvart'),
+    images: photos('1462826303086-329426d1aef5', '1497366811353-6870744d04b2'),
     openingHours: weekdays('08:00', '21:00', { sat: { open: '09:00', close: '15:00' }, sun: null }),
     status: 'listed',
     host: MILICA,
@@ -79,7 +84,7 @@ let spaces: Space[] = [
     address: 'Ulica Vaka Đurovića 5',
     pricePerHour: 30,
     capacity: 14,
-    images: photos('riverside'),
+    images: photos('1431540015161-0bf868a2d407', '1517502884422-41eaead166d4', '1521737604893-d14cc237f11d'),
     openingHours: weekdays('08:00', '20:00', { sat: null, sun: null }),
     status: 'listed',
     host: MILICA,
@@ -95,7 +100,7 @@ let spaces: Space[] = [
     address: 'Hercegovačka 30',
     pricePerHour: 12,
     capacity: 4,
-    images: photos('hercegovacka'),
+    images: photos('1600508774634-4e11d34730e2', '1568992687947-868a62a9f521', '1497366216548-37526070297c'),
     openingHours: weekdays('07:00', '22:00', { sat: { open: '09:00', close: '18:00' }, sun: null }),
     status: 'draft',
     host: MOCK_HOST,
@@ -111,7 +116,7 @@ let spaces: Space[] = [
     address: 'Bulevar Ivana Crnojevića 64',
     pricePerHour: 85,
     capacity: 120,
-    images: photos('event-loft'),
+    images: photos('1505373877841-8d25f7d46678', '1540575467063-178a50c2df87', '1511578314322-379afb476865'),
     openingHours: weekdays('10:00', '23:00', {
       sat: { open: '10:00', close: '23:00' },
       sun: { open: '12:00', close: '20:00' },
@@ -122,16 +127,43 @@ let spaces: Space[] = [
   },
 ]
 
-const matches = (space: Space, { search = '', category, city, hostId }: SpaceFilters) =>
+const WEEKDAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
+
+const hourOf = (time: string) => Number(time.slice(0, 2))
+
+// Free desks right now: deskCount minus confirmed bookings (shared table in src/lib/mock-db.ts) that
+// cover the current hour. The real backend does this in the GET /spaces query.
+function availableDesks(space: StoredSpace, now = new Date()) {
+  if (space.category !== 'desk') return null
+  const hours = space.openingHours[WEEKDAYS[now.getDay()]]
+  const hour = now.getHours()
+  if (!hours || hour < hourOf(hours.open) || hour >= hourOf(hours.close)) return null
+
+  const date = new Intl.DateTimeFormat('en-CA').format(now)
+  const taken = db.bookings.filter(
+    (b) =>
+      b.spaceId === space.id &&
+      b.date === date &&
+      b.status === 'confirmed' &&
+      hourOf(b.startTime) <= hour &&
+      hour < hourOf(b.endTime),
+  ).length
+  return Math.max((space.deskCount ?? 0) - taken, 0)
+}
+
+const withAvailability = (space: StoredSpace): Space => ({ ...space, availableDesks: availableDesks(space) })
+
+const matches = (space: StoredSpace, { search = '', category, city, hostId, status }: SpaceFilters) =>
   space.name.toLowerCase().includes(search.toLowerCase()) &&
   (!category || space.category === category) &&
   (!city || space.city.toLowerCase() === city.toLowerCase()) &&
-  (hostId === undefined || space.host.id === hostId)
+  (hostId === undefined || space.host.id === hostId) &&
+  (status === undefined || space.status === status)
 
 export class InvalidSpaceError extends Error {}
 
 // A desk space needs a whole number of desks (at least 1); other categories never carry a desk count.
-function withDeskRule(space: Space): Space {
+function withDeskRule(space: StoredSpace): StoredSpace {
   if (space.category !== 'desk') return { ...space, deskCount: undefined }
   if (!Number.isInteger(space.deskCount) || (space.deskCount ?? 0) < 1) {
     throw new InvalidSpaceError('A desk space needs at least one desk')
@@ -139,13 +171,21 @@ function withDeskRule(space: Space): Space {
   return space
 }
 
-export const spacesApi = {
-  list: (filters: SpaceFilters = {}) => delay(spaces.filter((s) => matches(s, filters))),
+function findSpace(id: number) {
+  const space = spaces.find((s) => s.id === id)
+  if (!space) throw new NotFoundError('Space', id)
+  return space
+}
 
-  get: (id: number) => {
-    const space = spaces.find((s) => s.id === id)
-    if (!space) return Promise.reject(new NotFoundError('Space', id))
-    return delay(space)
+export const spacesApi = {
+  list: async (filters: SpaceFilters = {}) => {
+    await delay(undefined)
+    return spaces.filter((s) => matches(s, filters)).map(withAvailability)
+  },
+
+  get: async (id: number) => {
+    await delay(undefined)
+    return withAvailability(findSpace(id))
   },
 
   create: async (input: NewSpace) => {
@@ -157,18 +197,19 @@ export const spacesApi = {
       createdAt: new Date().toISOString().slice(0, 10),
     })
     spaces = [space, ...spaces]
-    return space
+    return withAvailability(space)
   },
 
   update: async (id: number, changes: Partial<NewSpace>) => {
-    const current = await spacesApi.get(id)
-    const updated = withDeskRule({ ...current, ...changes })
+    await delay(undefined)
+    const updated = withDeskRule({ ...findSpace(id), ...changes })
     spaces = spaces.map((s) => (s.id === id ? updated : s))
-    return updated
+    return withAvailability(updated)
   },
 
-  remove: (id: number) => {
+  remove: async (id: number) => {
+    await delay(undefined)
+    findSpace(id)
     spaces = spaces.filter((s) => s.id !== id)
-    return delay(undefined)
   },
 }

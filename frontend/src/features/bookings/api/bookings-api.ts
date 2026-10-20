@@ -1,150 +1,11 @@
-import { NotFoundError, delay } from '@/lib/mock-db'
+import { NotFoundError, db, delay } from '@/lib/mock-db'
 
-import type {
-  BookableSpace,
-  Booking,
-  BookingFilters,
-  BookingGuest,
-  BookingStatus,
-  NewBooking,
-} from '../types'
+import type { Booking, BookingGuest, BookingStatus } from '@/lib/booking'
+
+import type { BookableSpace, BookingFilters, NewBooking } from '../types'
 
 // Ana Petrović, a guest from the shared users table (src/lib/mock-db.ts). The real backend takes the guest from the session.
 const MOCK_GUEST: BookingGuest = { id: 1, name: 'Ana Petrović' }
-const ANA = MOCK_GUEST
-const JELENA: BookingGuest = { id: 3, name: 'Jelena Nikolić' }
-
-const HUB = { id: 1, name: 'Hub Morača Coworking', address: 'Bulevar Svetog Petra Cetinjskog 9' }
-const STUDIO = { id: 2, name: 'Njegoševa Studio Desks', address: 'Njegoševa 24' }
-const GLASS = { id: 3, name: 'Glass Room at City Kvart', address: 'Bulevar Džordža Vašingtona 98' }
-const RIVERSIDE = { id: 4, name: 'Riverside Boardroom', address: 'Ulica Vaka Đurovića 5' }
-const LOFT = { id: 6, name: 'Preko Morače Event Loft', address: 'Bulevar Ivana Crnojevića 64' }
-
-// Njegoševa has 2 desks, so 10:00–12:00 on 22 Oct is full. Booking 5 overlaps the confirmed booking 4
-// in the Glass Room, so confirming it is refused.
-let bookings: Booking[] = [
-  {
-    id: 1,
-    spaceId: HUB.id,
-    space: HUB,
-    guest: ANA,
-    date: '2026-10-21',
-    startTime: '09:00',
-    endTime: '13:00',
-    totalPrice: 12,
-    status: 'confirmed',
-    createdAt: '2026-10-15',
-  },
-  {
-    id: 2,
-    spaceId: STUDIO.id,
-    space: STUDIO,
-    guest: ANA,
-    date: '2026-10-22',
-    startTime: '10:00',
-    endTime: '13:00',
-    totalPrice: 12,
-    status: 'confirmed',
-    createdAt: '2026-10-16',
-  },
-  {
-    id: 3,
-    spaceId: STUDIO.id,
-    space: STUDIO,
-    guest: JELENA,
-    date: '2026-10-22',
-    startTime: '09:00',
-    endTime: '12:00',
-    totalPrice: 12,
-    status: 'confirmed',
-    createdAt: '2026-10-17',
-  },
-  {
-    id: 4,
-    spaceId: GLASS.id,
-    space: GLASS,
-    guest: ANA,
-    date: '2026-10-23',
-    startTime: '14:00',
-    endTime: '16:00',
-    totalPrice: 36,
-    status: 'confirmed',
-    createdAt: '2026-10-18',
-  },
-  {
-    id: 5,
-    spaceId: GLASS.id,
-    space: GLASS,
-    guest: JELENA,
-    date: '2026-10-23',
-    startTime: '15:00',
-    endTime: '17:00',
-    totalPrice: 36,
-    status: 'pending',
-    createdAt: '2026-10-19',
-  },
-  {
-    id: 6,
-    spaceId: RIVERSIDE.id,
-    space: RIVERSIDE,
-    guest: JELENA,
-    date: '2026-10-27',
-    startTime: '09:00',
-    endTime: '12:00',
-    totalPrice: 90,
-    status: 'pending',
-    createdAt: '2026-10-19',
-  },
-  {
-    id: 7,
-    spaceId: LOFT.id,
-    space: LOFT,
-    guest: ANA,
-    date: '2026-10-24',
-    startTime: '18:00',
-    endTime: '23:00',
-    totalPrice: 425,
-    status: 'confirmed',
-    createdAt: '2026-10-10',
-  },
-  {
-    id: 8,
-    spaceId: LOFT.id,
-    space: LOFT,
-    guest: JELENA,
-    date: '2026-10-30',
-    startTime: '17:00',
-    endTime: '21:00',
-    totalPrice: 340,
-    status: 'cancelled',
-    createdAt: '2026-10-12',
-  },
-  {
-    id: 9,
-    spaceId: HUB.id,
-    space: HUB,
-    guest: JELENA,
-    date: '2026-10-26',
-    startTime: '13:00',
-    endTime: '18:00',
-    totalPrice: 15,
-    status: 'pending',
-    createdAt: '2026-10-20',
-  },
-  {
-    id: 10,
-    spaceId: RIVERSIDE.id,
-    space: RIVERSIDE,
-    guest: ANA,
-    date: '2026-10-21',
-    startTime: '16:00',
-    endTime: '18:00',
-    totalPrice: 60,
-    status: 'cancelled',
-    createdAt: '2026-10-14',
-  },
-]
-
 export class InvalidBookingError extends Error {}
 
 // 409 on the real backend: the slot has no room left for another confirmed booking.
@@ -181,7 +42,7 @@ function assertSlotAvailable(slot: NewBooking, space: BookableSpace, ignoreId?: 
   const { start, end } = slotHours(slot, space)
   const limit = space.category === 'desk' ? (space.deskCount ?? 0) : 1
 
-  const confirmed = bookings
+  const confirmed = db.bookings
     .filter(
       (b) => b.id !== ignoreId && b.spaceId === space.id && b.date === slot.date && b.status === 'confirmed',
     )
@@ -210,10 +71,10 @@ const byDateAndTime = (a: Booking, b: Booking) =>
 
 export const bookingsApi = {
   list: (filters: BookingFilters = {}) =>
-    delay(bookings.filter((b) => matches(b, filters)).sort(byDateAndTime)),
+    delay(db.bookings.filter((b) => matches(b, filters)).sort(byDateAndTime)),
 
   get: (id: number) => {
-    const booking = bookings.find((b) => b.id === id)
+    const booking = db.bookings.find((b) => b.id === id)
     if (!booking) return Promise.reject(new NotFoundError('Booking', id))
     return delay(booking)
   },
@@ -233,7 +94,7 @@ export const bookingsApi = {
       status: 'pending',
       createdAt: new Date().toISOString().slice(0, 10),
     }
-    bookings = [...bookings, booking]
+    db.bookings = [...db.bookings, booking]
     return booking
   },
 
@@ -249,7 +110,7 @@ export const bookingsApi = {
       assertSlotAvailable(booking, space, booking.id)
     }
     const updated: Booking = { ...booking, status: changes.status }
-    bookings = bookings.map((b) => (b.id === id ? updated : b))
+    db.bookings = db.bookings.map((b) => (b.id === id ? updated : b))
     return updated
   },
 
@@ -257,6 +118,6 @@ export const bookingsApi = {
   remove: async (id: number) => {
     const booking = await bookingsApi.get(id)
     if (booking.status !== 'pending') throw new InvalidBookingError('Only a pending booking can be deleted')
-    bookings = bookings.filter((b) => b.id !== id)
+    db.bookings = db.bookings.filter((b) => b.id !== id)
   },
 }

@@ -75,6 +75,7 @@ A space a host rents out by the hour. Code: `frontend/src/features/spaces/` (`ty
 | status | `listed` \| `draft` | yes | only `listed` spaces are visible to guests |
 | host | `{ id: number, name: string }` | yes | read-only; set by the backend from the signed-in user, never sent by the client |
 | createdAt | date | yes | assigned by the backend |
+| availableDesks | integer ≥ 0 \| `null` | yes | read-only, computed on every read: `deskCount` minus confirmed bookings covering the current hour; `null` for non-desk spaces and while the space is closed. Never sent by the client |
 
 **Booking unit (derived from `category`, not stored):** a `desk` space is booked one desk per booking
 (the guest does not pick which desk) and costs `pricePerHour × hours`. `meeting-room`, `office` and
@@ -88,16 +89,19 @@ have many spaces. A space has many bookings (see **Booking**).
 with `isHost = true` can create a space; only its host can edit or delete it, or see it while it is a
 `draft`.
 
-**API the frontend expects:** `GET /spaces?search=&category=&city=&hostId=` (search matches the name; `hostId` lists one host's
-spaces),
+**API the frontend expects:** `GET /spaces?search=&category=&city=&hostId=&status=` (search matches
+the name; `hostId` lists one host's spaces; `status=listed` is what guests use, e.g. on Home),
 `GET /spaces/:id` (404 if it does not exist), `POST /spaces` (all fields except `id`, `host`,
-`createdAt`), `PATCH /spaces/:id` (any subset of those fields), `DELETE /spaces/:id`. A `desk` space
+`createdAt`, `availableDesks`), `PATCH /spaces/:id` (any subset of those fields), `DELETE /spaces/:id`. A `desk` space
 without a valid `deskCount` is rejected with 400; for other categories `deskCount` is dropped.
 
 ## Booking
 
 A guest books a space for one date and a time slot in whole hours. Code: `frontend/src/features/bookings/`
-(`types.ts`, `api/bookings-api.ts`, `api/use-bookings.ts`).
+(`types.ts`, `api/bookings-api.ts`, `api/use-bookings.ts`). The `Booking` type is in
+`frontend/src/lib/booking.ts` and the mock rows in `frontend/src/lib/mock-db.ts`, because the spaces
+mock reads them to compute `availableDesks`. The backend does the same with a query; guests never get
+other people's bookings.
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
