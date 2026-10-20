@@ -4,7 +4,9 @@ import { CalendarDays, Clock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-import { STATUS_LABELS, type Booking } from '../types'
+import type { Booking } from '@/lib/booking'
+
+import { STATUS_LABELS } from '../types'
 
 const statusBadge = cva('', {
   variants: {

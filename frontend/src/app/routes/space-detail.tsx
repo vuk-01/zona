@@ -1,9 +1,94 @@
-import { PageTitle } from '@/components/layout/page-title'
+import { Link, useParams } from 'react-router'
 
+import { PageTitle } from '@/components/layout/page-title'
+import { Button } from '@/components/ui/button'
+import { useCurrentUser } from '@/features/auth/api/use-auth'
+import { BookingForm } from '@/features/bookings/components/booking-form'
+import { PopularTimes } from '@/features/bookings/components/popular-times'
+import { useSpace } from '@/features/spaces/api/use-spaces'
+import { OpeningHours } from '@/features/spaces/components/opening-hours'
+import { SpaceDetailSkeleton } from '@/features/spaces/components/space-detail-skeleton'
+import { SpaceGallery } from '@/features/spaces/components/space-gallery'
+import { SpaceSummary } from '@/features/spaces/components/space-summary'
+import { canView } from '@/features/spaces/types'
+import { HostCard } from '@/features/users/components/host-card'
+import { NotFoundError } from '@/lib/mock-db'
+
+const linkClass =
+  'rounded-sm font-semibold text-primary underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring'
+
+// A space: gallery, details, opening hours and host on the left; booking on the right (fixed bar on phones).
 export function SpaceDetail() {
+  const { id } = useParams()
+  // "/spaces/abc" gives NaN, which the API answers with 404 like any unknown id
+  const { data: space, isLoading, error, refetch, isRefetching } = useSpace(Number(id))
+  const { data: user, isPending: userPending } = useCurrentUser()
+
+  if (isLoading || (space && space.status === 'draft' && userPending)) return <SpaceDetailSkeleton />
+
+  if (error instanceof NotFoundError || (space && !canView(space, user?.id))) {
+    return (
+      <section className="flex flex-col items-start gap-4">
+        <PageTitle>Space not found</PageTitle>
+        <p className="text-muted-foreground">This space does not exist or is no longer listed.</p>
+        <Link to="/spaces" className={linkClass}>
+          Explore other spaces
+        </Link>
+      </section>
+    )
+  }
+
+  if (error || !space) {
+    return (
+      <section role="alert" className="flex flex-col items-start gap-4">
+        <PageTitle>Space details</PageTitle>
+        <p className="text-destructive">This space failed to load.</p>
+        <Button variant="outline" className="rounded-full" disabled={isRefetching} onClick={() => refetch()}>
+          Try again
+        </Button>
+      </section>
+    )
+  }
+
   return (
-    <section>
-      <PageTitle>Space details</PageTitle>
+    // Phones: overview, booking, then the rest (pb-24 leaves room for the fixed booking bar).
+    // lg: two columns, booking on the right next to both parts.
+    <section className="flex flex-col gap-8 pb-24 md:pb-0 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_1fr] lg:gap-x-12">
+      <div className="flex min-w-0 flex-col gap-8">
+        <div className="flex flex-col gap-4">
+          <PageTitle>{space.name}</PageTitle>
+          <SpaceSummary space={space} />
+        </div>
+        <SpaceGallery images={space.images} name={space.name} />
+      </div>
+
+      <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
+        <BookingForm space={space} user={userPending ? undefined : (user ?? null)} />
+      </aside>
+
+      <div className="flex min-w-0 flex-col gap-8">
+        {space.description && (
+          <section aria-labelledby="about-heading" className="flex flex-col gap-3">
+            <h2 id="about-heading" className="text-lg font-semibold">
+              About this space
+            </h2>
+            <p className="text-muted-foreground">{space.description}</p>
+          </section>
+        )}
+        <section aria-labelledby="hours-heading" className="flex flex-col gap-3">
+          <h2 id="hours-heading" className="text-lg font-semibold">
+            Opening hours
+          </h2>
+          <OpeningHours hours={space.openingHours} />
+        </section>
+        <PopularTimes space={space} />
+        <section aria-labelledby="host-heading" className="flex flex-col gap-3">
+          <h2 id="host-heading" className="text-lg font-semibold">
+            Your host
+          </h2>
+          <HostCard userId={space.host.id} />
+        </section>
+      </div>
     </section>
   )
 }

@@ -81,7 +81,8 @@
   --sidebar-accent: oklch(0.22 0.05 270);
   --sidebar-accent-foreground: oklch(0.96 0.01 262);
   --sidebar-border: oklch(0.22 0.05 270);
-  --chart-1: oklch(0.68 0.17 262);
+  /* L 0.66: inside the dark-mode band for chart marks (dataviz validator), ≥3:1 on the dark card */
+  --chart-1: oklch(0.66 0.17 262);
   --chart-2: oklch(0.35 0.06 266);
   --shadow-color: oklch(0 0 0 / 0.3);
 }
@@ -118,6 +119,8 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
+  /* 4px: rounded data-end of chart bars (Popular time) */
+  --radius-xs: calc(var(--radius) - 12px);
   --radius-sm: calc(var(--radius) - 8px);
   --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
