@@ -1,18 +1,20 @@
 import { ArrowLeftRight, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import type { User } from '@/lib/user'
+import type { User, UserMode } from '@/lib/user'
 
 import { useSwitchMode } from '../api/use-users'
 
 type ModeSwitchProps = {
   // The signed-in user; the route passes it in from the auth feature.
   user: User
+  // Called with the new mode once it is saved; the app shell uses it to go to that mode's home.
+  onSwitched?: (mode: UserMode) => void | Promise<void>
 }
 
 // "Switch to hosting" / "Switch to renting" in Profile. The first switch to hosting turns hosting on.
-export function ModeSwitch({ user }: ModeSwitchProps) {
-  const switchMode = useSwitchMode()
+export function ModeSwitch({ user, onSwitched }: ModeSwitchProps) {
+  const switchMode = useSwitchMode(onSwitched)
   const nextMode = user.mode === 'host' ? 'guest' : 'host'
 
   return (

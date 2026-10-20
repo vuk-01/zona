@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
@@ -26,8 +26,7 @@ type SignupValues = z.infer<typeof signupSchema>
 
 // No role choice here: every new account starts as a guest (see DESIGN.md).
 export function SignupForm() {
-  const navigate = useNavigate()
-  const { redirectTo, search } = useRedirectTarget()
+  const { search } = useRedirectTarget()
   const signup = useSignup()
   const {
     register,
@@ -36,7 +35,8 @@ export function SignupForm() {
   } = useForm<SignupValues>({ resolver: zodResolver(signupSchema) })
 
   const onSubmit = (values: SignupValues) =>
-    signup.mutate(values, { onSuccess: () => navigate(redirectTo, { replace: true }) })
+    // No navigate here: the user lands in the cache and GuestOnly (around this form) redirects
+    signup.mutate(values)
 
   return (
     <form noValidate onSubmit={handleSubmit(onSubmit)} className="grid gap-4">
