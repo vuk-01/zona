@@ -153,8 +153,19 @@ function availableDesks(space: StoredSpace, now = new Date()) {
 
 const withAvailability = (space: StoredSpace): Space => ({ ...space, availableDesks: availableDesks(space) })
 
-const matches = (space: StoredSpace, { search = '', category, city, hostId, status }: SpaceFilters) =>
-  space.name.toLowerCase().includes(search.toLowerCase()) &&
+// search matches the name or the city ("glass", "podgorica").
+const matchesSearch = (space: StoredSpace, search: string) => {
+  const term = search.trim().toLowerCase()
+  return space.name.toLowerCase().includes(term) || space.city.toLowerCase().includes(term)
+}
+
+const matches = (
+  space: StoredSpace,
+  { search = '', category, city, hostId, status, minPrice, maxPrice }: SpaceFilters,
+) =>
+  matchesSearch(space, search) &&
+  (minPrice === undefined || space.pricePerHour >= minPrice) &&
+  (maxPrice === undefined || space.pricePerHour <= maxPrice) &&
   (!category || space.category === category) &&
   (!city || space.city.toLowerCase() === city.toLowerCase()) &&
   (hostId === undefined || space.host.id === hostId) &&

@@ -66,4 +66,19 @@ export type SpaceFilters = {
   hostId?: number
   // Guests only see 'listed' spaces; drafts are for their host.
   status?: SpaceStatus
+  // Price per hour in EUR, both inclusive.
+  minPrice?: number
+  maxPrice?: number
 }
+
+// Price chips on Explore (?price=10-30). They map to minPrice/maxPrice, so the API stays generic.
+export type PriceRange = 'under-10' | '10-30' | 'over-30'
+
+export const PRICE_RANGES: Record<PriceRange, { label: string; minPrice?: number; maxPrice?: number }> = {
+  'under-10': { label: 'Under €10', maxPrice: 9.99 },
+  '10-30': { label: '€10–30', minPrice: 10, maxPrice: 30 },
+  'over-30': { label: 'Over €30', minPrice: 30.01 },
+}
+
+export const isPriceRange = (value: string | null): value is PriceRange =>
+  value !== null && Object.hasOwn(PRICE_RANGES, value)

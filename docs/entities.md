@@ -89,8 +89,11 @@ have many spaces. A space has many bookings (see **Booking**).
 with `isHost = true` can create a space; only its host can edit or delete it, or see it while it is a
 `draft`.
 
-**API the frontend expects:** `GET /spaces?search=&category=&city=&hostId=&status=` (search matches
-the name; `hostId` lists one host's spaces; `status=listed` is what guests use, e.g. on Home),
+**API the frontend expects:** `GET /spaces?search=&category=&city=&hostId=&status=&minPrice=&maxPrice=`
+(`search` matches the name or the city, case-insensitive; `hostId` lists one host's spaces;
+`status=listed` is what guests use, e.g. on Home and Explore; `minPrice`/`maxPrice` filter
+`pricePerHour` in EUR, both inclusive; Explore's price chips send Under €10 → `maxPrice=9.99`,
+€10–30 → `minPrice=10&maxPrice=30`, Over €30 → `minPrice=30.01`),
 `GET /spaces/:id` (404 if it does not exist), `POST /spaces` (all fields except `id`, `host`,
 `createdAt`, `availableDesks`), `PATCH /spaces/:id` (any subset of those fields), `DELETE /spaces/:id`. A `desk` space
 without a valid `deskCount` is rejected with 400; for other categories `deskCount` is dropped.
