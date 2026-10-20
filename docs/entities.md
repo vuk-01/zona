@@ -86,18 +86,24 @@ have many spaces. A space has many bookings (see **Booking**).
 
 **Access rules:** anyone, signed in or not, can list and view `listed` spaces; only a signed-in user
 with `isHost = true` can create a space; only its host can edit or delete it, or see it while it is a
-`draft`.
+`draft`. A space with **active bookings** (see Booking) cannot be deleted: the host can delete it once
+they are all finished, expired or cancelled.
 
 **API the frontend expects:** `GET /spaces?search=&category=&city=&hostId=` (search matches the name; `hostId` lists one host's
 spaces),
 `GET /spaces/:id` (404 if it does not exist), `POST /spaces` (all fields except `id`, `host`,
-`createdAt`), `PATCH /spaces/:id` (any subset of those fields), `DELETE /spaces/:id`. A `desk` space
-without a valid `deskCount` is rejected with 400; for other categories `deskCount` is dropped.
+`createdAt`), `PATCH /spaces/:id` (any subset of those fields), `DELETE /spaces/:id` (409 "This space
+has 2 active bookings" when it has any). A `desk` space without a valid `deskCount` is rejected with
+400; for other categories `deskCount` is dropped. With `hostId` (the host's own listing) every space
+also has `bookingCounts: { active: number, pending: number }`, so "My spaces" shows them without
+loading the bookings.
 
 ## Booking
 
 A guest books a space for one date and a time slot in whole hours. Code: `frontend/src/features/bookings/`
-(`types.ts`, `api/bookings-api.ts`, `api/use-bookings.ts`).
+(`types.ts`, `api/bookings-api.ts`, `api/use-bookings.ts`). The `Booking` type and the status rule
+(`statusNow`, `isActive`) are shared in `frontend/src/lib/booking.ts`, because the spaces feature needs
+them for the delete rule; the mock rows are in `db.bookings` in `frontend/src/lib/mock-db.ts`.
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
@@ -109,11 +115,16 @@ A guest books a space for one date and a time slot in whole hours. Code: `fronte
 | startTime | `HH:mm`, whole hour | yes | inside the space's opening hours for that weekday |
 | endTime | `HH:mm`, whole hour | yes | after `startTime`, at most the closing time |
 | totalPrice | number ≥ 0, EUR | yes | read-only; `pricePerHour × hours` at the moment of booking, it does not change later |
-| status | `pending` \| `confirmed` \| `cancelled` | yes | always `pending` on create |
+| status | `pending` \| `confirmed` \| `cancelled` \| `finished` \| `expired` | yes | always `pending` on create; `finished` and `expired` are never stored, see below |
 | createdAt | date | yes | assigned by the backend |
 
 **Status flow:** `pending` → `confirmed` (by the host) or `cancelled`; `confirmed` → `cancelled`.
-`cancelled` is final.
+Once the slot has ended (`date` + `endTime`, Podgorica time), the backend returns a `confirmed` booking
+as `finished` and a `pending` one (never confirmed) as `expired`; the stored status does not change.
+`cancelled`, `finished` and `expired` are final: they cannot be confirmed, cancelled or deleted.
+**Active** bookings are the upcoming `pending` and `confirmed` ones; only they count on "My spaces" and
+block deleting the space. The `status` filter matches the status as returned (so `status=finished`
+works).
 
 **Overlap rule.** A slot is the half-open interval `[startTime, endTime)`, so 10:00–12:00 and
 12:00–14:00 do not overlap. Only **confirmed** bookings take up room; `pending` and `cancelled` ones do

@@ -46,6 +46,9 @@ export type Space = {
   status: SpaceStatus
   host: SpaceHost
   createdAt: string
+  // Only on the host's own listing (`hostId` filter). Active = upcoming, pending or confirmed;
+  // a space with active bookings cannot be deleted.
+  bookingCounts?: { active: number; pending: number }
 }
 
 // The host is taken from the session, never from the form.

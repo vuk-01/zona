@@ -3,8 +3,9 @@ import { CalendarDays, Clock } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import type { Booking } from '@/lib/booking'
 
-import { STATUS_LABELS, type Booking } from '../types'
+import { STATUS_LABELS } from '../types'
 
 const statusBadge = cva('', {
   variants: {
@@ -12,6 +13,9 @@ const statusBadge = cva('', {
       pending: 'text-muted-foreground',
       confirmed: 'border-success text-success',
       cancelled: 'border-destructive text-destructive',
+      // Past bookings: quiet, they no longer need attention
+      finished: 'text-muted-foreground',
+      expired: 'border-dashed text-muted-foreground',
     },
   },
 })

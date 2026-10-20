@@ -1,4 +1,5 @@
-import { NotFoundError, delay } from '@/lib/mock-db'
+import { isActive, statusNow } from '@/lib/booking'
+import { NotFoundError, db, delay } from '@/lib/mock-db'
 
 import type { NewSpace, OpeningHours, Space, SpaceFilters, SpaceHost } from '../types'
 
@@ -139,8 +140,33 @@ function withDeskRule(space: Space): Space {
   return space
 }
 
+// 409 on the real backend: a space with active bookings cannot be deleted.
+export class SpaceHasActiveBookingsError extends Error {
+  readonly activeBookings: number
+
+  constructor(activeBookings: number) {
+    super(`This space has ${activeBookings} active ${activeBookings === 1 ? 'booking' : 'bookings'}`)
+    this.activeBookings = activeBookings
+  }
+}
+
+// Counted from the shared booking rows (src/lib/mock-db.ts), with the status right now.
+function bookingCounts(spaceId: number) {
+  const statuses = db.bookings.filter((b) => b.spaceId === spaceId).map((b) => statusNow(b))
+  return {
+    active: statuses.filter(isActive).length,
+    pending: statuses.filter((status) => status === 'pending').length,
+  }
+}
+
 export const spacesApi = {
-  list: (filters: SpaceFilters = {}) => delay(spaces.filter((s) => matches(s, filters))),
+  // The host's own listing (hostId) also gets bookingCounts, like GET /spaces?hostId= on the backend.
+  list: (filters: SpaceFilters = {}) => {
+    const found = spaces.filter((s) => matches(s, filters))
+    return delay(
+      filters.hostId === undefined ? found : found.map((s) => ({ ...s, bookingCounts: bookingCounts(s.id) })),
+    )
+  },
 
   get: (id: number) => {
     const space = spaces.find((s) => s.id === id)
@@ -167,8 +193,10 @@ export const spacesApi = {
     return updated
   },
 
-  remove: (id: number) => {
+  remove: async (id: number) => {
+    await delay(undefined)
+    const { active } = bookingCounts(id)
+    if (active > 0) throw new SpaceHasActiveBookingsError(active)
     spaces = spaces.filter((s) => s.id !== id)
-    return delay(undefined)
   },
 }

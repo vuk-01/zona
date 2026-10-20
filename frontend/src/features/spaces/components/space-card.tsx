@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 import { CATEGORY_LABELS, bookingUnit, type Space, type Weekday } from '../types'
+import { SpacePrice } from './space-price'
 
 const WEEKDAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
@@ -20,7 +21,7 @@ export function SpaceCard({ space }: SpaceCardProps) {
   const perDesk = bookingUnit(space.category) === 'desk'
 
   return (
-    <Card className="overflow-hidden pt-0">
+    <Card className="overflow-hidden rounded-lg pt-0 shadow-none">
       <img
         src={space.images[0]}
         alt={`${space.name}, ${CATEGORY_LABELS[space.category].toLowerCase()} in ${space.city}`}
@@ -44,10 +45,7 @@ export function SpaceCard({ space }: SpaceCardProps) {
             {perDesk ? `${space.deskCount ?? 0} desks` : `Up to ${space.capacity} people`}
           </span>
         </div>
-        <span className="shrink-0 rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
-          <span className="font-semibold">€{space.pricePerHour}</span>{' '}
-          <span className="text-muted-foreground">{perDesk ? '/desk·hr' : '/hour'}</span>
-        </span>
+        <SpacePrice space={space} />
       </CardContent>
     </Card>
   )

@@ -25,7 +25,7 @@ hosts list their own spaces for rent.
 - In host mode a small "Hosting" `Badge` sits next to the logo in the sidebar and in the mobile page
   title, so it is always clear which mode is on.
 - Host screens reuse the guest patterns: space card (with status "Listed" / "Draft"), Popular time (so
-  the host sees when their space is busy), and a full-width pill CTA "List a new space".
+  the host sees when their space is busy), and a full-width pill CTA "Add a space".
 
 ## Routes
 
@@ -63,22 +63,22 @@ Playful, friendly, modern. Short, warm UI copy ("Find your zone", "23 desks avai
 Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palette is taken from
 `docs/ref/slika2.png`.
 
-| Token                        | Use                                                                                        |
-| ---------------------------- | ------------------------------------------------------------------------------------------ |
-| `background`                 | sky-blue page background                                                                   |
-| `foreground`                 | navy text                                                                                  |
-| `card`, `popover`            | white cards, sheets and dialogs                                                            |
-| `primary`                    | main CTA (Book, Checkout), active tab, selected bar, links                                 |
-| `secondary`                  | pale blue pills: price pill ("€4–8 /hr"), selected list row, mode switch button            |
-| `muted` / `muted-foreground` | search field and inactive chips / addresses, "/hour", meta text                            |
-| `accent`                     | hover backgrounds only (shadcn uses it this way), pale blue                                |
-| `highlight`                  | pink: **only** for discounts ("−30%") and the "Popular" badge                              |
-| `success`                    | green: availability ("23 desks available", "Open now")                                     |
-| `destructive`                | errors, cancel booking                                                                     |
-| `border` / `input`           | dividers and card borders / input borders (stronger, 3:1 against `card`)                   |
-| `sidebar-*`                  | navy navigation: bottom nav on mobile, sidebar on desktop; `sidebar-primary` = active item |
-| `chart-1` / `chart-2`        | Popular time: selected (busy) hour / other hours                                           |
-| `shadow-soft`                | the only shadow, for floating elements (bottom nav, sheets, popovers)                      |
+| Token                                    | Use                                                                                        |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `background`                             | sky-blue page background                                                                   |
+| `foreground`                             | navy text                                                                                  |
+| `card`, `popover`                        | white cards, sheets and dialogs                                                            |
+| `primary`                                | main CTA (Book, Checkout), active tab, selected bar, links                                 |
+| `secondary`                              | pale blue pills: price pill ("€4–8 /hr"), selected list row, mode switch button            |
+| `muted` / `muted-foreground`             | search field and inactive chips / addresses, "/hour", meta text                            |
+| `accent`                                 | hover backgrounds only (shadcn uses it this way), pale blue                                |
+| `highlight`                              | pink: **only** for discounts ("−30%") and the "Popular" badge                              |
+| `success`                                | green: availability ("23 desks available", "Open now")                                     |
+| `destructive` / `destructive-foreground` | errors, cancel booking, delete / text on a `destructive` button (white light, navy dark)   |
+| `border` / `input`                       | dividers and card borders / input borders (stronger, 3:1 against `card`)                   |
+| `sidebar-*`                              | navy navigation: bottom nav on mobile, sidebar on desktop; `sidebar-primary` = active item |
+| `chart-1` / `chart-2`                    | Popular time: selected (busy) hour / other hours                                           |
+| `shadow-soft`                            | the only shadow, for floating elements (bottom nav, sheets, popovers)                      |
 
 All text/background pairs are at least 4.5:1 in both themes. Check this again after changing a
 color token.
@@ -138,6 +138,22 @@ replace them.
   border; rating badge in `primary` ("5 ★"); `ChevronRight` on the right.
 - **Booking summary**: label/value rows, a dashed divider before the total, total in weight 600.
 - **Main action**: one full-width `primary` pill button at the bottom of the screen.
+- **Host space card** (My spaces): the space card plus a "Draft" `secondary` badge for unlisted
+  spaces, the active booking count ("2 bookings · 1 pending" or "No active bookings", it wraps on
+  phones instead of truncating) and two actions: outline pill "Edit" and ghost "Delete" in `destructive`.
+- **Delete confirmation**: `AlertDialog` "Delete {name}?" with what happens and that it can't be
+  undone; Cancel (outline) + "Delete" (`bg-destructive text-destructive-foreground`). The dialog
+  stays open while deleting and on an error; afterwards focus moves to the list and a `role="status"`
+  line announces "{name} was deleted".
+- **Blocked delete**: a space with active bookings cannot be deleted. "Delete" still opens the dialog,
+  so the reason is always reachable (a disabled button would hide it): "You can't delete {name} yet",
+  "It has 2 active bookings. You can delete it once they are finished or cancelled.", one outline "OK",
+  no destructive button.
+- **Booking status badges** (outline): Pending muted, Confirmed `success`, Cancelled `destructive`,
+  Finished muted, Expired muted with a dashed border. Only Pending and Confirmed (upcoming) are
+  "active"; past bookings become Finished (was confirmed) or Expired (was never confirmed).
+- **Empty state**: white card with a `lucide` icon in `primary`, one heading, one line of text and one
+  `primary` pill action ("You have no spaces yet" → "Add your space").
 
 ## Popular time (from slika3)
 
@@ -173,6 +189,7 @@ replace them.
 - Focus is always visible: `focus-visible:ring-[3px] focus-visible:ring-ring` (full opacity), with
   `ring-offset-2` on filled pill buttons so the ring does not blend into `primary`.
 - When an action disables or removes the focused element, move focus to its result.
+- Tap targets at least 44 px tall on phones: buttons are `h-11 md:h-9` (shadcn's default is 36 px).
 
 ## Dark mode
 

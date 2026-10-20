@@ -1,6 +1,7 @@
 // In-memory mock "database" shared by all features. Next workshop this file goes away,
 // and the functions in src/features/<name>/api/ start calling the real backend.
 
+import type { Booking } from './booking'
 import type { User } from './user'
 
 const DELAY_MS = 400
@@ -18,9 +19,18 @@ export type StoredUser = User & { password: string }
 
 const avatar = (n: number) => `https://i.pravatar.cc/300?img=${n}`
 
+// Booking summaries of spaces and guests (the spaces live in features/spaces/api/spaces-api.ts).
+const ANA = { id: 1, name: 'Ana Petrović' }
+const JELENA = { id: 3, name: 'Jelena Nikolić' }
+const HUB = { id: 1, name: 'Hub Morača Coworking', address: 'Bulevar Svetog Petra Cetinjskog 9' }
+const STUDIO = { id: 2, name: 'Njegoševa Studio Desks', address: 'Njegoševa 24' }
+const GLASS = { id: 3, name: 'Glass Room at City Kvart', address: 'Bulevar Džordža Vašingtona 98' }
+const RIVERSIDE = { id: 4, name: 'Riverside Boardroom', address: 'Ulica Vaka Đurovića 5' }
+const LOFT = { id: 6, name: 'Preko Morače Event Loft', address: 'Bulevar Ivana Crnojevića 64' }
+
 // One users table for both auth (login, sign-up) and users (profile), so a profile change is seen
 // by the signed-in session right away. Every demo account uses the password "zona1234".
-export const db: { users: StoredUser[] } = {
+export const db: { users: StoredUser[]; bookings: Booking[] } = {
   users: [
     {
       id: 1,
@@ -117,6 +127,158 @@ export const db: { users: StoredUser[] } = {
       isHost: true,
       mode: 'guest',
       createdAt: '2026-09-08',
+    },
+  ],
+
+  // Shared by the bookings feature and the spaces feature (a space with active bookings cannot be
+  // deleted). Stored statuses are pending, confirmed or cancelled; see statusNow in ./booking.ts.
+  // Njegoševa has 2 desks, so 10:00–12:00 on 22 Oct is full. Booking 5 overlaps the confirmed booking 4
+  // in the Glass Room, so confirming it is refused.
+  bookings: [
+    {
+      id: 1,
+      spaceId: HUB.id,
+      space: HUB,
+      guest: ANA,
+      date: '2026-10-21',
+      startTime: '09:00',
+      endTime: '13:00',
+      totalPrice: 12,
+      status: 'confirmed',
+      createdAt: '2026-10-15',
+    },
+    {
+      id: 2,
+      spaceId: STUDIO.id,
+      space: STUDIO,
+      guest: ANA,
+      date: '2026-10-22',
+      startTime: '10:00',
+      endTime: '13:00',
+      totalPrice: 12,
+      status: 'confirmed',
+      createdAt: '2026-10-16',
+    },
+    {
+      id: 3,
+      spaceId: STUDIO.id,
+      space: STUDIO,
+      guest: JELENA,
+      date: '2026-10-22',
+      startTime: '09:00',
+      endTime: '12:00',
+      totalPrice: 12,
+      status: 'confirmed',
+      createdAt: '2026-10-17',
+    },
+    {
+      id: 4,
+      spaceId: GLASS.id,
+      space: GLASS,
+      guest: ANA,
+      date: '2026-10-23',
+      startTime: '14:00',
+      endTime: '16:00',
+      totalPrice: 36,
+      status: 'confirmed',
+      createdAt: '2026-10-18',
+    },
+    {
+      id: 5,
+      spaceId: GLASS.id,
+      space: GLASS,
+      guest: JELENA,
+      date: '2026-10-23',
+      startTime: '15:00',
+      endTime: '17:00',
+      totalPrice: 36,
+      status: 'pending',
+      createdAt: '2026-10-19',
+    },
+    {
+      id: 6,
+      spaceId: RIVERSIDE.id,
+      space: RIVERSIDE,
+      guest: JELENA,
+      date: '2026-10-27',
+      startTime: '09:00',
+      endTime: '12:00',
+      totalPrice: 90,
+      status: 'pending',
+      createdAt: '2026-10-19',
+    },
+    {
+      id: 7,
+      spaceId: LOFT.id,
+      space: LOFT,
+      guest: ANA,
+      date: '2026-10-24',
+      startTime: '18:00',
+      endTime: '23:00',
+      totalPrice: 425,
+      status: 'confirmed',
+      createdAt: '2026-10-10',
+    },
+    {
+      id: 8,
+      spaceId: LOFT.id,
+      space: LOFT,
+      guest: JELENA,
+      date: '2026-10-30',
+      startTime: '17:00',
+      endTime: '21:00',
+      totalPrice: 340,
+      status: 'cancelled',
+      createdAt: '2026-10-12',
+    },
+    {
+      id: 9,
+      spaceId: HUB.id,
+      space: HUB,
+      guest: JELENA,
+      date: '2026-10-26',
+      startTime: '13:00',
+      endTime: '18:00',
+      totalPrice: 15,
+      status: 'pending',
+      createdAt: '2026-10-20',
+    },
+    {
+      id: 10,
+      spaceId: RIVERSIDE.id,
+      space: RIVERSIDE,
+      guest: ANA,
+      date: '2026-10-21',
+      startTime: '16:00',
+      endTime: '18:00',
+      totalPrice: 60,
+      status: 'cancelled',
+      createdAt: '2026-10-14',
+    },
+    // In the past: confirmed → finished, pending (never confirmed) → expired. Neither is active.
+    {
+      id: 11,
+      spaceId: HUB.id,
+      space: HUB,
+      guest: JELENA,
+      date: '2026-10-16',
+      startTime: '09:00',
+      endTime: '12:00',
+      totalPrice: 9,
+      status: 'confirmed',
+      createdAt: '2026-10-09',
+    },
+    {
+      id: 12,
+      spaceId: LOFT.id,
+      space: LOFT,
+      guest: ANA,
+      date: '2026-10-18',
+      startTime: '18:00',
+      endTime: '22:00',
+      totalPrice: 340,
+      status: 'pending',
+      createdAt: '2026-10-11',
     },
   ],
 }
