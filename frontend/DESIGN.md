@@ -103,8 +103,11 @@ color token.
 
 - **Real photos** of the spaces: 16:10 at the top of the space card, rounded, `object-cover`, always
   with `alt`.
-- **Flat illustrations** for the category options (Desk, Meeting room, Office, Event hall) and for
-  empty states, in blue, navy, pink and orange like slika2. They live in `public/illustrations/`.
+- **Flat illustrations** for the category options (All, Desk, Meeting room, Office, Event hall) and for
+  empty states, in the style of slika2. They are inline SVG components
+  (`features/spaces/components/category-illustration.tsx`) filled only with tokens: `primary`,
+  `chart-2` (pale blue) and `foreground` (navy outlines), so they follow light and dark mode and need
+  no hex values.
 
 ### Icons
 
@@ -131,8 +134,10 @@ replace them.
 - **Categories**: a row of illustration + label (All, Desk, Meeting room, Office, Event hall); the selected
   one has a `primary` label and a thin `primary` border.
 - **Space card**: photo, name (600), address (`muted-foreground`, one line, truncated), opening hours
-  with a `Clock` icon, availability in `success`, price pill in `secondary` at the bottom right. The
-  price per hour is **always** visible.
+  with a `Clock` icon, availability in `success` (desks: "23 desks available"; "Fully booked now" /
+  "Closed now" and "Up to 8 people" stay `muted-foreground`), price pill "€3 /hr" in `secondary` at the
+  bottom right. The price per hour is **always** visible. The whole card links to `/spaces/:id`. Cards always
+  stack down the page on phones (one column), never in a sideways row.
 - **Tabs**: text tabs with a `primary` underline under the active one.
 - **Selectable list rows**: white row with border; selected = `secondary` background + `primary`
   border; rating badge in `primary` ("5 ★"); `ChevronRight` on the right.
@@ -164,6 +169,14 @@ replace them.
 - Other hours in `chart-2`, the selected/current hour in `chart-1`.
 - One line of text under the chart: "Usually busiest around 16:00".
 - Loading: skeleton bars. Empty: "Not enough data yet". Error: short message + "Try again".
+- Marks: bars at most 24px wide with a 2px gap, a 4px rounded top (`rounded-t-xs`, token
+  `--radius-xs`) and square on a hairline `border` baseline.
+- The selected hour's value sits in a small pill above its bar ("72% at 16:00"); hover, tap, focus or
+  the arrow keys change it (one tab stop for the whole chart). Every value is also in "Show as table".
+- `chart-2` is a de-emphasis color with low contrast against the card by design, which is why the
+  table view and the readout are required, not optional. Dark `chart-1` is L 0.66 so it stays inside
+  the dark-mode band for chart marks (checked with the dataviz palette validator).
+- Code: `features/bookings/components/popular-times.tsx`.
 
 ## Auth pages (`/login`, `/signup`)
 

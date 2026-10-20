@@ -1,5 +1,6 @@
-// The booking, shared by the bookings feature (booking itself) and the spaces feature (a space with
-// active bookings cannot be deleted). Same pattern as `user.ts`.
+// A booking, shared by the bookings feature (booking and confirming) and the spaces feature (free
+// desks, and a space with active bookings cannot be deleted). The overlap rule itself lives in
+// src/features/bookings/api/bookings-api.ts.
 
 // Stored rows only hold pending, confirmed or cancelled. Finished and expired are what a booking
 // becomes once its time has passed; they are worked out on read (see statusNow), never stored.

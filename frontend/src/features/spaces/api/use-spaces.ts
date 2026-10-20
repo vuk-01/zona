@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { NotFoundError } from '@/lib/mock-db'
+
 import type { NewSpace, SpaceFilters } from '../types'
 import { spacesApi } from './spaces-api'
 
@@ -14,6 +16,8 @@ export function useSpace(id: number) {
   return useQuery({
     queryKey: ['spaces', id],
     queryFn: () => spacesApi.get(id),
+    // A missing space stays missing; only retry other errors (the default is 3 tries)
+    retry: (failureCount, error) => !(error instanceof NotFoundError) && failureCount < 3,
   })
 }
 
