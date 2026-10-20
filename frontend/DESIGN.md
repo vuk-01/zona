@@ -169,6 +169,16 @@ replace them.
 - **Booking status badges** (outline): Pending muted, Confirmed `success`, Cancelled `destructive`,
   Finished muted, Expired muted with a dashed border. Only Pending and Confirmed (upcoming) are
   "active"; past bookings become Finished (was confirmed) or Expired (was never confirmed).
+- **My bookings** (`/bookings`): text tabs "Upcoming" and "Past" with a count pill; the open tab is in
+  the URL (`?tab=past`). Upcoming = pending and confirmed, soonest first; Past = finished, expired and
+  every cancelled booking, newest first. Booking card = the space card layout: cover photo (joined in
+  by the route), status badge, space name, address, date (`CalendarDays`) and slot with hours
+  (`Clock`), total in the price pill. The whole card links to `/spaces/:id` (stretched link on the
+  name); an active booking also has a ghost "Cancel booking" in `destructive` above that link.
+- **Cancel booking**: `AlertDialog` "Cancel your booking?" with the space, date and slot; "Keep booking"
+  (outline) + "Cancel booking" (`bg-destructive`). Same behavior as the delete confirmation; afterwards
+  focus moves to the Upcoming panel and `role="status"` says "Your booking at {space} was cancelled.
+  You can find it under Past."
 - **Empty state**: white card with a `lucide` icon in `primary`, one heading, one line of text and one
   `primary` pill action ("You have no spaces yet" → "Add your space").
 
