@@ -1,14 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import type { User } from '../types'
-import { authApi } from './auth-api'
+import { type User, currentUserQueryKey } from '@/lib/user'
 
-const currentUserKey = ['auth', 'me']
+import { authApi } from './auth-api'
 
 // The signed-in user, or null for a visitor who is only browsing.
 export function useCurrentUser() {
   return useQuery({
-    queryKey: currentUserKey,
+    queryKey: currentUserQueryKey,
     queryFn: authApi.me,
   })
 }
@@ -16,7 +15,7 @@ export function useCurrentUser() {
 function useSetCurrentUser() {
   const queryClient = useQueryClient()
   return (user: User | null) => {
-    queryClient.setQueryData(currentUserKey, user)
+    queryClient.setQueryData(currentUserQueryKey, user)
     return queryClient.invalidateQueries({ queryKey: ['auth'] })
   }
 }

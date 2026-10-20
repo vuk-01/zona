@@ -1,36 +1,7 @@
-import { delay } from '@/lib/mock-db'
+import { type StoredUser, db, delay } from '@/lib/mock-db'
+import type { User } from '@/lib/user'
 
-import type { LoginInput, SignupInput, User } from '../types'
-
-// The mock keeps passwords next to users; the real backend stores only a hash.
-type StoredUser = User & { password: string }
-
-let users: StoredUser[] = [
-  {
-    id: 1,
-    name: 'Ana Petrović',
-    email: 'ana@zona.app',
-    password: 'zona1234',
-    isHost: false,
-    createdAt: '2026-09-02',
-  },
-  {
-    id: 2,
-    name: 'Marko Jovanović',
-    email: 'marko@zona.app',
-    password: 'zona1234',
-    isHost: true,
-    createdAt: '2026-08-14',
-  },
-  {
-    id: 3,
-    name: 'Jelena Nikolić',
-    email: 'jelena@zona.app',
-    password: 'zona1234',
-    isHost: false,
-    createdAt: '2026-10-05',
-  },
-]
+import type { LoginInput, SignupInput } from '../types'
 
 // Only the signed-in user id is kept in the browser, so a reload keeps the session.
 // Storage can be blocked (private mode), so the mock then simply forgets the session.
@@ -54,13 +25,7 @@ function writeSession(userId: number | null) {
   }
 }
 
-const toUser = (user: StoredUser): User => ({
-  id: user.id,
-  name: user.name,
-  email: user.email,
-  isHost: user.isHost,
-  createdAt: user.createdAt,
-})
+const toUser = ({ password: _password, ...user }: StoredUser): User => user
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 
@@ -79,13 +44,13 @@ export class EmailTakenError extends Error {
 export const authApi = {
   me: async (): Promise<User | null> => {
     await delay(undefined)
-    const user = users.find((u) => u.id === readSession())
+    const user = db.users.find((u) => u.id === readSession())
     return user ? toUser(user) : null
   },
 
   login: async ({ email, password }: LoginInput) => {
     await delay(undefined)
-    const user = users.find((u) => u.email === normalizeEmail(email) && u.password === password)
+    const user = db.users.find((u) => u.email === normalizeEmail(email) && u.password === password)
     if (!user) throw new InvalidCredentialsError()
     writeSession(user.id)
     return toUser(user)
@@ -93,16 +58,20 @@ export const authApi = {
 
   signup: async ({ name, email, password }: SignupInput) => {
     await delay(undefined)
-    if (users.some((u) => u.email === normalizeEmail(email))) throw new EmailTakenError()
+    if (db.users.some((u) => u.email === normalizeEmail(email))) throw new EmailTakenError()
     const user: StoredUser = {
       id: Date.now(),
       name: name.trim(),
       email: normalizeEmail(email),
       password,
+      avatarUrl: null,
+      city: '',
+      bio: '',
       isHost: false,
+      mode: 'guest',
       createdAt: new Date().toISOString().slice(0, 10),
     }
-    users = [...users, user]
+    db.users = [...db.users, user]
     writeSession(user.id)
     return toUser(user)
   },
