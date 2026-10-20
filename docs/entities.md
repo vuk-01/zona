@@ -151,6 +151,17 @@ a confirmed booking is cancelled instead, so the history stays.
 **API the frontend expects:** `GET /bookings?spaceId=&guestId=&status=&date=` (sorted by date and start
 time), `GET /bookings/:id` (404 if it does not exist), `POST /bookings` (`spaceId`, `date`,
 `startTime`, `endTime` → Booking with `status: pending`), `PATCH /bookings/:id` (`{ status }`;
-409 if confirming breaks the overlap rule), `DELETE /bookings/:id` (only `pending`).
-The mock takes the space as an extra argument for `create` and confirm; the backend looks it up by
-`spaceId` instead.
+409 if confirming breaks the overlap rule), `DELETE /bookings/:id` (only `pending`),
+`GET /bookings/popular-times?spaceId=` (open to everyone, for "Popular time" on the space page:
+`{ firstHour: 8, days: { mon: number[14] | null, … } }`, how booked the space usually is per hour
+08:00–21:00 as 0–100, averaged over the last 8 weeks of bookings; `null` for a closed day; the whole
+answer is `null` when the space has under 2 weeks of history, shown as "Not enough data yet"; only
+aggregates, never individual bookings),
+`GET /bookings/availability?spaceId=&date=&startTime=&endTime=` (open to everyone, for the space page:
+`{ available: boolean, freeDesks: number | null, message: string | null }` with the same overlap rule
+as `POST`; `freeDesks` is the number of desks free at the busiest hour of the slot, `null` for
+whole-space categories; it never returns anyone's bookings; 400 for a slot outside opening hours).
+`POST /bookings` also returns 400 for a date in the past and "You cannot book your own space" when the
+signed-in user is the space's host.
+The mock takes the space (and, for `create`, the signed-in guest) as extra arguments; the backend
+looks the space up by `spaceId` and takes the guest from the session.

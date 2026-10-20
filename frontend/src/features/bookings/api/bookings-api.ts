@@ -2,16 +2,21 @@ import { NotFoundError, db, delay } from '@/lib/mock-db'
 
 import type { Booking, BookingGuest, BookingStatus } from '@/lib/booking'
 
-import type { BookableSpace, BookingFilters, NewBooking } from '../types'
+import type {
+  BookableSpace,
+  BookingFilters,
+  NewBooking,
+  PopularTimes,
+  SlotAvailability,
+  Weekday,
+} from '../types'
 
-// Ana Petrović, a guest from the shared users table (src/lib/mock-db.ts). The real backend takes the guest from the session.
-const MOCK_GUEST: BookingGuest = { id: 1, name: 'Ana Petrović' }
 export class InvalidBookingError extends Error {}
 
 // 409 on the real backend: the slot has no room left for another confirmed booking.
 export class SlotUnavailableError extends Error {}
 
-const WEEKDAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
+const WEEKDAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
 // 'HH:00' → hour number; minutes other than :00 are rejected, slots are whole hours.
 function toHour(time: string) {
@@ -20,8 +25,12 @@ function toHour(time: string) {
   return Number(match[1])
 }
 
+// Today in the browser's time zone, 'YYYY-MM-DD'.
+const localToday = () => new Intl.DateTimeFormat('en-CA').format(new Date())
+
 function slotHours({ date, startTime, endTime }: NewBooking, space: BookableSpace) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new InvalidBookingError('Pick a date')
+  if (date < localToday()) throw new InvalidBookingError('Pick today or a later date')
   const start = toHour(startTime)
   const end = toHour(endTime)
   if (start >= end) throw new InvalidBookingError('The end time must be after the start time')
@@ -38,7 +47,7 @@ function slotHours({ date, startTime, endTime }: NewBooking, space: BookableSpac
 // The overlap rule. A whole space (meeting room, office, event hall) allows one confirmed booking at a
 // time; a desk space allows as many as it has desks. The limit is checked hour by hour, so what counts
 // is how many desks are taken at the busiest hour, not how many bookings touch the slot.
-function assertSlotAvailable(slot: NewBooking, space: BookableSpace, ignoreId?: number) {
+function slotUsage(slot: NewBooking, space: BookableSpace, ignoreId?: number) {
   const { start, end } = slotHours(slot, space)
   const limit = space.category === 'desk' ? (space.deskCount ?? 0) : 1
 
@@ -48,16 +57,77 @@ function assertSlotAvailable(slot: NewBooking, space: BookableSpace, ignoreId?: 
     )
     .map((b) => ({ start: toHour(b.startTime), end: toHour(b.endTime) }))
 
+  let free = limit
+  let fullAt: number | null = null
   for (let hour = start; hour < end; hour++) {
-    const taken = confirmed.filter((b) => b.start <= hour && hour < b.end).length
-    if (taken >= limit) {
-      const time = `${String(hour).padStart(2, '0')}:00`
-      throw new SlotUnavailableError(
-        space.category === 'desk' ? `No desks left at ${time}` : `This space is already booked at ${time}`,
-      )
-    }
+    const left = limit - confirmed.filter((b) => b.start <= hour && hour < b.end).length
+    free = Math.min(free, left)
+    if (left <= 0 && fullAt === null) fullAt = hour
   }
-  return end - start
+  return { hours: end - start, free: Math.max(free, 0), fullAt }
+}
+
+function fullMessage(space: BookableSpace, hour: number) {
+  const time = `${String(hour).padStart(2, '0')}:00`
+  return space.category === 'desk' ? `No desks left at ${time}` : `This space is already booked at ${time}`
+}
+
+function assertSlotAvailable(slot: NewBooking, space: BookableSpace, ignoreId?: number) {
+  const { hours, fullAt } = slotUsage(slot, space, ignoreId)
+  if (fullAt !== null) throw new SlotUnavailableError(fullMessage(space, fullAt))
+  return hours
+}
+
+// Popular time. The real backend averages the last 8 weeks of bookings per weekday and hour; the mock
+// draws the same kind of curve per category (desks: morning and after lunch, meeting rooms: late
+// morning and mid-afternoon, offices: the working day, event halls: evenings and weekends).
+const POPULAR_FIRST_HOUR = 8
+const POPULAR_HOURS = 14 // 08:00 … 21:00
+const MIN_HISTORY_DAYS = 14
+
+const peak = (hour: number, center: number, width: number) =>
+  Math.exp(-((hour - center) ** 2) / (2 * width ** 2))
+
+const CURVES: Record<BookableSpace['category'], (hour: number) => number> = {
+  desk: (h) => Math.max(0.9 * peak(h, 11, 2), 0.8 * peak(h, 15.5, 2)),
+  'meeting-room': (h) => Math.max(0.9 * peak(h, 10.5, 1.5), 0.85 * peak(h, 15, 1.5)),
+  office: (h) => 0.85 * peak(h, 13, 3.5),
+  'event-hall': (h) => Math.max(0.95 * peak(h, 20, 1.8), 0.35 * peak(h, 14, 2)),
+}
+
+const DAY_FACTORS: Record<BookableSpace['category'], number[]> = {
+  // sun, mon, tue, wed, thu, fri, sat
+  desk: [0.2, 0.95, 1, 1, 0.95, 0.8, 0.4],
+  'meeting-room': [0.1, 0.9, 1, 0.95, 1, 0.7, 0.25],
+  office: [0.1, 1, 1, 1, 1, 0.9, 0.3],
+  'event-hall': [0.7, 0.3, 0.3, 0.45, 0.6, 1, 1],
+}
+
+// Same numbers on every load, a little different per space and hour
+const jitter = (...seed: number[]) => {
+  const x = Math.sin(seed.reduce((sum, n, i) => sum + n * (i + 1) * 12.9898, 0)) * 43758.5453
+  return x - Math.floor(x)
+}
+
+function popularTimes(space: BookableSpace): NonNullable<PopularTimes> | null {
+  const ageDays = space.createdAt ? (Date.now() - Date.parse(space.createdAt)) / 86_400_000 : Infinity
+  if (ageDays < MIN_HISTORY_DAYS) return null
+
+  const days = Object.fromEntries(
+    WEEKDAYS.map((day, dayIndex) => {
+      const hours = space.openingHours[day]
+      if (!hours) return [day, null]
+      const values = Array.from({ length: POPULAR_HOURS }, (_, i) => {
+        const hour = POPULAR_FIRST_HOUR + i
+        if (hour < toHour(hours.open) || hour >= toHour(hours.close)) return 0
+        const value = CURVES[space.category](hour + 0.5) * DAY_FACTORS[space.category][dayIndex]
+        return Math.min(100, Math.round(100 * value * (0.85 + 0.3 * jitter(space.id, dayIndex, hour))))
+      })
+      return [day, values]
+    }),
+  ) as Record<Weekday, number[] | null>
+
+  return { firstHour: POPULAR_FIRST_HOUR, days }
 }
 
 const matches = (booking: Booking, { spaceId, guestId, status, date }: BookingFilters) =>
@@ -79,17 +149,37 @@ export const bookingsApi = {
     return delay(booking)
   },
 
-  // `space` is only needed by the mock; the real backend looks the space up by `spaceId`.
+  // Counts only, never other people's bookings: is the slot free, and how many desks are left at its
+  // busiest hour. GET /bookings/availability?spaceId=&date=&startTime=&endTime= on the real backend.
+  availability: async (slot: NewBooking, space: BookableSpace): Promise<SlotAvailability> => {
+    await delay(undefined)
+    const { free, fullAt } = slotUsage(slot, space)
+    return {
+      available: fullAt === null,
+      freeDesks: space.category === 'desk' ? free : null,
+      message: fullAt === null ? null : fullMessage(space, fullAt),
+    }
+  },
+
+  // Aggregated percentages only, never individual bookings. GET /bookings/popular-times?spaceId=
+  popularTimes: async (space: BookableSpace): Promise<PopularTimes> => {
+    await delay(undefined)
+    return popularTimes(space)
+  },
+
+  // `space` and `guest` are only needed by the mock; the real backend looks the space up by `spaceId`
+  // and takes the guest from the session.
   // Pending bookings do not hold a slot, so a new booking is only refused when confirmed ones fill it.
-  create: async (input: NewBooking, space: BookableSpace) => {
+  create: async (input: NewBooking, space: BookableSpace, guest: BookingGuest) => {
     await delay(undefined)
     if (input.spaceId !== space.id) throw new InvalidBookingError('The booking does not match this space')
+    if (space.host?.id === guest.id) throw new InvalidBookingError('You cannot book your own space')
     const hours = assertSlotAvailable(input, space)
     const booking: Booking = {
       ...input,
       id: Date.now(),
       space: { id: space.id, name: space.name, address: space.address },
-      guest: MOCK_GUEST,
+      guest: { id: guest.id, name: guest.name },
       totalPrice: space.pricePerHour * hours,
       status: 'pending',
       createdAt: new Date().toISOString().slice(0, 10),

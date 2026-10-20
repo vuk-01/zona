@@ -153,6 +153,14 @@ replace them.
 - Other hours in `chart-2`, the selected/current hour in `chart-1`.
 - One line of text under the chart: "Usually busiest around 16:00".
 - Loading: skeleton bars. Empty: "Not enough data yet". Error: short message + "Try again".
+- Marks: bars at most 24px wide with a 2px gap, a 4px rounded top (`rounded-t-xs`, token
+  `--radius-xs`) and square on a hairline `border` baseline.
+- The selected hour's value sits in a small pill above its bar ("72% at 16:00"); hover, tap, focus or
+  the arrow keys change it (one tab stop for the whole chart). Every value is also in "Show as table".
+- `chart-2` is a de-emphasis color with low contrast against the card by design, which is why the
+  table view and the readout are required, not optional. Dark `chart-1` is L 0.66 so it stays inside
+  the dark-mode band for chart marks (checked with the dataviz palette validator).
+- Code: `features/bookings/components/popular-times.tsx`.
 
 ## Auth pages (`/login`, `/signup`)
 

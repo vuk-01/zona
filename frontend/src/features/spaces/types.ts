@@ -55,6 +55,10 @@ export type Space = {
   availableDesks: number | null
 }
 
+// A draft is only visible to its own host; for everyone else it does not exist (404).
+export const canView = (space: Space, userId: number | undefined) =>
+  space.status === 'listed' || space.host.id === userId
+
 // The host is taken from the session, never from the form; availableDesks is never sent.
 export type NewSpace = Omit<Space, 'id' | 'createdAt' | 'host' | 'availableDesks'>
 
