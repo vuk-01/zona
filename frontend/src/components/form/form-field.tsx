@@ -11,7 +11,7 @@ type FormFieldProps = ComponentProps<typeof Input> & {
 }
 
 // Labeled pill input with an optional hint and its validation message, linked for screen readers.
-// All auth fields are required; the form uses noValidate, so zod shows the messages.
+// Every field that uses it is required; the forms use noValidate, so zod shows the messages.
 export function FormField({ id, label, hint, error, ...inputProps }: FormFieldProps) {
   const hintId = `${id}-hint`
   const errorId = `${id}-error`

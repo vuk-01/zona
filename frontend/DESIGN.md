@@ -146,6 +146,18 @@ replace them.
 - **Host space card** (My spaces): the space card plus a "Draft" `secondary` badge for unlisted
   spaces, the active booking count ("2 bookings · 1 pending" or "No active bookings", it wraps on
   phones instead of truncating) and two actions: outline pill "Edit" and ghost "Delete" in `destructive`.
+- **Space form** (Add a space / Edit space): one column (`max-w-2xl`) under a "My spaces" back link,
+  in sections with a `text-lg` title: About the space (name, optional description, category chips),
+  Location, size and price ("Number of desks" appears only for Desk), Opening hours (a row per day:
+  `Switch` + two pill selects in whole hours, "Closed" when off), Photos (link fields with a 16:10
+  thumbnail, the first is the cover, "Add photo" up to 8). Category chips are radio buttons styled as
+  pills; selected = `secondary` background + `primary` border and label. Errors under each field in
+  `destructive`; a server error in the `role="alert"` box above the buttons. New: `primary` "Publish
+  space" + outline "Save as draft"; Edit: a "Listed" `Switch` row and `primary` "Save changes". Full
+  width on phones, auto width from `md`; disabled with a spinner while saving. After saving the app
+  returns to My spaces, where a `role="status"` line (`secondary` with a `primary` border and a
+  `CircleCheck`) says "{name} is published", "{name} was saved as a draft" or "Changes to {name} were
+  saved".
 - **Delete confirmation**: `AlertDialog` "Delete {name}?" with what happens and that it can't be
   undone; Cancel (outline) + "Delete" (`bg-destructive text-destructive-foreground`). The dialog
   stays open while deleting and on an error; afterwards focus moves to the list and a `role="status"`

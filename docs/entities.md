@@ -64,15 +64,15 @@ A space a host rents out by the hour. Code: `frontend/src/features/spaces/` (`ty
 | --- | --- | --- | --- |
 | id | number | yes | assigned by the backend |
 | name | string, 3–80 characters | yes | |
-| description | string | no | shown on the space page |
+| description | string, at most 500 characters | no | shown on the space page |
 | category | `desk` \| `meeting-room` \| `office` \| `event-hall` | yes | UI labels: Desk, Meeting room, Office, Event hall |
 | city | string | yes | |
 | address | string | yes | street and number |
-| pricePerHour | number ≥ 0, EUR | yes | `desk`: price for **one desk** per hour; other categories: price for the whole space per hour |
-| capacity | integer ≥ 1 | yes | maximum number of people in the space, for every category |
-| deskCount | integer ≥ 1 | only for `desk` | number of bookable desks; absent for other categories |
-| images | URL[], at least 1 | yes | the first one is the cover photo |
-| openingHours | object `mon`…`sun` → `{ open: "HH:mm", close: "HH:mm" }` or `null` | yes | `null` = closed that day; local time (Europe/Podgorica) |
+| pricePerHour | number > 0 and ≤ 1000, EUR, at most 2 decimals | yes | `desk`: price for **one desk** per hour; other categories: price for the whole space per hour |
+| capacity | integer 1–1000 | yes | maximum number of people in the space, for every category |
+| deskCount | integer ≥ 1 and ≤ `capacity` | only for `desk` | number of bookable desks; absent for other categories |
+| images | http(s) URL[], 1–8 | yes | the first one is the cover photo |
+| openingHours | object `mon`…`sun` → `{ open: "HH:mm", close: "HH:mm" }` or `null` | yes | `null` = closed that day; local time (Europe/Podgorica); whole hours (`close` may be `24:00`), `close` after `open`, open on at least one day |
 | status | `listed` \| `draft` | yes | only `listed` spaces are visible to guests |
 | host | `{ id: number, name: string }` | yes | read-only; set by the backend from the signed-in user, never sent by the client |
 | createdAt | date | yes | assigned by the backend |
@@ -99,7 +99,9 @@ they are all finished, expired or cancelled.
 `GET /spaces/:id` (404 if it does not exist), `POST /spaces` (all fields except `id`, `host`,
 `createdAt`, `availableDesks`, `bookingCounts`), `PATCH /spaces/:id` (any subset of those fields),
 `DELETE /spaces/:id` (409 "This space has 2 active bookings" when it has any). A `desk` space without a
-valid `deskCount` is rejected with 400; for other categories `deskCount` is dropped. With `hostId` (the
+valid `deskCount` is rejected with 400; for other categories `deskCount` is dropped. Any other field that
+breaks the rules in the table is rejected with 400 and a message the form can show under that field
+(the form in `components/space-form.tsx` checks the same rules first). With `hostId` (the
 host's own listing) every space also has `bookingCounts: { active: number, pending: number }`, so
 "My spaces" shows them without loading the bookings.
 

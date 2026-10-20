@@ -5,10 +5,14 @@ import { PageTitle } from '@/components/layout/page-title'
 import { Button } from '@/components/ui/button'
 import { useCurrentUser } from '@/features/auth/api/use-auth'
 import { HostSpacesList } from '@/features/spaces/components/host-spaces-list'
+import { SavedNotice } from '@/features/spaces/components/saved-notice'
+import { useSavedNotice } from '@/features/spaces/hooks/use-saved-notice'
 
 // Wrapped in RequireAuth mode="host" in the router, so the user is a host once the page renders.
 export function HostSpaces() {
   const { data: user } = useCurrentUser()
+  // "Glass Room is published" after the space form sends the host back here
+  const notice = useSavedNotice()
 
   return (
     <section>
@@ -24,6 +28,7 @@ export function HostSpaces() {
           </Link>
         </Button>
       </div>
+      <SavedNotice notice={notice} />
       {user && <HostSpacesList hostId={user.id} />}
     </section>
   )
