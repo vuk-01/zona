@@ -23,7 +23,7 @@ The mock users live in one table in `frontend/src/lib/mock-db.ts`, used by both 
 | city | string | yes | empty after sign-up |
 | bio | string, at most 200 characters | yes | short "about me"; empty after sign-up |
 | isHost | boolean | yes | hosting is turned on; `false` on sign-up, becomes `true` the first time the user switches to host mode and stays `true` |
-| mode | `guest` \| `host` | yes | the mode the app is in right now; `guest` on sign-up; `host` is only possible when `isHost` is `true`. Returned only to the user themselves |
+| mode | `guest` \| `host` | yes | the mode the app is in right now; `guest` on sign-up and on every login; `host` is only possible when `isHost` is `true`. Returned only to the user themselves |
 | createdAt | date | yes | assigned by the backend; shown as "Joined October 2026" |
 
 **Public profile:** `PublicUser` is `User` without `email` and `mode`. This is what other people get
@@ -31,7 +31,8 @@ The mock users live in one table in `frontend/src/lib/mock-db.ts`, used by both 
 
 **Guest and host mode:** one account, two modes, no role choice at sign-up. The switch button in
 Profile sends `PATCH /users/:id { mode }`: "Switch to hosting" sets `mode: host` (and `isHost: true`
-the first time), "Switch to renting" sets `mode: guest` and keeps `isHost`. The mode changes the
+the first time), "Switch to renting" sets `mode: guest` and keeps `isHost`. Every login starts in
+guest mode, also for hosts, so the app always opens as a guest; a reload keeps the current mode. The mode changes the
 navigation and the home screen; it never changes what the user owns, so a host in guest mode keeps
 their spaces.
 
@@ -46,7 +47,7 @@ booking a space and listing a space require a signed-in user; a user can see the
 
 **API the frontend expects:**
 - Auth: `POST /auth/signup` (name, email, password → User, starts a session), `POST /auth/login`
-  (email, password → User; 401 "Wrong email or password"), `POST /auth/logout`, `GET /auth/me` (User,
+  (email, password → User with `mode: guest`; 401 "Wrong email or password"), `POST /auth/logout`, `GET /auth/me` (User,
   or 401 when signed out). Sign-up with an existing email returns 409 "Email already in use". Google
   login and password reset come later.
 - Users: `GET /users?search=&isHost=` (→ PublicUser[]), `GET /users/:id` (→ PublicUser; 404 if it does
