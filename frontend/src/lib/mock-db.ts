@@ -133,7 +133,8 @@ const LOFT = { id: 6, name: 'Preko Morače Event Loft', address: 'Bulevar Ivana 
 
 // Njegoševa has 2 desks, so 10:00–12:00 on 22 Oct is full. Booking 5 overlaps the confirmed booking 4
 // in the Glass Room, so confirming it is refused. Booking 11 is always today, so Hub Morača shows one
-// desk taken ("23 desks available") whenever it is open.
+// desk taken ("23 desks available") whenever it is open. Stored statuses are pending, confirmed or
+// cancelled; finished and expired are worked out on read (see statusNow in ./booking.ts).
 const bookings: Booking[] = [
   {
     id: 1,
@@ -266,6 +267,31 @@ const bookings: Booking[] = [
     totalPrice: 36,
     status: 'confirmed',
     createdAt: today,
+  },
+  // In the past: confirmed → finished, pending (never confirmed) → expired. Neither is active.
+  {
+    id: 12,
+    spaceId: HUB.id,
+    space: HUB,
+    guest: JELENA,
+    date: '2026-10-16',
+    startTime: '09:00',
+    endTime: '12:00',
+    totalPrice: 9,
+    status: 'confirmed',
+    createdAt: '2026-10-09',
+  },
+  {
+    id: 13,
+    spaceId: LOFT.id,
+    space: LOFT,
+    guest: ANA,
+    date: '2026-10-18',
+    startTime: '18:00',
+    endTime: '22:00',
+    totalPrice: 340,
+    status: 'pending',
+    createdAt: '2026-10-11',
   },
 ]
 

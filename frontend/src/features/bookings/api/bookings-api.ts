@@ -1,15 +1,19 @@
+import { type Booking, type BookingGuest, statusNow } from '@/lib/booking'
 import { NotFoundError, db, delay } from '@/lib/mock-db'
 
-import type { Booking, BookingGuest, BookingStatus } from '@/lib/booking'
-
-import type {
-  BookableSpace,
-  BookingFilters,
-  NewBooking,
-  PopularTimes,
-  SlotAvailability,
-  Weekday,
+import {
+  type BookableSpace,
+  type BookingFilters,
+  type NewBooking,
+  type PopularTimes,
+  type SlotAvailability,
+  type Weekday,
+  STATUS_LABELS,
 } from '../types'
+
+// The booking rows live in the shared mock database (src/lib/mock-db.ts), because the spaces mock
+// needs them too. A row keeps its stored status; what the API returns is the status right now.
+const withStatusNow = (booking: Booking): Booking => ({ ...booking, status: statusNow(booking) })
 
 export class InvalidBookingError extends Error {}
 
@@ -141,12 +145,17 @@ const byDateAndTime = (a: Booking, b: Booking) =>
 
 export const bookingsApi = {
   list: (filters: BookingFilters = {}) =>
-    delay(db.bookings.filter((b) => matches(b, filters)).sort(byDateAndTime)),
+    delay(
+      db.bookings
+        .map(withStatusNow)
+        .filter((b) => matches(b, filters))
+        .sort(byDateAndTime),
+    ),
 
   get: (id: number) => {
     const booking = db.bookings.find((b) => b.id === id)
     if (!booking) return Promise.reject(new NotFoundError('Booking', id))
-    return delay(booking)
+    return delay(withStatusNow(booking))
   },
 
   // Counts only, never other people's bookings: is the slot free, and how many desks are left at its
@@ -188,12 +197,16 @@ export const bookingsApi = {
     return booking
   },
 
-  // Only the status changes after a booking is made. Confirming checks the overlap rule again, because
-  // other bookings may have been confirmed since this one was created; it needs `space` for that.
-  update: async (id: number, changes: { status: BookingStatus }, space?: BookableSpace) => {
+  // Only the status changes after a booking is made, and only while it is pending or confirmed:
+  // cancelled, finished and expired are final (a pending booking whose time has passed is expired, so
+  // it can no longer be confirmed). Confirming checks the overlap rule again, because other bookings
+  // may have been confirmed since this one was created; it needs `space` for that.
+  update: async (id: number, changes: { status: 'confirmed' | 'cancelled' }, space?: BookableSpace) => {
     const booking = await bookingsApi.get(id)
     if (booking.status === changes.status) return booking
-    if (booking.status === 'cancelled') throw new InvalidBookingError('A cancelled booking cannot be changed')
+    if (booking.status !== 'pending' && booking.status !== 'confirmed') {
+      throw new InvalidBookingError(`${STATUS_LABELS[booking.status]} bookings cannot be changed`)
+    }
     if (changes.status === 'confirmed') {
       if (space?.id !== booking.spaceId)
         throw new InvalidBookingError('The booking does not match this space')
@@ -204,7 +217,8 @@ export const bookingsApi = {
     return updated
   },
 
-  // Only a pending booking can be deleted; a confirmed one is cancelled instead, so the history stays.
+  // Only a pending (upcoming) booking can be deleted; a confirmed one is cancelled instead, and past
+  // ones stay, so the history is kept.
   remove: async (id: number) => {
     const booking = await bookingsApi.get(id)
     if (booking.status !== 'pending') throw new InvalidBookingError('Only a pending booking can be deleted')

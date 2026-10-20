@@ -48,10 +48,14 @@ export const authApi = {
     return user ? toUser(user) : null
   },
 
+  // Every sign-in starts in guest mode, also for hosts; they switch to hosting in Profile.
+  // A reload keeps the mode, because it goes through `me`, not here.
   login: async ({ email, password }: LoginInput) => {
     await delay(undefined)
-    const user = db.users.find((u) => u.email === normalizeEmail(email) && u.password === password)
-    if (!user) throw new InvalidCredentialsError()
+    const found = db.users.find((u) => u.email === normalizeEmail(email) && u.password === password)
+    if (!found) throw new InvalidCredentialsError()
+    const user: StoredUser = { ...found, mode: 'guest' }
+    db.users = db.users.map((u) => (u.id === user.id ? user : u))
     writeSession(user.id)
     return toUser(user)
   },

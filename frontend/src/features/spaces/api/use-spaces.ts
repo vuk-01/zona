@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { NotFoundError } from '@/lib/mock-db'
 
-import type { NewSpace, SpaceFilters } from '../types'
+import type { NewSpace, SpaceFilters, SpaceHost } from '../types'
 import { spacesApi } from './spaces-api'
 
 export function useSpaces(filters: SpaceFilters = {}) {
@@ -25,7 +25,7 @@ export function useSpace(id: number) {
 export function useCreateSpace() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: NewSpace) => spacesApi.create(input),
+    mutationFn: ({ input, host }: { input: NewSpace; host: SpaceHost }) => spacesApi.create(input, host),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['spaces'] }),
   })
 }

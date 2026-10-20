@@ -4,12 +4,12 @@ import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
 import { z } from 'zod'
 
+import { FormAlert } from '@/components/form/form-alert'
+import { FormField } from '@/components/form/form-field'
 import { Button } from '@/components/ui/button'
 
 import { useLogin } from '../api/use-auth'
 import { useRedirectTarget } from '../hooks/use-redirect-target'
-import { FormAlert } from './form-alert'
-import { FormField } from './form-field'
 
 const loginSchema = z.object({
   email: z.string().trim().min(1, 'Enter your email').pipe(z.email('Enter a valid email')),

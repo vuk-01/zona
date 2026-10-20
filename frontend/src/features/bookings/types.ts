@@ -1,9 +1,14 @@
+// The booking entity itself is shared (`@/lib/booking`), because the spaces feature needs it too
+// (free desks, and a space with active bookings cannot be deleted). This file has what only the
+// bookings feature uses.
 import type { Booking, BookingStatus } from '@/lib/booking'
 
 export const STATUS_LABELS: Record<BookingStatus, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
   cancelled: 'Cancelled',
+  finished: 'Finished',
+  expired: 'Expired',
 }
 
 // What the guest sends; everything else is filled in by the backend.
@@ -12,6 +17,7 @@ export type NewBooking = Pick<Booking, 'spaceId' | 'date' | 'startTime' | 'endTi
 export type BookingFilters = {
   spaceId?: number
   guestId?: number
+  // Matches the status right now, so 'finished' finds past confirmed bookings
   status?: BookingStatus
   date?: string
 }

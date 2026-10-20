@@ -23,7 +23,7 @@ The mock users live in one table in `frontend/src/lib/mock-db.ts`, used by both 
 | city | string | yes | empty after sign-up |
 | bio | string, at most 200 characters | yes | short "about me"; empty after sign-up |
 | isHost | boolean | yes | hosting is turned on; `false` on sign-up, becomes `true` the first time the user switches to host mode and stays `true` |
-| mode | `guest` \| `host` | yes | the mode the app is in right now; `guest` on sign-up; `host` is only possible when `isHost` is `true`. Returned only to the user themselves |
+| mode | `guest` \| `host` | yes | the mode the app is in right now; `guest` on sign-up and on every login; `host` is only possible when `isHost` is `true`. Returned only to the user themselves |
 | createdAt | date | yes | assigned by the backend; shown as "Joined October 2026" |
 
 **Public profile:** `PublicUser` is `User` without `email` and `mode`. This is what other people get
@@ -31,7 +31,8 @@ The mock users live in one table in `frontend/src/lib/mock-db.ts`, used by both 
 
 **Guest and host mode:** one account, two modes, no role choice at sign-up. The switch button in
 Profile sends `PATCH /users/:id { mode }`: "Switch to hosting" sets `mode: host` (and `isHost: true`
-the first time), "Switch to renting" sets `mode: guest` and keeps `isHost`. The mode changes the
+the first time), "Switch to renting" sets `mode: guest` and keeps `isHost`. Every login starts in
+guest mode, also for hosts, so the app always opens as a guest; a reload keeps the current mode. The mode changes the
 navigation and the home screen; it never changes what the user owns, so a host in guest mode keeps
 their spaces.
 
@@ -46,7 +47,7 @@ booking a space and listing a space require a signed-in user; a user can see the
 
 **API the frontend expects:**
 - Auth: `POST /auth/signup` (name, email, password → User, starts a session), `POST /auth/login`
-  (email, password → User; 401 "Wrong email or password"), `POST /auth/logout`, `GET /auth/me` (User,
+  (email, password → User with `mode: guest`; 401 "Wrong email or password"), `POST /auth/logout`, `GET /auth/me` (User,
   or 401 when signed out). Sign-up with an existing email returns 409 "Email already in use". Google
   login and password reset come later.
 - Users: `GET /users?search=&isHost=` (→ PublicUser[]), `GET /users/:id` (→ PublicUser; 404 if it does
@@ -63,15 +64,15 @@ A space a host rents out by the hour. Code: `frontend/src/features/spaces/` (`ty
 | --- | --- | --- | --- |
 | id | number | yes | assigned by the backend |
 | name | string, 3–80 characters | yes | |
-| description | string | no | shown on the space page |
+| description | string, at most 500 characters | no | shown on the space page |
 | category | `desk` \| `meeting-room` \| `office` \| `event-hall` | yes | UI labels: Desk, Meeting room, Office, Event hall |
 | city | string | yes | |
 | address | string | yes | street and number |
-| pricePerHour | number ≥ 0, EUR | yes | `desk`: price for **one desk** per hour; other categories: price for the whole space per hour |
-| capacity | integer ≥ 1 | yes | maximum number of people in the space, for every category |
-| deskCount | integer ≥ 1 | only for `desk` | number of bookable desks; absent for other categories |
-| images | URL[], at least 1 | yes | the first one is the cover photo |
-| openingHours | object `mon`…`sun` → `{ open: "HH:mm", close: "HH:mm" }` or `null` | yes | `null` = closed that day; local time (Europe/Podgorica) |
+| pricePerHour | number > 0 and ≤ 1000, EUR, at most 2 decimals | yes | `desk`: price for **one desk** per hour; other categories: price for the whole space per hour |
+| capacity | integer 1–1000 | yes | maximum number of people in the space, for every category |
+| deskCount | integer ≥ 1 and ≤ `capacity` | only for `desk` | number of bookable desks; absent for other categories |
+| images | http(s) URL[], 1–8 | yes | the first one is the cover photo |
+| openingHours | object `mon`…`sun` → `{ open: "HH:mm", close: "HH:mm" }` or `null` | yes | `null` = closed that day; local time (Europe/Podgorica); whole hours (`close` may be `24:00`), `close` after `open`, open on at least one day |
 | status | `listed` \| `draft` | yes | only `listed` spaces are visible to guests |
 | host | `{ id: number, name: string }` | yes | read-only; set by the backend from the signed-in user, never sent by the client |
 | createdAt | date | yes | assigned by the backend |
@@ -87,7 +88,8 @@ have many spaces. A space has many bookings (see **Booking**).
 
 **Access rules:** anyone, signed in or not, can list and view `listed` spaces; only a signed-in user
 with `isHost = true` can create a space; only its host can edit or delete it, or see it while it is a
-`draft`.
+`draft`. A space with **active bookings** (see Booking) cannot be deleted: the host can delete it once
+they are all finished, expired or cancelled.
 
 **API the frontend expects:** `GET /spaces?search=&category=&city=&hostId=&status=&minPrice=&maxPrice=`
 (`search` matches the name or the city, case-insensitive; `hostId` lists one host's spaces;
@@ -95,15 +97,21 @@ with `isHost = true` can create a space; only its host can edit or delete it, or
 `pricePerHour` in EUR, both inclusive; Explore's price chips send Under €10 → `maxPrice=9.99`,
 €10–30 → `minPrice=10&maxPrice=30`, Over €30 → `minPrice=30.01`),
 `GET /spaces/:id` (404 if it does not exist), `POST /spaces` (all fields except `id`, `host`,
-`createdAt`, `availableDesks`), `PATCH /spaces/:id` (any subset of those fields), `DELETE /spaces/:id`. A `desk` space
-without a valid `deskCount` is rejected with 400; for other categories `deskCount` is dropped.
+`createdAt`, `availableDesks`, `bookingCounts`), `PATCH /spaces/:id` (any subset of those fields),
+`DELETE /spaces/:id` (409 "This space has 2 active bookings" when it has any). A `desk` space without a
+valid `deskCount` is rejected with 400; for other categories `deskCount` is dropped. Any other field that
+breaks the rules in the table is rejected with 400 and a message the form can show under that field
+(the form in `components/space-form.tsx` checks the same rules first). With `hostId` (the
+host's own listing) every space also has `bookingCounts: { active: number, pending: number }`, so
+"My spaces" shows them without loading the bookings.
 
 ## Booking
 
 A guest books a space for one date and a time slot in whole hours. Code: `frontend/src/features/bookings/`
-(`types.ts`, `api/bookings-api.ts`, `api/use-bookings.ts`). The `Booking` type is in
-`frontend/src/lib/booking.ts` and the mock rows in `frontend/src/lib/mock-db.ts`, because the spaces
-mock reads them to compute `availableDesks`. The backend does the same with a query; guests never get
+(`types.ts`, `api/bookings-api.ts`, `api/use-bookings.ts`). The `Booking` type and the status rule
+(`statusNow`, `isActive`) are shared in `frontend/src/lib/booking.ts` and the mock rows are in
+`db.bookings` in `frontend/src/lib/mock-db.ts`, because the spaces mock reads them to compute
+`availableDesks` and for the delete rule. The backend does the same with a query; guests never get
 other people's bookings.
 
 | Field | Type | Required | Notes |
@@ -116,11 +124,16 @@ other people's bookings.
 | startTime | `HH:mm`, whole hour | yes | inside the space's opening hours for that weekday |
 | endTime | `HH:mm`, whole hour | yes | after `startTime`, at most the closing time |
 | totalPrice | number ≥ 0, EUR | yes | read-only; `pricePerHour × hours` at the moment of booking, it does not change later |
-| status | `pending` \| `confirmed` \| `cancelled` | yes | always `pending` on create |
+| status | `pending` \| `confirmed` \| `cancelled` \| `finished` \| `expired` | yes | always `pending` on create; `finished` and `expired` are never stored, see below |
 | createdAt | date | yes | assigned by the backend |
 
 **Status flow:** `pending` → `confirmed` (by the host) or `cancelled`; `confirmed` → `cancelled`.
-`cancelled` is final.
+Once the slot has ended (`date` + `endTime`, Podgorica time), the backend returns a `confirmed` booking
+as `finished` and a `pending` one (never confirmed) as `expired`; the stored status does not change.
+`cancelled`, `finished` and `expired` are final: they cannot be confirmed, cancelled or deleted.
+**Active** bookings are the upcoming `pending` and `confirmed` ones; only they count on "My spaces" and
+block deleting the space. The `status` filter matches the status as returned (so `status=finished`
+works).
 
 **Overlap rule.** A slot is the half-open interval `[startTime, endTime)`, so 10:00–12:00 and
 12:00–14:00 do not overlap. Only **confirmed** bookings take up room; `pending` and `cancelled` ones do

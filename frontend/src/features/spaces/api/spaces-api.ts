@@ -1,3 +1,4 @@
+import { isActive, statusNow } from '@/lib/booking'
 import { NotFoundError, db, delay } from '@/lib/mock-db'
 
 import type { NewSpace, OpeningHours, Space, SpaceFilters, SpaceHost, Weekday } from '../types'
@@ -6,8 +7,7 @@ import type { NewSpace, OpeningHours, Space, SpaceFilters, SpaceHost, Weekday } 
 type StoredSpace = Omit<Space, 'availableDesks'>
 
 // Host accounts from the shared users table (src/lib/mock-db.ts).
-// The real backend takes the host of a new space from the session; the mock uses Marko.
-const MOCK_HOST: SpaceHost = { id: 2, name: 'Marko Jovanović' }
+const MARKO: SpaceHost = { id: 2, name: 'Marko Jovanović' }
 const MILICA: SpaceHost = { id: 4, name: 'Milica Vuković' }
 
 const weekdays = (open: string, close: string, weekend: Pick<OpeningHours, 'sat' | 'sun'>): OpeningHours => ({
@@ -38,7 +38,7 @@ let spaces: StoredSpace[] = [
     images: photos('1527192491265-7e15c55b1ed2', '1604328698692-f76ea9498e76', '1556761175-5973dc0f32e7'),
     openingHours: weekdays('08:00', '20:00', { sat: { open: '10:00', close: '16:00' }, sun: null }),
     status: 'listed',
-    host: MOCK_HOST,
+    host: MARKO,
     createdAt: '2026-09-18',
   },
   {
@@ -55,7 +55,7 @@ let spaces: StoredSpace[] = [
     images: photos('1497215842964-222b430dc094', '1497032628192-86f99bcd76bc', '1524758631624-e2822e304c36'),
     openingHours: weekdays('09:00', '18:00', { sat: null, sun: null }),
     status: 'listed',
-    host: MOCK_HOST,
+    host: MARKO,
     createdAt: '2026-09-25',
   },
   {
@@ -103,7 +103,7 @@ let spaces: StoredSpace[] = [
     images: photos('1600508774634-4e11d34730e2', '1568992687947-868a62a9f521', '1497366216548-37526070297c'),
     openingHours: weekdays('07:00', '22:00', { sat: { open: '09:00', close: '18:00' }, sun: null }),
     status: 'draft',
-    host: MOCK_HOST,
+    host: MARKO,
     createdAt: '2026-10-14',
   },
   {
@@ -122,7 +122,7 @@ let spaces: StoredSpace[] = [
       sun: { open: '12:00', close: '20:00' },
     }),
     status: 'listed',
-    host: MOCK_HOST,
+    host: MARKO,
     createdAt: '2026-10-09',
   },
 ]
@@ -188,10 +188,33 @@ function findSpace(id: number) {
   return space
 }
 
+// 409 on the real backend: a space with active bookings cannot be deleted.
+export class SpaceHasActiveBookingsError extends Error {
+  readonly activeBookings: number
+
+  constructor(activeBookings: number) {
+    super(`This space has ${activeBookings} active ${activeBookings === 1 ? 'booking' : 'bookings'}`)
+    this.activeBookings = activeBookings
+  }
+}
+
+// Counted from the shared booking rows (src/lib/mock-db.ts), with the status right now.
+function bookingCounts(spaceId: number) {
+  const statuses = db.bookings.filter((b) => b.spaceId === spaceId).map((b) => statusNow(b))
+  return {
+    active: statuses.filter(isActive).length,
+    pending: statuses.filter((status) => status === 'pending').length,
+  }
+}
+
 export const spacesApi = {
+  // The host's own listing (hostId) also gets bookingCounts, like GET /spaces?hostId= on the backend.
   list: async (filters: SpaceFilters = {}) => {
     await delay(undefined)
-    return spaces.filter((s) => matches(s, filters)).map(withAvailability)
+    const found = spaces.filter((s) => matches(s, filters)).map(withAvailability)
+    return filters.hostId === undefined
+      ? found
+      : found.map((s) => ({ ...s, bookingCounts: bookingCounts(s.id) }))
   },
 
   get: async (id: number) => {
@@ -199,12 +222,13 @@ export const spacesApi = {
     return withAvailability(findSpace(id))
   },
 
-  create: async (input: NewSpace) => {
+  // `host` is only needed by the mock; the real backend takes the host from the session.
+  create: async (input: NewSpace, host: SpaceHost) => {
     await delay(undefined)
     const space = withDeskRule({
       ...input,
       id: Date.now(),
-      host: MOCK_HOST,
+      host: { id: host.id, name: host.name },
       createdAt: new Date().toISOString().slice(0, 10),
     })
     spaces = [space, ...spaces]
@@ -221,6 +245,8 @@ export const spacesApi = {
   remove: async (id: number) => {
     await delay(undefined)
     findSpace(id)
+    const { active } = bookingCounts(id)
+    if (active > 0) throw new SpaceHasActiveBookingsError(active)
     spaces = spaces.filter((s) => s.id !== id)
   },
 }
