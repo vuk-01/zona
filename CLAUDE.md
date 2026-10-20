@@ -1,6 +1,7 @@
-# [App name]
+# Zona
 
-[One sentence: what the app does and for whom.]
+Zona is an app where guests rent spaces and halls (desks, meeting rooms, offices, event halls) and
+hosts list their own spaces; one account switches between the two modes, phone first.
 
 This is a monorepo: one repository for the whole app.
 - `frontend/`: React app (Workshop 3). Details in @frontend/CLAUDE.md
