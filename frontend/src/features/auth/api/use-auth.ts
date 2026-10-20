@@ -36,10 +36,15 @@ export function useSignup() {
   })
 }
 
-export function useLogout() {
+// `onLoggedOut` (leaving the page) runs before the user is cleared: on a protected page, clearing
+// first would let RequireAuth send the user to /login?redirect=… right after a deliberate log out.
+export function useLogout(onLoggedOut?: () => void) {
   const setCurrentUser = useSetCurrentUser()
   return useMutation({
     mutationFn: authApi.logout,
-    onSuccess: () => setCurrentUser(null),
+    onSuccess: () => {
+      onLoggedOut?.()
+      return setCurrentUser(null)
+    },
   })
 }

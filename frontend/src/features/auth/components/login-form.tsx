@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
@@ -19,8 +19,7 @@ const loginSchema = z.object({
 type LoginValues = z.infer<typeof loginSchema>
 
 export function LoginForm() {
-  const navigate = useNavigate()
-  const { redirectTo, search } = useRedirectTarget()
+  const { search } = useRedirectTarget()
   const login = useLogin()
   const {
     register,
@@ -29,7 +28,8 @@ export function LoginForm() {
   } = useForm<LoginValues>({ resolver: zodResolver(loginSchema) })
 
   const onSubmit = (values: LoginValues) =>
-    login.mutate(values, { onSuccess: () => navigate(redirectTo, { replace: true }) })
+    // No navigate here: the user lands in the cache and GuestOnly (around this form) redirects
+    login.mutate(values)
 
   return (
     <form noValidate onSubmit={handleSubmit(onSubmit)} className="grid gap-4">

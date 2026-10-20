@@ -17,15 +17,32 @@ hosts list their own spaces for rent.
 
 - The same account switches modes with a full-width `secondary` pill button with the `ArrowLeftRight`
   icon: "Switch to hosting" in guest mode, "Switch to renting" in host mode.
-- It sits in Profile (mobile) and at the bottom of the desktop sidebar. There is no role choice at
-  sign-up.
+- It sits in Profile, on every screen. There is no role choice at sign-up.
 - Switching changes the navigation items and the home screen, **never the colors**:
-  - Guest nav: Home, Map, Bookings, Profile
-  - Host nav: Today (incoming bookings), My spaces, Calendar, Profile
+  - Guest nav: Home, Explore, Bookings, Profile
+  - Host nav: My spaces, Profile ("Add a space" is a CTA on My spaces, not a nav item)
+  - After switching, the app goes to that mode's home: guest → `/`, host → `/host/spaces`
 - In host mode a small "Hosting" `Badge` sits next to the logo in the sidebar and in the mobile page
   title, so it is always clear which mode is on.
 - Host screens reuse the guest patterns: space card (with status "Listed" / "Draft"), Popular time (so
   the host sees when their space is busy), and a full-width pill CTA "List a new space".
+
+## Routes
+
+| Mode  | Path                    | Page                    | Access                  |
+| ----- | ----------------------- | ----------------------- | ----------------------- |
+| guest | `/`                     | Home ("Find your zone") | everyone                |
+| guest | `/spaces`               | Explore spaces          | everyone                |
+| guest | `/spaces/:id`           | Space details           | everyone                |
+| guest | `/bookings`             | My bookings             | signed in               |
+| both  | `/profile`              | Profile + mode switch   | signed in               |
+| host  | `/host/spaces`          | My spaces               | signed in, in host mode |
+| host  | `/host/spaces/new`      | Add a space             | signed in, in host mode |
+| host  | `/host/spaces/:id/edit` | Edit space              | signed in, in host mode |
+
+- Signed out on a protected page: go to `/login?redirect=<page>`, and back there after logging in.
+- In guest mode on a host page: go to `/`, the guest home. Switching from host to guest on a host page
+  lands there too, so the redirect and the switch never send the user to two different places.
 
 ## Sign-in rules
 
@@ -97,10 +114,13 @@ replace them.
 ## Layout
 
 - **Mobile (375 px)**: the sky background at the top, content in a white sheet
-  (`bg-card rounded-t-xl`). A navy pill bottom nav floats at the bottom (`bg-sidebar rounded-full
-shadow-soft`) with 4 icons; the active item is a blue pill with icon and label.
-- **Desktop (md+)**: a navy sidebar on the left with the same items (icon + label), the mode switch at
-  the bottom. Content on the right, max width ~1200 px. Space cards in a grid: 1 column → 2 at `md`
+  (`bg-card rounded-t-xl`). A slim top bar holds the wordmark (+ "Hosting" badge) and the account
+  button. A navy pill bottom nav floats at the bottom (`bg-sidebar rounded-full shadow-soft`) with
+  the mode's items as icons; the active item is a blue pill with icon and label.
+- **Desktop (md+)**: a navy sidebar on the left with only the wordmark and the same items (icon +
+  label). The account ("Log in", or name + "Log out") sits in a slim top bar on the right, above the
+  content. Nothing important goes at the bottom of the fixed sidebar: a short window can hide it.
+  Content on the right, max width ~1200 px. Space cards in a grid: 1 column → 2 at `md`
   → 3 at `lg`.
 - Spacing: large gaps between sections (`py-12` or more on desktop, `py-8` on mobile), small gaps inside
   groups (`gap-2` to `gap-4`).

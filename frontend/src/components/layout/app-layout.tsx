@@ -1,49 +1,44 @@
 import type { ReactNode } from 'react'
-import { NavLink, Outlet } from 'react-router'
+import { Outlet } from 'react-router'
 
-import { cn } from '@/lib/utils'
+import type { UserMode } from '@/lib/user'
 
-const links = [
-  { to: '/', label: 'Home' },
-  { to: '/listings', label: 'Listings' },
-]
+import { BottomNav } from './bottom-nav'
+import { modeHome, navItems } from './nav-items'
+import { Sidebar } from './sidebar'
+import { Wordmark } from './wordmark'
 
 type AppLayoutProps = {
-  // Account area in the header (filled in by src/app/router.tsx, since layout must not import features)
+  // Guest or host navigation. The layout must not import features, so src/app/app-shell.tsx
+  // reads the signed-in user and passes the mode and the account menu in.
+  mode: UserMode
+  // The signed-in user is still loading, so the mode is not known yet
+  isLoading: boolean
   account?: ReactNode
 }
 
-export function AppLayout({ account }: AppLayoutProps) {
+// Mobile: top bar (wordmark + account) on the sky background, content in a white sheet, floating
+// bottom nav. Desktop (md+): navy sidebar with navigation only, account top right above the content,
+// so nothing important sits at the bottom of the fixed sidebar where a short window can hide it.
+export function AppLayout({ mode, isLoading, account }: AppLayoutProps) {
+  const items = navItems[mode]
+  const isHosting = !isLoading && mode === 'host'
+
   return (
     <div className="min-h-dvh">
-      <header className="border-b bg-card">
-        <nav className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-4">
-          <span className="flex-1 font-heading text-lg font-bold text-primary">Zona</span>
-          <ul className="flex gap-4 text-sm sm:gap-6">
-            {links.map((link) => (
-              <li key={link.to}>
-                <NavLink
-                  to={link.to}
-                  end
-                  className={({ isActive }) =>
-                    cn(
-                      'text-muted-foreground hover:text-foreground',
-                      isActive && 'font-semibold text-foreground',
-                    )
-                  }
-                >
-                  {link.label}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-          {/* flex-1 on both sides keeps the links centered while the account area changes width */}
-          <div className="flex flex-1 justify-end">{account}</div>
-        </nav>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-8">
-        <Outlet />
-      </main>
+      <Sidebar items={items} isLoading={isLoading} homePath={modeHome[mode]} isHosting={isHosting} />
+      <div className="flex min-h-dvh flex-col md:pl-64">
+        <header className="flex items-center justify-between gap-4 px-4 py-4 md:justify-end md:px-8 md:pt-6 md:pb-0">
+          <div className="md:hidden">
+            <Wordmark to={modeHome[mode]} isHosting={isHosting} className="text-primary" />
+          </div>
+          {account}
+        </header>
+        <main className="mx-auto w-full max-w-6xl flex-1 rounded-t-xl bg-card px-4 pt-8 pb-28 md:rounded-none md:bg-transparent md:px-8 md:pt-6 md:pb-12">
+          <Outlet />
+        </main>
+      </div>
+      <BottomNav items={items} isLoading={isLoading} />
     </div>
   )
 }

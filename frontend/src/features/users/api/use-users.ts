@@ -41,11 +41,17 @@ export function useUpdateProfile() {
   })
 }
 
-export function useSwitchMode() {
-  const refresh = useRefreshUsers()
+// The saved user goes straight into the signed-in user's cache before `onSwitched` (navigation to the
+// new mode's home), so the host pages already see host mode when we get there.
+export function useSwitchMode(onSwitched?: (mode: UserMode) => void | Promise<void>) {
+  const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ id, mode }: { id: number; mode: UserMode }) => usersApi.update(id, { mode }),
-    onSuccess: refresh,
+    onSuccess: async (user) => {
+      queryClient.setQueryData(currentUserQueryKey, user)
+      await onSwitched?.(user.mode)
+      return queryClient.invalidateQueries({ queryKey: ['users'] })
+    },
   })
 }
 

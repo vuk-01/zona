@@ -5,12 +5,12 @@ argument-hint: <name>: <description>
 
 Add a feature: $ARGUMENTS
 
-The format is `<name>: <description>`, e.g. `users: sellers who post listings`. The name is plural and kebab-case.
+The format is `<name>: <description>`, e.g. `reviews: guest reviews of spaces`. The name is plural and kebab-case.
 
-1. Read CLAUDE.md, frontend/CLAUDE.md, docs/entities.md and `frontend/src/features/listings/` as the reference
+1. Read CLAUDE.md, frontend/CLAUDE.md, docs/entities.md and `frontend/src/features/spaces/` as the reference
 2. Propose fields, types and relations to existing entities, and wait for my confirmation
 3. Type in `frontend/src/features/<name>/types.ts`
-4. 8–12 realistic mock records in English (real names, cities, prices, no "Lorem ipsum") and the functions `list`, `get`, `create`, `update`, `remove` in `frontend/src/features/<name>/api/<name>-api.ts`, modeled on `frontend/src/features/listings/api/listings-api.ts`, using `delay` and `NotFoundError` from `@/lib/mock-db`
+4. 8–12 realistic mock records in English (real names, cities, prices, no "Lorem ipsum") and the functions `list`, `get`, `create`, `update`, `remove` in `frontend/src/features/<name>/api/<name>-api.ts`, modeled on `frontend/src/features/spaces/api/spaces-api.ts`, using `delay` and `NotFoundError` from `@/lib/mock-db`
 5. Hooks in `frontend/src/features/<name>/api/use-<name>.ts`
 6. Components (if needed) in `frontend/src/features/<name>/components/`, with loading, empty and error states
 7. Update docs/entities.md: field table, relations, access rules and the API the frontend expects
