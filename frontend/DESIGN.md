@@ -152,7 +152,8 @@ replace them.
   Location, size and price ("Number of desks" appears only for Desk), Opening hours (a row per day:
   `Switch` + two pill selects in whole hours, "Closed" when off), Photos (link fields with a 16:10
   thumbnail, the first is the cover, "Add photo" up to 8). Category chips are radio buttons styled as
-  pills; selected = `secondary` background + `primary` border and label. Errors under each field in
+  pills; selected = `secondary` background, `primary` border and `secondary-foreground` label
+  (`primary` text on `secondary` is under 4.5:1). Errors under each field in
   `destructive`; a server error in the `role="alert"` box above the buttons. New: `primary` "Publish
   space" + outline "Save as draft"; Edit: a "Listed" `Switch` row and `primary` "Save changes". Full
   width on phones, auto width from `md`; disabled with a spinner while saving. After saving the app

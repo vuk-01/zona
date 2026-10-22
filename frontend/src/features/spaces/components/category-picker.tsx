@@ -10,7 +10,8 @@ type CategoryPickerProps = {
 const CATEGORIES = Object.entries(CATEGORY_LABELS) as [SpaceCategory, string][]
 
 // Pill chips backed by real radio buttons, so arrow keys move between them and screen readers
-// announce "Desk, radio button, 1 of 4". The selected chip has a primary border, like the category row.
+// announce "Desk, radio button, 1 of 4". The selected chip has a primary border, like the category row,
+// and a secondary-foreground label: primary text on the secondary background is under 4.5:1.
 export function CategoryPicker({ field, error }: CategoryPickerProps) {
   return (
     <fieldset
@@ -23,7 +24,7 @@ export function CategoryPicker({ field, error }: CategoryPickerProps) {
         {CATEGORIES.map(([value, label]) => (
           <label
             key={value}
-            className="flex h-11 cursor-pointer items-center rounded-full border border-input bg-card px-4 text-sm font-medium transition-colors hover:bg-accent has-[:checked]:border-primary has-[:checked]:bg-secondary has-[:checked]:text-primary has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring md:h-9"
+            className="flex h-11 cursor-pointer items-center rounded-full border border-input bg-card px-4 text-sm font-medium transition-colors hover:bg-accent has-[:checked]:border-primary has-[:checked]:bg-secondary has-[:checked]:text-secondary-foreground has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring md:h-9"
           >
             <input type="radio" value={value} className="sr-only" {...field} />
             {label}
