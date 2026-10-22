@@ -70,7 +70,7 @@ Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palett
 | `card`, `popover`                        | white cards, sheets and dialogs                                                            |
 | `primary`                                | main CTA (Book, Checkout), active tab, selected bar, links                                 |
 | `secondary`                              | pale blue pills: price pill ("€4–8 /hr"), selected list row, mode switch button            |
-| `muted` / `muted-foreground`             | search field and inactive chips / addresses, "/hour", meta text                            |
+| `muted` / `muted-foreground`             | search field and inactive chips / addresses, "/hr", meta text                              |
 | `accent`                                 | hover backgrounds only (shadcn uses it this way), pale blue                                |
 | `highlight`                              | pink: **only** for discounts ("−30%") and the "Popular" badge                              |
 | `success`                                | green: availability ("23 desks available", "Open now")                                     |
@@ -90,7 +90,8 @@ color token.
 - Page title: 24 px (`text-2xl`) on mobile, 28–30 px (`md:text-3xl`), weight 600.
 - Section title ("Spaces near you"): 18 px (`text-lg`), weight 600.
 - Body: 14–16 px (`text-sm`/`text-base`), weight 400; meta 12–14 px in `muted-foreground`.
-- Prices: weight 600, unit in `muted-foreground` ("€4 /hour").
+- Prices: weight 600, unit in `muted-foreground`: "€4 /hr", desks "€3 /desk·hr". `SpacePrice`
+  (`features/spaces/components/space-price.tsx`) writes every price pill, so the unit is the same everywhere.
 - At most two heading sizes per screen.
 
 ### Shape
@@ -146,7 +147,8 @@ replace them.
 - **Main action**: one full-width `primary` pill button at the bottom of the screen.
 - **Host space card** (My spaces): the space card plus a "Draft" `secondary` badge for unlisted
   spaces, the active booking count ("2 bookings · 1 pending" or "No active bookings", it wraps on
-  phones instead of truncating) and two actions: outline pill "Edit" and ghost "Delete" in `destructive`.
+  phones instead of truncating), the price pill on its own row at the right, and two actions: outline
+  pill "Edit" and ghost "Delete" in `destructive`.
 - **Space form** (Add a space / Edit space): one column (`max-w-2xl`) under a "My spaces" back link,
   in sections with a `text-lg` title: About the space (name, optional description, category chips),
   Location, size and price ("Number of desks" appears only for Desk), Opening hours (a row per day:

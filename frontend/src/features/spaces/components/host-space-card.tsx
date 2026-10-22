@@ -47,12 +47,13 @@ export function HostSpaceCard({ space, onDeleted }: HostSpaceCardProps) {
         </p>
       </CardHeader>
       <CardContent className="mt-auto flex flex-col gap-4 text-sm">
-        {/* Wraps instead of truncating, so "· 1 pending" stays readable on phones; the price stays right */}
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        {/* The booking count wraps instead of truncating, so "· 1 pending" stays readable on phones; the
+            price always has its own row on the right, so every card lines up the same way */}
+        <div className="flex flex-col gap-2">
           {space.bookingCounts && <SpaceBookingSummary counts={space.bookingCounts} />}
-          <span className="ml-auto">
+          <div className="flex justify-end">
             <SpacePrice space={space} />
-          </span>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button
