@@ -21,14 +21,19 @@ function readTheme(): Theme {
 let theme: Theme = readTheme()
 const listeners = new Set<() => void>()
 
+function resolveIsDark() {
+  return theme === 'dark' || (theme === 'system' && darkQuery.matches)
+}
+
 function applyTheme() {
-  const isDark = theme === 'dark' || (theme === 'system' && darkQuery.matches)
-  document.documentElement.classList.toggle('dark', isDark)
+  document.documentElement.classList.toggle('dark', resolveIsDark())
 }
 
 // While on System, follow the device when it switches between light and dark
 darkQuery.addEventListener('change', () => {
-  if (theme === 'system') applyTheme()
+  if (theme !== 'system') return
+  applyTheme()
+  listeners.forEach((listener) => listener())
 })
 
 export function setTheme(next: Theme) {
@@ -52,4 +57,9 @@ function subscribe(listener: () => void) {
 
 export function useTheme() {
   return useSyncExternalStore(subscribe, () => theme)
+}
+
+// Whether the page is dark right now: the saved choice, or the device setting while on System
+export function useIsDark() {
+  return useSyncExternalStore(subscribe, resolveIsDark)
 }

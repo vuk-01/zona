@@ -164,4 +164,11 @@
   h3 {
     @apply font-heading;
   }
+  /* Theme switch: the theme toggle draws the new theme as a growing circle over the old one, so the
+     default cross-fade is turned off */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
 }
