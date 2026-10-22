@@ -3,12 +3,14 @@ import { cva } from 'class-variance-authority'
 import { PRICE_RANGES, type PriceRange } from '../types'
 
 const chipVariants = cva(
-  'h-11 shrink-0 rounded-full border px-3 text-sm md:h-9 md:px-4 font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2',
+  'h-11 shrink-0 rounded-full border px-3 text-sm md:h-9 md:px-4 font-medium outline-none transition-[translate,background-color,border-color,color,box-shadow] duration-200 focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2',
   {
     variants: {
       selected: {
         true: 'border-primary bg-primary text-primary-foreground',
-        false: 'border-input bg-card text-foreground hover:bg-accent',
+        // Like the buttons: lifts with the soft shadow and turns blue on hover
+        false:
+          'border-input bg-card text-foreground hover:border-primary hover:text-primary hover:shadow-soft motion-safe:hover:-translate-y-0.5',
       },
     },
   },
@@ -28,14 +30,20 @@ type PriceFilterProps = {
   onChange: (value: PriceRange | undefined) => void
 }
 
-// Price per hour as pill chips; one is always selected ("Any" when there is no price filter).
+// Price per hour as pill chips; one is always selected ("Any" when there is no price filter). The panel
+// slides in when the filter button opens it.
 export function PriceFilter({ id, value, onChange }: PriceFilterProps) {
   return (
-    <div id={id} role="group" aria-labelledby="price-filter-label" className="flex flex-col gap-3">
+    <div
+      id={id}
+      role="group"
+      aria-labelledby="price-filter-label"
+      className="flex flex-col gap-3 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-300"
+    >
       <span id="price-filter-label" className="text-sm font-medium">
         Price per hour
       </span>
-      <div className="-mx-4 flex gap-1 overflow-x-auto px-4 py-1 md:mx-0 md:flex-wrap md:gap-2 md:px-0">
+      <div className="-mx-4 flex gap-1 overflow-x-auto px-4 py-1 md:mx-0 md:flex-wrap md:gap-2 md:overflow-visible md:px-0">
         {options.map((option) => (
           <button
             key={option.label}

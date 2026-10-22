@@ -5,7 +5,10 @@ import { Link, useNavigate } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
-const filterButtonClass = 'relative size-12 shrink-0 rounded-full bg-card shadow-none focus-visible:ring-ring'
+// Outline buttons lift on hover (Button); this one also turns blue, and stays tinted while the filters
+// are open
+const filterButtonClass =
+  'relative size-12 shrink-0 rounded-full bg-card shadow-none hover:border-primary hover:bg-card hover:text-primary focus-visible:ring-ring aria-expanded:border-primary aria-expanded:bg-secondary aria-expanded:text-secondary-foreground'
 
 type SpaceSearchProps = {
   defaultValue?: string
@@ -19,7 +22,8 @@ type SpaceSearchProps = {
   hasActiveFilters?: boolean
 }
 
-// Search pill (matches name or city) + round filter button.
+// Search pill (matches name or city) + round filter button. The pill outlines blue on hover and turns
+// white with a blue icon while typing.
 export function SpaceSearch({
   defaultValue = '',
   onSearch,
@@ -51,9 +55,9 @@ export function SpaceSearch({
         search(value)
       }}
     >
-      <div className="relative flex-1">
+      <div className="group relative flex-1">
         <Search
-          className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary"
           aria-hidden="true"
         />
         <Input
@@ -66,7 +70,7 @@ export function SpaceSearch({
             // The field's clear (×) button empties it without submitting
             if (onSearch && event.target.value === '') onSearch('')
           }}
-          className="h-12 rounded-full bg-muted pr-4 pl-12 focus-visible:ring-ring"
+          className="h-12 rounded-full bg-muted pr-4 pl-12 transition-[color,background-color,border-color,box-shadow] duration-200 hover:border-primary focus-visible:bg-card focus-visible:ring-ring"
         />
       </div>
       {onToggleFilters ? (

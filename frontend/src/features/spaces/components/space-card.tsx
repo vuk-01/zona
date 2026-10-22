@@ -18,7 +18,7 @@ function todayHours(space: Space) {
 const availabilityVariants = cva('flex items-center gap-2 whitespace-nowrap', {
   variants: {
     tone: {
-      success: 'text-success',
+      success: 'font-medium text-success',
       muted: 'text-muted-foreground',
     },
   },
@@ -34,7 +34,8 @@ type SpaceCardProps = {
   space: Space
 }
 
-// The whole card opens the space page.
+// The whole card opens the space page. On hover it lifts a little with the lift shadow and a blue border,
+// the photo zooms in slowly and the name turns blue (DESIGN.md "Motion").
 export function SpaceCard({ space }: SpaceCardProps) {
   const perDesk = bookingUnit(space.category) === 'desk'
   const desks = deskAvailability(space.availableDesks)
@@ -45,14 +46,18 @@ export function SpaceCard({ space }: SpaceCardProps) {
       // relative: the sr-only text is positioned against the card, not the page, so it can never widen the page
       className="group relative block h-full rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2"
     >
-      <Card className="h-full gap-4 overflow-hidden rounded-lg pt-0 pb-4 shadow-none transition-colors group-hover:border-primary">
-        <img
-          src={space.images[0]}
-          alt={`${space.name}, ${CATEGORY_LABELS[space.category].toLowerCase()} in ${space.city}`}
-          className="aspect-[16/10] w-full rounded-lg bg-muted object-cover"
-        />
+      <Card className="h-full gap-4 overflow-hidden rounded-lg pt-0 pb-4 shadow-none transition-[translate,box-shadow,border-color] duration-300 ease-out group-hover:border-primary/60 group-hover:shadow-lift motion-safe:group-hover:-translate-y-1">
+        <div className="overflow-hidden rounded-lg bg-muted">
+          <img
+            src={space.images[0]}
+            alt={`${space.name}, ${CATEGORY_LABELS[space.category].toLowerCase()} in ${space.city}`}
+            className="aspect-[16/10] w-full object-cover transition-transform duration-700 ease-out motion-safe:group-hover:scale-105"
+          />
+        </div>
         <CardHeader className="gap-1 px-4">
-          <CardTitle className="truncate text-base font-semibold">{space.name}</CardTitle>
+          <CardTitle className="truncate text-base font-semibold transition-colors group-hover:text-primary">
+            {space.name}
+          </CardTitle>
           <p className="truncate text-sm text-muted-foreground">{space.address}</p>
         </CardHeader>
         <CardContent className="mt-auto flex items-end justify-between gap-3 px-4 text-sm">

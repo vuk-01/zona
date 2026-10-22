@@ -1,13 +1,16 @@
 import { CalendarDays, CircleAlert, History, Loader2, type LucideIcon, Search } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 
 import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
 import { StatusNotice } from '@/components/feedback/status-notice'
+import { HeroPanel } from '@/components/layout/hero-panel'
+import { Reveal } from '@/components/motion/reveal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { type Booking, isActive } from '@/lib/booking'
+import { useActiveIndicator } from '@/lib/use-active-indicator'
 
 import { useBookings } from '../api/use-bookings'
 import { type BookingTab, splitBookings, useBookingTab } from '../hooks/use-booking-tabs'
@@ -18,6 +21,8 @@ type BookingsListProps = {
   // Cover photo per space id, joined in by the route (the bookings feature does not load spaces).
   // undefined while the spaces load; a space missing from the map shows a placeholder.
   spaceImages?: Map<number, string>
+  // The page title (the route's PageTitle), shown in the hero panel above the tabs
+  title: ReactNode
 }
 
 const TABS: { value: BookingTab; label: string; empty: { icon: LucideIcon; title: string; text: string } }[] =
@@ -42,6 +47,9 @@ const TABS: { value: BookingTab; label: string; empty: { icon: LucideIcon; title
     },
   ]
 
+const grid = 'grid gap-6 md:grid-cols-2 lg:grid-cols-3'
+const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300'
+
 const exploreSpaces = (
   <Button asChild className={emptyStateAction}>
     <Link to="/spaces">
@@ -51,10 +59,14 @@ const exploreSpaces = (
   </Button>
 )
 
-// The guest's bookings in two tabs, Upcoming and Past, with loading, empty and error states.
-export function BookingsList({ guestId, spaceImages }: BookingsListProps) {
+// The guest's bookings in two tabs, Upcoming and Past, with loading, empty and error states. The title and
+// the tabs share the hero panel; the panel stays in place in every state, so the title never remounts.
+// The tab underline slides to the open tab, and the cards fade in, one after another along a row.
+export function BookingsList({ guestId, spaceImages, title }: BookingsListProps) {
   const { data: bookings, isLoading, error, refetch, isFetching } = useBookings({ guestId })
   const [tab, setTab] = useBookingTab()
+  const [tabList, setTabList] = useState<HTMLDivElement | null>(null)
+  const underline = useActiveIndicator(tabList, '[data-state="active"]', tab)
 
   // A cancelled booking leaves Upcoming with its button: once the refetched list no longer has it
   // there, focus moves to the tab panel and the result is announced.
@@ -82,37 +94,76 @@ export function BookingsList({ guestId, spaceImages }: BookingsListProps) {
   }, [cancelledLeftUpcoming])
 
   // Error first: a retry keeps the error block (and the focused "Try again" button) on screen
-  if (error) {
-    return (
-      <div
-        role="alert"
-        className="mt-8 flex flex-col items-start gap-4 rounded-lg border bg-card p-6 text-destructive"
-      >
-        <p className="flex items-center gap-2">
-          <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
-          Your bookings failed to load.
-        </p>
-        <Button
-          variant="outline"
-          className="h-11 rounded-full bg-transparent text-foreground hover:bg-accent focus-visible:ring-ring md:h-9"
-          aria-disabled={isFetching}
-          onClick={() => {
-            if (!isFetching) void refetch()
-          }}
-        >
-          {isFetching && <Loader2 className="animate-spin" aria-hidden="true" />}
-          {isFetching ? 'Trying…' : 'Try again'}
-        </Button>
-      </div>
-    )
-  }
+  const state = error
+    ? 'error'
+    : isLoading || !bookings
+      ? 'loading'
+      : bookings.length === 0
+        ? 'empty'
+        : 'ready'
+  const byTab = splitBookings(bookings ?? [])
 
-  if (isLoading || !bookings) {
-    return (
-      <div aria-busy="true" className="mt-8 flex flex-col gap-6">
-        <span className="sr-only">Loading your bookings…</span>
-        <Skeleton className="h-9 w-56 rounded-full" />
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+  return (
+    <Tabs value={tab} onValueChange={setTab} className="gap-6 md:gap-8">
+      <HeroPanel>
+        {title}
+        {state === 'loading' && <Skeleton className="h-9 w-56 rounded-full" />}
+        {state === 'ready' && (
+          <TabsList
+            ref={setTabList}
+            variant="line"
+            className="relative h-auto gap-6 border-b pb-0"
+            aria-label="Bookings"
+          >
+            {underline && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-primary transition-[translate,width] duration-300 ease-out motion-reduce:transition-none"
+                style={{ translate: `${underline.x}px 0`, width: underline.width }}
+              />
+            )}
+            {TABS.map(({ value, label }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                className="h-11 flex-none rounded-none px-1 pb-3 text-base text-muted-foreground after:hidden hover:text-foreground focus-visible:rounded-sm focus-visible:ring-ring data-[state=active]:font-semibold data-[state=active]:text-primary md:h-9 dark:data-[state=active]:text-primary"
+              >
+                {label}
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
+                  {byTab[value].length}
+                </span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        )}
+      </HeroPanel>
+
+      {state === 'error' && (
+        <div
+          role="alert"
+          className={`flex flex-col items-start gap-4 rounded-lg border bg-card p-6 text-destructive ${fadeIn}`}
+        >
+          <p className="flex items-center gap-2">
+            <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
+            Your bookings failed to load.
+          </p>
+          <Button
+            variant="outline"
+            className="h-11 rounded-full bg-transparent text-foreground hover:bg-accent focus-visible:ring-ring md:h-9"
+            aria-disabled={isFetching}
+            onClick={() => {
+              if (!isFetching) void refetch()
+            }}
+          >
+            {isFetching && <Loader2 className="animate-spin" aria-hidden="true" />}
+            {isFetching ? 'Trying…' : 'Try again'}
+          </Button>
+        </div>
+      )}
+
+      {state === 'loading' && (
+        <div aria-busy="true" className={`${grid} ${fadeIn}`}>
+          <span className="sr-only">Loading your bookings…</span>
           {Array.from({ length: 3 }, (_, i) => (
             <div key={i} className="flex flex-col gap-4 rounded-lg border bg-card pb-4">
               <Skeleton className="aspect-[16/10] w-full rounded-lg" />
@@ -125,73 +176,56 @@ export function BookingsList({ guestId, spaceImages }: BookingsListProps) {
             </div>
           ))}
         </div>
-      </div>
-    )
-  }
+      )}
 
-  if (bookings.length === 0) {
-    return (
-      <div className="mt-8">
-        <EmptyState
-          icon={CalendarDays}
-          title="You have no bookings yet"
-          text="Find a desk, a meeting room or a hall and book your first hours."
-          action={exploreSpaces}
-        />
-      </div>
-    )
-  }
+      {state === 'empty' && (
+        <div className={fadeIn}>
+          <EmptyState
+            icon={CalendarDays}
+            title="You have no bookings yet"
+            text="Find a desk, a meeting room or a hall and book your first hours."
+            action={exploreSpaces}
+          />
+        </div>
+      )}
 
-  const byTab = splitBookings(bookings)
-
-  return (
-    <Tabs value={tab} onValueChange={setTab} className="mt-6 gap-6">
-      <StatusNotice notice={announcement || null} />
-      <TabsList variant="line" className="h-auto gap-6 border-b pb-0" aria-label="Bookings">
-        {TABS.map(({ value, label }) => (
-          <TabsTrigger
-            key={value}
-            value={value}
-            className="h-11 flex-none rounded-none px-1 pb-3 text-base text-muted-foreground after:bottom-[-1px] after:bg-primary hover:text-foreground focus-visible:rounded-sm focus-visible:ring-ring data-[state=active]:font-semibold data-[state=active]:text-primary md:h-9 dark:data-[state=active]:text-primary"
-          >
-            {label}
-            <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
-              {byTab[value].length}
-            </span>
-          </TabsTrigger>
-        ))}
-      </TabsList>
-
-      {TABS.map(({ value, empty }) => (
-        <TabsContent
-          key={value}
-          value={value}
-          ref={value === 'upcoming' ? panelRef : undefined}
-          tabIndex={-1}
-          className="rounded-lg focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-card md:focus-visible:ring-offset-background"
-        >
-          {byTab[value].length === 0 ? (
-            <EmptyState
-              icon={empty.icon}
-              title={empty.title}
-              text={empty.text}
-              action={value === 'upcoming' ? exploreSpaces : undefined}
-            />
-          ) : (
-            <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {byTab[value].map((booking) => (
-                <li key={booking.id}>
-                  <BookingCard
-                    booking={booking}
-                    imageUrl={spaceImages ? (spaceImages.get(booking.spaceId) ?? null) : undefined}
-                    onCancelled={onCancelled}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </TabsContent>
-      ))}
+      {state === 'ready' && (
+        <>
+          <StatusNotice notice={announcement || null} />
+          {TABS.map(({ value, empty }) => (
+            <TabsContent
+              key={value}
+              value={value}
+              ref={value === 'upcoming' ? panelRef : undefined}
+              tabIndex={-1}
+              className={`rounded-lg focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-sheet md:focus-visible:ring-offset-background ${fadeIn}`}
+            >
+              {byTab[value].length === 0 ? (
+                <EmptyState
+                  icon={empty.icon}
+                  title={empty.title}
+                  text={empty.text}
+                  action={value === 'upcoming' ? exploreSpaces : undefined}
+                />
+              ) : (
+                <ul className={grid}>
+                  {byTab[value].map((booking, index) => (
+                    <li key={booking.id}>
+                      <Reveal delay={(index % 3) * 90} className="h-full">
+                        <BookingCard
+                          booking={booking}
+                          imageUrl={spaceImages ? (spaceImages.get(booking.spaceId) ?? null) : undefined}
+                          onCancelled={onCancelled}
+                        />
+                      </Reveal>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </TabsContent>
+          ))}
+        </>
+      )}
     </Tabs>
   )
 }

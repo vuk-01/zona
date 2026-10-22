@@ -1,5 +1,6 @@
 import { Controller, type UseFormReturn, useWatch } from 'react-hook-form'
 
+import { TimeSelect } from '@/components/form/time-select'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 
@@ -16,16 +17,19 @@ const DAY_LABELS: Record<Weekday, string> = {
   sun: 'Sunday',
 }
 
-const selectClass =
-  'h-11 min-w-0 flex-1 rounded-full border border-input bg-muted px-4 text-base outline-none focus-visible:ring-[3px] focus-visible:ring-ring aria-invalid:border-destructive md:h-9 md:text-sm'
+const selectClass = 'min-w-0 flex-1 bg-muted'
+
+const toOption = (time: string) => ({ value: time, label: time })
+const OPEN_OPTIONS = OPEN_TIMES.map(toOption)
+const CLOSE_OPTIONS = CLOSE_TIMES.map(toOption)
 
 type OpeningHoursFieldsProps = {
   form: UseFormReturn<SpaceFormValues>
 }
 
-// One row per day: an Open switch and, while open, the opening and closing hour.
+// One row per day: an Open switch and, while open, the opening and closing hour (time selects).
 export function OpeningHoursFields({ form }: OpeningHoursFieldsProps) {
-  const { control, register, formState } = form
+  const { control, formState } = form
   const openingHours = useWatch({ control, name: 'openingHours' })
   const errors = formState.errors.openingHours
 
@@ -63,30 +67,42 @@ export function OpeningHoursFields({ form }: OpeningHoursFieldsProps) {
               </div>
 
               {isOpen ? (
-                <div className="flex min-w-0 flex-1 basis-56 items-center gap-2">
-                  <select
-                    aria-label={`${DAY_LABELS[day]} opens at`}
-                    className={selectClass}
-                    {...register(`openingHours.${day}.open`)}
-                  >
-                    {OPEN_TIMES.map((time) => (
-                      <option key={time}>{time}</option>
-                    ))}
-                  </select>
+                <div className="flex min-w-0 flex-1 basis-64 items-center gap-2">
+                  <Controller
+                    control={control}
+                    name={`openingHours.${day}.open`}
+                    render={({ field }) => (
+                      <TimeSelect
+                        aria-label={`${DAY_LABELS[day]} opens at`}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                        options={OPEN_OPTIONS}
+                        className={selectClass}
+                      />
+                    )}
+                  />
                   <span aria-hidden="true" className="text-muted-foreground">
                     –
                   </span>
-                  <select
-                    aria-label={`${DAY_LABELS[day]} closes at`}
-                    aria-invalid={closeError ? true : undefined}
-                    aria-describedby={closeError ? `${day}-close-error` : undefined}
-                    className={selectClass}
-                    {...register(`openingHours.${day}.close`)}
-                  >
-                    {CLOSE_TIMES.map((time) => (
-                      <option key={time}>{time}</option>
-                    ))}
-                  </select>
+                  <Controller
+                    control={control}
+                    name={`openingHours.${day}.close`}
+                    render={({ field }) => (
+                      <TimeSelect
+                        aria-label={`${DAY_LABELS[day]} closes at`}
+                        aria-invalid={closeError ? true : undefined}
+                        aria-describedby={closeError ? `${day}-close-error` : undefined}
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        onBlur={field.onBlur}
+                        ref={field.ref}
+                        options={CLOSE_OPTIONS}
+                        className={selectClass}
+                      />
+                    )}
+                  />
                 </div>
               ) : (
                 <span className="text-sm text-muted-foreground">Closed</span>

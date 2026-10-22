@@ -18,7 +18,7 @@ export function Wordmark({ to, isHosting, className }: WordmarkProps) {
       <Link
         to={to}
         className={cn(
-          '-mx-2 inline-flex min-h-11 items-center rounded-full px-2 font-heading text-xl font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring md:min-h-0',
+          '-mx-2 inline-flex min-h-11 items-center rounded-full px-2 font-heading text-2xl font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring md:min-h-0',
           className,
         )}
       >

@@ -2,6 +2,7 @@ import { Building2, SearchX } from 'lucide-react'
 import { useRef } from 'react'
 
 import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
+import { Reveal } from '@/components/motion/reveal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -11,6 +12,7 @@ import { SpaceCard } from './space-card'
 
 // One column on phones (cards go down the page), 2 at md, 3 at lg.
 const grid = 'grid gap-6 md:grid-cols-2 lg:grid-cols-3'
+const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300'
 
 type SpacesListProps = {
   filters?: SpaceFilters
@@ -22,7 +24,8 @@ type SpacesListProps = {
   onClearFilters?: () => void
 }
 
-// Spaces with all three states: loading, empty and error.
+// Spaces with all three states: loading, empty and error. Every state fades in, and on every filter
+// change the cards come in again, one after another along a row; further down they fade in on scroll.
 export function SpacesList({ filters = {}, limit, showCount = false, onClearFilters }: SpacesListProps) {
   const { data: spaces, isLoading, error, refetch, isRefetching } = useSpaces(filters)
   // "Clear filters" disappears once it is used, so focus moves to the results instead of <body>.
@@ -31,7 +34,7 @@ export function SpacesList({ filters = {}, limit, showCount = false, onClearFilt
   function content() {
     if (isLoading) {
       return (
-        <div className={grid} aria-busy="true" aria-label="Loading spaces">
+        <div className={`${grid} ${fadeIn}`} aria-busy="true" aria-label="Loading spaces">
           {Array.from({ length: 3 }, (_, i) => (
             <Skeleton key={i} className="h-80 rounded-lg" />
           ))}
@@ -58,45 +61,52 @@ export function SpacesList({ filters = {}, limit, showCount = false, onClearFilt
     if (!spaces || spaces.length === 0) {
       if (!onClearFilters) {
         return (
-          <EmptyState
-            icon={Building2}
-            title="No spaces yet"
-            text="Hosts are adding desks, rooms and halls. Check back soon."
-          />
+          <div className={fadeIn}>
+            <EmptyState
+              icon={Building2}
+              title="No spaces yet"
+              text="Hosts are adding desks, rooms and halls. Check back soon."
+            />
+          </div>
         )
       }
       return (
-        <EmptyState
-          icon={SearchX}
-          title="No spaces match this search"
-          text="Try another name, city, category or price."
-          action={
-            <Button
-              className={emptyStateAction}
-              onClick={() => {
-                onClearFilters()
-                resultsRef.current?.focus()
-              }}
-            >
-              Clear filters
-            </Button>
-          }
-        />
+        <div className={`${fadeIn} motion-safe:zoom-in-95`}>
+          <EmptyState
+            icon={SearchX}
+            title="No spaces match this search"
+            text="Try another name, city, category or price."
+            action={
+              <Button
+                className={emptyStateAction}
+                onClick={() => {
+                  onClearFilters()
+                  resultsRef.current?.focus()
+                }}
+              >
+                Clear filters
+              </Button>
+            }
+          />
+        </div>
       )
     }
 
     const shown = spaces.slice(0, limit)
     return (
-      <div className="flex flex-col gap-4">
+      // A new key per filter set: the cards come in again on every change, also from the cache
+      <div key={JSON.stringify(filters)} className="flex flex-col gap-4">
         {showCount && (
-          <p className="text-sm text-muted-foreground">
+          <p className={`text-sm text-muted-foreground ${fadeIn}`}>
             {shown.length} {shown.length === 1 ? 'space' : 'spaces'}
           </p>
         )}
         <ul className={grid}>
-          {shown.map((space) => (
+          {shown.map((space, index) => (
             <li key={space.id}>
-              <SpaceCard space={space} />
+              <Reveal delay={(index % 3) * 90} className="h-full">
+                <SpaceCard space={space} />
+              </Reveal>
             </li>
           ))}
         </ul>

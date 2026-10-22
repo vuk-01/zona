@@ -2,6 +2,7 @@ import { CircleAlert, CircleCheck, Loader2 } from 'lucide-react'
 import { useEffect, useRef, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 
+import { TimeSelect } from '@/components/form/time-select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,6 +28,8 @@ const dayFormat = new Intl.DateTimeFormat('en-GB', {
 
 const fieldClass =
   'h-12 w-full rounded-full border border-input bg-card px-4 text-base outline-none focus-visible:ring-[3px] focus-visible:ring-ring md:text-sm'
+
+const hourOption = (hour: number) => ({ value: String(hour), label: formatHour(hour) })
 
 type BookingFormProps = {
   space: BookableSpace
@@ -142,33 +145,23 @@ export function BookingForm({ space, user }: BookingFormProps) {
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-2">
               <Label htmlFor="booking-from">From</Label>
-              <select
+              <TimeSelect
                 id="booking-from"
-                value={slot.from}
-                onChange={(event) => slot.setFrom(Number(event.target.value))}
-                className={fieldClass}
-              >
-                {slot.fromOptions.map((hour) => (
-                  <option key={hour} value={hour}>
-                    {formatHour(hour)}
-                  </option>
-                ))}
-              </select>
+                value={String(slot.from ?? '')}
+                onValueChange={(value) => slot.setFrom(Number(value))}
+                options={slot.fromOptions.map(hourOption)}
+                className="h-12 bg-card md:h-12"
+              />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="booking-to">To</Label>
-              <select
+              <TimeSelect
                 id="booking-to"
-                value={slot.to}
-                onChange={(event) => slot.setTo(Number(event.target.value))}
-                className={fieldClass}
-              >
-                {slot.toOptions.map((hour) => (
-                  <option key={hour} value={hour}>
-                    {formatHour(hour)}
-                  </option>
-                ))}
-              </select>
+                value={String(slot.to ?? '')}
+                onValueChange={(value) => slot.setTo(Number(value))}
+                options={slot.toOptions.map(hourOption)}
+                className="h-12 bg-card md:h-12"
+              />
             </div>
           </div>
         )}

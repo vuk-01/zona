@@ -10,8 +10,9 @@ All paths below are relative to `frontend/`.
 - Blue `primary` for the main action, navy `sidebar-*` tokens for navigation (bottom nav on mobile,
   sidebar on desktop), sky-blue `background`, white `card`
 - Pink `highlight` only for discounts and "Popular"; green `success` for availability
-- Radius 1rem for cards and images; `rounded-full` for buttons, inputs, chips and pills; thin borders,
-  `shadow-soft` only for floating elements
+- Radius 1rem for cards and images; `rounded-full` for buttons, inputs, chips and pills; thin borders;
+  `shadow-soft` for floating elements and hovered buttons, `shadow-lift` for hovered clickable cards
+- Motion follows DESIGN.md "Motion", every movement behind `motion-safe:`
 - Light and dark theme (`.dark` on `<html>`): check every page in both. `src/lib/theme.ts` and the
   inline script in `index.html` share the `zona-theme` key, so change them together
 - Guest/host mode changes the navigation and screens, never the colors
@@ -33,12 +34,17 @@ Dependency direction: shared code -> features -> app, never the other way around
 - `src/features/<name>/api/use-<name>.ts`: TanStack Query hooks around the API
 - `src/features/<name>/components/`: components of that feature (e.g. `space-card.tsx`)
 - `src/components/ui/`: shadcn/ui components, added with `pnpm dlx shadcn@latest add <name>` (run inside `frontend/`)
-- `src/components/layout/`: app layout (sidebar, bottom nav, top bar, `nav-items.ts`, `page-title.tsx`)
-  and the auth page shell; it imports no features
+- `src/components/layout/`: app layout (sidebar, bottom nav, top bar, `nav-items.ts`, `page-title.tsx`,
+  `hero-panel.tsx`: the page top on Home, Explore, My bookings, Profile and the host pages) and the auth
+  page shell; it imports no features
+- `src/components/form/`: `FormField`, `FormAlert` and `TimeSelect` (a whole hour, on `ui/select.tsx`)
 - `src/components/feedback/`: `EmptyState` (every empty list and "not found" page) and `StatusNotice`
   (the visible result of an action)
-- `src/app/app-shell.tsx`: reads the signed-in user and passes the guest/host `mode` and the account
-  menu into `AppLayout`; the mode switch lives in `src/app/routes/profile.tsx`
+- `src/app/app-shell.tsx`: reads the signed-in user and passes the guest/host `mode`, the account menu
+  (top bar on phones) and the account for the bottom of the side menu into `AppLayout`; the mode switch
+  lives in `src/app/routes/profile.tsx`
+- `src/app/auth-shell.tsx`: passes the spaces showcase (category illustrations, live line) into
+  `AuthLayout` for `/login` and `/signup`
 - Protected routes are wrapped in `RequireAuth` (`mode="host"` for `/host/*`) in `src/app/router.tsx`
 - `src/lib/`: `utils.ts` (`cn`) and `mock-db.ts` (mock database and delay)
 

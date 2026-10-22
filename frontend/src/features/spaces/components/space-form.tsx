@@ -4,6 +4,7 @@ import { Controller, useWatch } from 'react-hook-form'
 
 import { FormAlert } from '@/components/form/form-alert'
 import { FormField } from '@/components/form/form-field'
+import { Reveal } from '@/components/motion/reveal'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -25,9 +26,12 @@ type SpaceFormProps = {
 }
 
 const sectionTitle = 'text-lg font-semibold'
+// Every section is a card, like the cards on Profile: not clickable, so they never lift
+const sectionCard = 'rounded-lg border bg-card p-4 md:p-6'
 
 // Adding and editing a space. A new space is published or saved as a draft with its own button;
-// an existing one is saved with the Listed switch deciding whether guests can see it.
+// an existing one is saved with the Listed switch deciding whether guests can see it. The sections are
+// cards that fade in as they scroll into view (DESIGN.md "Space form").
 export function SpaceForm({ space, isPending, error, onSubmit }: SpaceFormProps) {
   const form = useSpaceForm(space)
   const {
@@ -56,92 +60,100 @@ export function SpaceForm({ space, isPending, error, onSubmit }: SpaceFormProps)
     <form
       noValidate
       onSubmit={submitAs(isEditing ? 'from-switch' : 'listed')}
-      className="mt-6 flex max-w-2xl flex-col gap-10 md:mt-8"
+      className="flex max-w-2xl flex-col gap-6 md:gap-8"
     >
-      <fieldset className="grid gap-4">
-        <legend className={`${sectionTitle} mb-4`}>About the space</legend>
-        <FormField
-          id="name"
-          label="Name"
-          placeholder="e.g. Sunny desks by the river"
-          error={errors.name?.message}
-          {...register('name')}
-        />
-        <div className="grid gap-2">
-          <Label htmlFor="description" className="px-4">
-            Description <span className="font-normal text-muted-foreground">(optional)</span>
-          </Label>
-          <Textarea
-            id="description"
-            rows={4}
-            placeholder="What makes it a good place to work? Wi-Fi, coffee, parking, quiet…"
-            aria-invalid={errors.description ? true : undefined}
-            aria-describedby={errors.description ? 'description-error' : undefined}
-            className="rounded-lg bg-muted px-4 py-3 focus-visible:ring-ring"
-            {...register('description')}
-          />
-          {errors.description && (
-            <p id="description-error" className="px-4 text-sm text-destructive">
-              {errors.description.message}
-            </p>
-          )}
-        </div>
-        <CategoryPicker field={register('category')} error={errors.category?.message} />
-      </fieldset>
-
-      <fieldset className="grid gap-4">
-        <legend className={`${sectionTitle} mb-4`}>Location, size and price</legend>
-        <div className="grid gap-4 md:grid-cols-2">
+      <Reveal className={sectionCard}>
+        <fieldset className="grid gap-4">
+          <legend className={`${sectionTitle} mb-4`}>About the space</legend>
           <FormField
-            id="city"
-            label="City"
-            autoComplete="address-level2"
-            error={errors.city?.message}
-            {...register('city')}
+            id="name"
+            label="Name"
+            placeholder="e.g. Sunny desks by the river"
+            error={errors.name?.message}
+            {...register('name')}
           />
-          <FormField
-            id="address"
-            label="Address"
-            autoComplete="street-address"
-            placeholder="e.g. Njegoševa 24"
-            error={errors.address?.message}
-            {...register('address')}
-          />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <FormField
-            id="pricePerHour"
-            label={category === 'desk' ? 'Price per desk per hour (€)' : 'Price per hour (€)'}
-            inputMode="decimal"
-            error={errors.pricePerHour?.message}
-            {...register('pricePerHour')}
-          />
-          <FormField
-            id="capacity"
-            label="Capacity (people)"
-            inputMode="numeric"
-            error={errors.capacity?.message}
-            {...register('capacity')}
-          />
-          {category === 'desk' && (
-            <FormField
-              id="deskCount"
-              label="Number of desks"
-              inputMode="numeric"
-              hint="Guests book one desk at a time"
-              error={errors.deskCount?.message}
-              {...register('deskCount')}
+          <div className="grid gap-2">
+            <Label htmlFor="description" className="px-4">
+              Description <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Textarea
+              id="description"
+              rows={4}
+              placeholder="What makes it a good place to work? Wi-Fi, coffee, parking, quiet…"
+              aria-invalid={errors.description ? true : undefined}
+              aria-describedby={errors.description ? 'description-error' : undefined}
+              className="rounded-lg bg-muted px-4 py-3 focus-visible:ring-ring"
+              {...register('description')}
             />
-          )}
-        </div>
-      </fieldset>
+            {errors.description && (
+              <p id="description-error" className="px-4 text-sm text-destructive">
+                {errors.description.message}
+              </p>
+            )}
+          </div>
+          <CategoryPicker field={register('category')} error={errors.category?.message} />
+        </fieldset>
+      </Reveal>
 
-      <OpeningHoursFields form={form} />
+      <Reveal className={sectionCard}>
+        <fieldset className="grid gap-4">
+          <legend className={`${sectionTitle} mb-4`}>Location, size and price</legend>
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField
+              id="city"
+              label="City"
+              autoComplete="address-level2"
+              error={errors.city?.message}
+              {...register('city')}
+            />
+            <FormField
+              id="address"
+              label="Address"
+              autoComplete="street-address"
+              placeholder="e.g. Njegoševa 24"
+              error={errors.address?.message}
+              {...register('address')}
+            />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <FormField
+              id="pricePerHour"
+              label={category === 'desk' ? 'Price per desk per hour (€)' : 'Price per hour (€)'}
+              inputMode="decimal"
+              error={errors.pricePerHour?.message}
+              {...register('pricePerHour')}
+            />
+            <FormField
+              id="capacity"
+              label="Capacity (people)"
+              inputMode="numeric"
+              error={errors.capacity?.message}
+              {...register('capacity')}
+            />
+            {category === 'desk' && (
+              <FormField
+                id="deskCount"
+                label="Number of desks"
+                inputMode="numeric"
+                hint="Guests book one desk at a time"
+                error={errors.deskCount?.message}
+                {...register('deskCount')}
+              />
+            )}
+          </div>
+        </fieldset>
+      </Reveal>
 
-      <PhotoUrlFields form={form} />
+      <Reveal className={sectionCard}>
+        <OpeningHoursFields form={form} />
+      </Reveal>
+
+      <Reveal className={sectionCard}>
+        <PhotoUrlFields form={form} />
+      </Reveal>
 
       {isEditing && (
-        <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+        <Reveal className={`flex items-center justify-between gap-4 ${sectionCard}`}>
           <div className="grid gap-1">
             <Label htmlFor="listed">Listed</Label>
             <p id="listed-hint" className="text-sm text-muted-foreground">
@@ -162,7 +174,7 @@ export function SpaceForm({ space, isPending, error, onSubmit }: SpaceFormProps)
               />
             )}
           />
-        </div>
+        </Reveal>
       )}
 
       <div className="flex flex-col gap-4">
