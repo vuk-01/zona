@@ -6,6 +6,7 @@ import type { UserMode } from '@/lib/user'
 import { BottomNav } from './bottom-nav'
 import { modeHome, navItems } from './nav-items'
 import { Sidebar } from './sidebar'
+import { ThemeToggle } from './theme-toggle'
 import { Wordmark } from './wordmark'
 
 type AppLayoutProps = {
@@ -17,9 +18,10 @@ type AppLayoutProps = {
   account?: ReactNode
 }
 
-// Mobile: top bar (wordmark + account) on the sky background, content in a white sheet, floating
-// bottom nav. Desktop (md+): navy sidebar with navigation only, account top right above the content,
-// so nothing important sits at the bottom of the fixed sidebar where a short window can hide it.
+// Mobile: top bar (wordmark, theme toggle + account) on the sky background, content in a white sheet,
+// floating bottom nav. Desktop (md+): navy sidebar with navigation only, theme toggle and account top
+// right above the content, so nothing important sits at the bottom of the fixed sidebar where a short
+// window can hide it.
 export function AppLayout({ mode, isLoading, account }: AppLayoutProps) {
   const items = navItems[mode]
   const isHosting = !isLoading && mode === 'host'
@@ -32,7 +34,10 @@ export function AppLayout({ mode, isLoading, account }: AppLayoutProps) {
           <div className="md:hidden">
             <Wordmark to={modeHome[mode]} isHosting={isHosting} className="text-primary" />
           </div>
-          {account}
+          <div className="flex min-w-0 items-center gap-2">
+            <ThemeToggle />
+            {account}
+          </div>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 rounded-t-xl bg-card px-4 pt-8 pb-28 md:rounded-none md:bg-transparent md:px-8 md:pt-6 md:pb-12">
           <Outlet />

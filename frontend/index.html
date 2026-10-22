@@ -5,6 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Zona</title>
+    <script>
+      // The saved theme before the first paint, so a dark page never flashes light. Same key and values
+      // as src/lib/theme.ts: 'light' or 'dark', anything else is System (the device setting).
+      ;(function () {
+        var stored = null
+        try {
+          stored = localStorage.getItem('zona-theme')
+        } catch (e) {}
+        var isDark = stored === 'dark' || (stored !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', isDark)
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />

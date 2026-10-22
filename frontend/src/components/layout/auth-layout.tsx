@@ -1,11 +1,17 @@
 import { Link, Outlet } from 'react-router'
 
+import { ThemeToggle } from './theme-toggle'
+
 // Shell for /login and /signup: sky background with the wordmark, the form in a white sheet
 // (mobile) or a card pinned near the top (md+), so it does not jump when errors appear.
+// The theme toggle sits top right: in the wordmark's row on phones, where the app's top bar has it on md+.
 // See "Auth pages" in DESIGN.md.
 export function AuthLayout() {
   return (
-    <div className="flex min-h-dvh flex-col md:items-center md:px-4 md:py-16">
+    <div className="relative flex min-h-dvh flex-col md:items-center md:px-4 md:py-16">
+      <div className="absolute top-10 right-4 md:top-6 md:right-8">
+        <ThemeToggle />
+      </div>
       <header className="px-4 pt-12 pb-8 text-center md:pt-0">
         <Link
           to="/"

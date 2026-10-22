@@ -119,14 +119,14 @@ replace them.
 ## Layout
 
 - **Mobile (375 px)**: the sky background at the top, content in a white sheet
-  (`bg-card rounded-t-xl`). A slim top bar holds the wordmark (+ "Hosting" badge) and the account
-  button. A navy pill bottom nav floats at the bottom (`bg-sidebar rounded-full shadow-soft`) with
+  (`bg-card rounded-t-xl`). A slim top bar holds the wordmark (+ "Hosting" badge), the theme toggle and
+  the account button. A navy pill bottom nav floats at the bottom (`bg-sidebar rounded-full shadow-soft`) with
   the mode's items as icons; the active item is a blue pill with icon and label.
 - **Fixed bars on phones**: the scroll padding in `index.css` keeps a focused field above the bottom
   nav; a bar fixed above it (the booking bar) sets `data-booking-bar`, which raises that padding.
 - **Desktop (md+)**: a navy sidebar on the left with only the wordmark and the same items (icon +
-  label). The account ("Log in", or name + "Log out") sits in a slim top bar on the right, above the
-  content. Nothing important goes at the bottom of the fixed sidebar: a short window can hide it.
+  label). The theme toggle and the account ("Log in", or name + "Log out") sit in a slim top bar on the
+  right, above the content. Nothing important goes at the bottom of the fixed sidebar: a short window can hide it.
   Content on the right, max width ~1200 px. Space cards in a grid: 1 column → 2 at `md`
   → 3 at `lg`.
 - Spacing: large gaps between sections (`py-12` or more on desktop, `py-8` on mobile), small gaps inside
@@ -220,6 +220,7 @@ replace them.
   appear.
 - One centered heading ("Log in" / "Create account", `text-2xl md:text-3xl`) and one short line of
   text under it. The wordmark is never bigger than the heading.
+- The theme toggle sits top right: in the wordmark's row on phones, where the app's top bar has it on md+.
 - Labeled inputs and the submit button are `rounded-full`; full-width `primary` submit.
 - Field errors under the input in `destructive`; rules that must stay visible (e.g. "At least 8
   characters") are hint text under the field, not a placeholder.
@@ -260,6 +261,14 @@ replace them.
 
 Both themes from day one. The `dark` class on `<html>` turns it on. Deep navy background, slightly
 lighter navy cards, lighter blue `primary` with navy text. Every page is checked in both themes.
+
+- **Theme toggle** (`src/components/layout/theme-toggle.tsx`): a round outline icon button
+  (`size-11 md:size-9`) in the top bar and on the auth pages. A click goes Light → Dark → System → Light;
+  the icon shows the current choice (`Sun` / `Moon` / `Monitor`) and the label names the current and
+  the next one ("Theme: Dark. Switch to system theme").
+- System follows `prefers-color-scheme` and is the default. The choice is saved per device in
+  `localStorage` (`src/lib/theme.ts`); a script in `index.html` applies it before the first paint, so a
+  dark page never flashes light.
 
 ## References
 

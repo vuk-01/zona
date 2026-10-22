@@ -12,7 +12,8 @@ All paths below are relative to `frontend/`.
 - Pink `highlight` only for discounts and "Popular"; green `success` for availability
 - Radius 1rem for cards and images; `rounded-full` for buttons, inputs, chips and pills; thin borders,
   `shadow-soft` only for floating elements
-- Light and dark theme (`.dark` on `<html>`): check every page in both
+- Light and dark theme (`.dark` on `<html>`): check every page in both. `src/lib/theme.ts` and the
+  inline script in `index.html` share the `zona-theme` key, so change them together
 - Guest/host mode changes the navigation and screens, never the colors
 
 ## Feature-first
