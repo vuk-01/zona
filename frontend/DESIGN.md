@@ -79,6 +79,7 @@ Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palett
 | `sidebar-*`                              | navy navigation: bottom nav on mobile, sidebar on desktop; `sidebar-primary` = active item |
 | `chart-1` / `chart-2`                    | Popular time: selected (busy) hour / other hours                                           |
 | `shadow-soft`                            | the only shadow, for floating elements (bottom nav, sheets, popovers)                      |
+| `overlay`                                | dims the page behind dialogs (navy at 50%, black at 60% in dark)                           |
 
 All text/background pairs are at least 4.5:1 in both themes. Check this again after changing a
 color token.

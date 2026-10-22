@@ -48,6 +48,8 @@
   --chart-1: oklch(0.55 0.21 264);
   --chart-2: oklch(0.88 0.05 262);
   --shadow-color: oklch(0.45 0.12 264 / 0.08);
+  /* dims the page behind dialogs: navy foreground at 50% */
+  --overlay: oklch(0.24 0.06 268 / 0.5);
   --font-heading: 'Poppins', ui-sans-serif, system-ui, sans-serif;
   --font-body: 'Poppins', ui-sans-serif, system-ui, sans-serif;
 }
@@ -87,6 +89,7 @@
   --chart-1: oklch(0.66 0.17 262);
   --chart-2: oklch(0.35 0.06 266);
   --shadow-color: oklch(0 0 0 / 0.3);
+  --overlay: oklch(0 0 0 / 0.6);
 }
 
 @theme inline {
@@ -122,6 +125,7 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
+  --color-overlay: var(--overlay);
   /* 4px: rounded data-end of chart bars (Popular time) */
   --radius-xs: calc(var(--radius) - 12px);
   --radius-sm: calc(var(--radius) - 8px);
