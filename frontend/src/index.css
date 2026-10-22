@@ -144,6 +144,18 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+  /* Phones: a focused field scrolls to just above the floating bottom nav, and above the booking bar
+     on a space page (data-booking-bar), instead of ending up hidden under them */
+  html {
+    @variant max-md {
+      scroll-padding-bottom: --spacing(24);
+    }
+  }
+  html:has([data-booking-bar]) {
+    @variant max-md {
+      scroll-padding-bottom: --spacing(44);
+    }
+  }
   h1,
   h2,
   h3 {

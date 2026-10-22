@@ -3,7 +3,7 @@ import { NavLink } from 'react-router'
 
 import { Skeleton } from '@/components/ui/skeleton'
 
-import type { NavItem } from './nav-items'
+import { type NavItem, navItems } from './nav-items'
 
 const itemVariants = cva(
   'flex h-12 items-center gap-2 rounded-full px-4 text-sm font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar',
@@ -16,6 +16,16 @@ const itemVariants = cva(
     },
   },
 )
+
+// Placeholders shaped like the items: the active one is a wide pill, the others are icons
+const placeholderVariants = cva('h-12 rounded-full bg-sidebar-accent', {
+  variants: {
+    active: {
+      true: 'w-24',
+      false: 'w-12',
+    },
+  },
+})
 
 type BottomNavProps = {
   items: NavItem[]
@@ -31,10 +41,12 @@ export function BottomNav({ items, isLoading }: BottomNavProps) {
       className="fixed inset-x-4 bottom-4 z-10 rounded-full bg-sidebar p-2 shadow-soft md:hidden"
     >
       <ul className="flex items-center justify-around gap-1">
+        {/* As many placeholders as guest items: visitors and every fresh login are in guest mode, so
+            most loads do not jump (a host in host mode goes from 4 to 2). All four fit at 375 px. */}
         {isLoading
-          ? Array.from({ length: 2 }, (_, i) => (
+          ? Array.from({ length: navItems.guest.length }, (_, i) => (
               <li key={i}>
-                <Skeleton className="h-12 w-24 rounded-full bg-sidebar-accent" />
+                <Skeleton className={placeholderVariants({ active: i === 0 })} />
               </li>
             ))
           : items.map(({ to, label, icon: Icon, end }) => (

@@ -77,7 +77,7 @@ export function BookingForm({ space, user }: BookingFormProps) {
         role="status"
         className="flex flex-col gap-4 rounded-lg border bg-card p-6 outline-none"
       >
-        <CircleCheck className="size-8 text-success" aria-hidden="true" />
+        <CircleCheck className="size-8 text-primary" aria-hidden="true" />
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">Booking request sent</h2>
           <p className="text-sm text-muted-foreground">
@@ -237,8 +237,12 @@ export function BookingForm({ space, user }: BookingFormProps) {
         {bookLabel}
       </Button>
 
-      {/* Phones: total + Book fixed above the bottom navigation */}
-      <div className="fixed inset-x-4 bottom-24 z-10 flex items-center justify-between gap-4 rounded-full border bg-card py-2 pr-2 pl-6 shadow-soft md:hidden">
+      {/* Phones: total + Book fixed above the bottom navigation. data-booking-bar raises the page's
+          scroll padding (index.css), so a focused field never ends up under the bar */}
+      <div
+        data-booking-bar
+        className="fixed inset-x-4 bottom-24 z-10 flex items-center justify-between gap-4 rounded-full border bg-card py-2 pr-2 pl-6 shadow-soft md:hidden"
+      >
         <div className="flex min-w-0 flex-col">
           <span className="font-semibold">{slot.slot ? euros.format(total) : '—'}</span>
           <span className="truncate text-xs text-muted-foreground">

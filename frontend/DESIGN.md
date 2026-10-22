@@ -122,6 +122,8 @@ replace them.
   (`bg-card rounded-t-xl`). A slim top bar holds the wordmark (+ "Hosting" badge) and the account
   button. A navy pill bottom nav floats at the bottom (`bg-sidebar rounded-full shadow-soft`) with
   the mode's items as icons; the active item is a blue pill with icon and label.
+- **Fixed bars on phones**: the scroll padding in `index.css` keeps a focused field above the bottom
+  nav; a bar fixed above it (the booking bar) sets `data-booking-bar`, which raises that padding.
 - **Desktop (md+)**: a navy sidebar on the left with only the wordmark and the same items (icon +
   label). The account ("Log in", or name + "Log out") sits in a slim top bar on the right, above the
   content. Nothing important goes at the bottom of the fixed sidebar: a short window can hide it.

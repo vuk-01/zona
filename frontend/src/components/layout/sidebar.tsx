@@ -3,7 +3,7 @@ import { NavLink } from 'react-router'
 
 import { Skeleton } from '@/components/ui/skeleton'
 
-import type { NavItem } from './nav-items'
+import { type NavItem, navItems } from './nav-items'
 import { Wordmark } from './wordmark'
 
 const itemVariants = cva(
@@ -36,8 +36,10 @@ export function Sidebar({ items, isLoading, homePath, isHosting }: SidebarProps)
       </div>
       <nav aria-label="Main" className="flex-1 overflow-y-auto px-4 pb-6">
         <ul className="grid gap-1">
+          {/* As many placeholders as guest items: visitors and every fresh login are in guest mode,
+              so most loads do not jump (a host in host mode goes from 4 to 2) */}
           {isLoading
-            ? Array.from({ length: 2 }, (_, i) => (
+            ? Array.from({ length: navItems.guest.length }, (_, i) => (
                 <li key={i}>
                   <Skeleton className="h-12 rounded-full bg-sidebar-accent" />
                 </li>
