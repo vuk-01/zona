@@ -16,11 +16,12 @@ export function HostSpaces() {
 
   return (
     <section>
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Phones: the CTA is a full-width pill under the title; md+: auto width next to it */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <PageTitle>My spaces</PageTitle>
         <Button
           asChild
-          className="h-11 rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card md:h-9 md:focus-visible:ring-offset-background"
+          className="h-11 w-full rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card md:h-9 md:w-auto md:focus-visible:ring-offset-background"
         >
           <Link to="/host/spaces/new">
             <Plus aria-hidden="true" />
