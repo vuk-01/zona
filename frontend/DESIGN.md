@@ -229,6 +229,23 @@ replace them.
   back to `/`. Links are always underlined, not only on hover.
 - A signed-in user who opens `/login` or `/signup` is sent on to `?redirect=` or home.
 
+## Profile (`/profile`, from profilePageUI)
+
+- Three cards under the page title, `gap-6`, each `rounded-lg border bg-card p-4 md:p-6`, no shadow:
+  1. Header: `UserAvatar` (`lg`), name, role ("Guest" / "Guest and host"), city with `MapPin`.
+  2. "Personal information": `text-lg` title and an outline pill "Edit" (`Pencil`) above a divider, then
+     label/value pairs (label in `muted-foreground`, value weight 500): Name, Email, City, Member
+     since, Role; About spans the whole row. One column on phones, 2 at `md`, 3 at `lg`. A missing
+     value says "Not set" / "No bio yet." in `muted-foreground`.
+  3. "Mode": one line ("You are renting spaces now." / "You are hosting now.") and the mode switch.
+- "Edit" turns the pairs into fields in the same card: Name, City (optional) and About (optional, with
+  an x/200 counter); email and password changes come with the backend. `primary` "Save" + outline
+  "Cancel", full width on phones; disabled with a spinner while saving; a server error in the
+  `role="alert"` box. Focus goes to Name on Edit and back to "Edit" after Save or Cancel; after saving,
+  a status notice says "Your profile was saved."
+- Code: `features/users/components/profile-details.tsx` (and `profile-header.tsx`,
+  `profile-mode-card.tsx`).
+
 ## Accessibility
 
 - Text at least 4.5:1; input borders (`input` token) and focus rings at least 3:1 against `card`.
@@ -250,6 +267,8 @@ lighter navy cards, lighter blue `primary` with navy text. Every page is checked
   category row, space card, tabs, selectable rows, booking summary, pill CTA.
 - `docs/ref/slika3.png` (parking app): **only the font** (Poppins-like geometric sans) and the
   **Popular time** chart. Not its black buttons, black chips or grey palette.
+- `docs/ref/profilePageUI.png` (profile page): **only the layout** of Profile: a header card, cards
+  with a title and "Edit", label/value pairs in columns. Not its orange and green palette.
 
 ## Don't
 
