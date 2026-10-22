@@ -263,10 +263,11 @@ Both themes from day one. The `dark` class on `<html>` turns it on. Deep navy ba
 lighter navy cards, lighter blue `primary` with navy text. Every page is checked in both themes.
 
 - **Theme toggle** (`src/components/layout/theme-toggle.tsx`): a round outline icon button
-  (`size-11 md:size-9`) in the top bar and on the auth pages. A click goes Light → Dark → System → Light;
-  the icon shows the current choice (`Sun` / `Moon` / `Monitor`) and the label names the current and
-  the next one ("Theme: Dark. Switch to system theme").
-- System follows `prefers-color-scheme` and is the default. The choice is saved per device in
+  (`size-11 md:size-9`) in the top bar and on the auth pages. A click flips between light and dark; the
+  icon shows the theme it switches to (`Sun` on dark, `Moon` on light) and turns and fades into the
+  other one, and the label says the same ("Switch to light theme"). The new theme spreads in a circle
+  from the button (View Transitions API); without it, or with reduced motion, it switches at once.
+- System follows `prefers-color-scheme` and is the default until the first click. The choice is saved per device in
   `localStorage` (`src/lib/theme.ts`); a script in `index.html` applies it before the first paint, so a
   dark page never flashes light.
 
