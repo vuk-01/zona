@@ -9,6 +9,8 @@
  * Zona theme: blue, navy and sky colors from docs/ref/slika2.png, Poppins from docs/ref/slika3.png.
  */
 :root {
+  /* native controls (selects, scrollbars) follow the theme */
+  color-scheme: light;
   --radius: 1rem;
   --background: oklch(0.965 0.018 255);
   --foreground: oklch(0.24 0.06 268);
@@ -53,6 +55,7 @@
 }
 
 .dark {
+  color-scheme: dark;
   --background: oklch(0.18 0.04 268);
   --foreground: oklch(0.96 0.01 262);
   --card: oklch(0.23 0.05 268);
