@@ -32,12 +32,13 @@ type BookingCardProps = {
 }
 
 // One of the guest's bookings. The whole card opens the space page: the name is a link stretched over
-// the card, and "Cancel booking" sits above it, so the button is never inside the link.
+// the card, and "Cancel booking" sits above it, so the button is never inside the link. Hovering the
+// link lifts the card like a space card (DESIGN.md "Motion"); hovering the button does not.
 export function BookingCard({ booking, imageUrl, onCancelled }: BookingCardProps) {
   const hours = bookingHours(booking.startTime, booking.endTime)
 
   return (
-    <Card className="relative h-full gap-4 overflow-hidden rounded-lg pt-0 pb-4 shadow-none transition-colors has-[a:hover]:border-primary has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring">
+    <Card className="group relative h-full gap-4 overflow-hidden rounded-lg pt-0 pb-4 shadow-none transition-[translate,box-shadow,border-color] duration-300 ease-out has-[a:hover]:border-primary/60 has-[a:hover]:shadow-lift has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring motion-safe:has-[a:hover]:-translate-y-1">
       {imageUrl === undefined ? (
         <Skeleton className="aspect-[16/10] w-full rounded-lg" />
       ) : imageUrl === null ? (
@@ -45,11 +46,13 @@ export function BookingCard({ booking, imageUrl, onCancelled }: BookingCardProps
           <ImageOff className="size-6" aria-hidden="true" />
         </div>
       ) : (
-        <img
-          src={imageUrl}
-          alt={`Photo of ${booking.space.name}`}
-          className="aspect-[16/10] w-full rounded-lg bg-muted object-cover"
-        />
+        <div className="overflow-hidden rounded-lg bg-muted">
+          <img
+            src={imageUrl}
+            alt={`Photo of ${booking.space.name}`}
+            className="aspect-[16/10] w-full object-cover transition-transform duration-700 ease-out motion-safe:group-has-[a:hover]:scale-105"
+          />
+        </div>
       )}
       <CardHeader className="gap-2 px-4">
         <Badge variant="outline" className={statusBadge({ status: booking.status })}>
@@ -58,7 +61,7 @@ export function BookingCard({ booking, imageUrl, onCancelled }: BookingCardProps
         <CardTitle className="text-base leading-snug font-semibold wrap-break-word">
           <Link
             to={`/spaces/${booking.spaceId}`}
-            className="outline-none after:absolute after:inset-0 after:content-['']"
+            className="outline-none transition-colors after:absolute after:inset-0 after:content-[''] hover:text-primary"
           >
             {booking.space.name}
           </Link>

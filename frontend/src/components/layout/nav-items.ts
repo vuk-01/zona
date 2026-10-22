@@ -1,4 +1,5 @@
 import { Building2, CalendarDays, CircleUser, House, type LucideIcon, Search } from 'lucide-react'
+import type { ReactNode } from 'react'
 
 import type { UserMode } from '@/lib/user'
 
@@ -10,18 +11,50 @@ export type NavItem = {
   end?: boolean
 }
 
+// A group of items in the side menu, under a small title
+export type NavSection = {
+  title: string
+  items: NavItem[]
+}
+
+const home: NavItem = { to: '/', label: 'Home', icon: House, end: true }
+const explore: NavItem = { to: '/spaces', label: 'Explore', icon: Search }
+const bookings: NavItem = { to: '/bookings', label: 'Bookings', icon: CalendarDays }
+const mySpaces: NavItem = { to: '/host/spaces', label: 'My spaces', icon: Building2 }
 const profile: NavItem = { to: '/profile', label: 'Profile', icon: CircleUser }
 
-// Guest/host mode changes these items, never the colors (see DESIGN.md).
-export const navItems: Record<UserMode, NavItem[]> = {
+// Guest/host mode changes these items, never the colors (see DESIGN.md). The side menu shows them in
+// sections; the tab bar on phones shows the same items in one row (navItems).
+export const navSections: Record<UserMode, NavSection[]> = {
   guest: [
-    { to: '/', label: 'Home', icon: House, end: true },
-    { to: '/spaces', label: 'Explore', icon: Search },
-    { to: '/bookings', label: 'Bookings', icon: CalendarDays },
-    profile,
+    { title: 'Discover', items: [home, explore] },
+    { title: 'You', items: [bookings, profile] },
   ],
-  host: [{ to: '/host/spaces', label: 'My spaces', icon: Building2 }, profile],
+  host: [
+    { title: 'Hosting', items: [mySpaces] },
+    { title: 'You', items: [profile] },
+  ],
 }
+
+export const navItems: Record<UserMode, NavItem[]> = {
+  guest: navSections.guest.flatMap((section) => section.items),
+  host: navSections.host.flatMap((section) => section.items),
+}
+
+// The account at the bottom of the side menu. src/app/app-shell.tsx fills it from the auth and users
+// features, since layout imports no features.
+export type NavAccount =
+  | { status: 'loading' }
+  | { status: 'visitor'; loginHref: string }
+  | {
+      status: 'signed-in'
+      name: string
+      email: string
+      // The user's photo or initials (UserAvatar from the users feature)
+      avatar: ReactNode
+      onLogout: () => void
+      isLoggingOut: boolean
+    }
 
 // Where the app goes after switching modes, and where the wordmark links to.
 export const modeHome: Record<UserMode, string> = {

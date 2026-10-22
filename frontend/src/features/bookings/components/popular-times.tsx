@@ -50,13 +50,12 @@ type PopularTimesProps = {
 }
 
 // "Popular time": day chips, an hourly bar chart 08:00–22:00 and one line of text.
-// Hover, tap or arrow keys pick an hour; "Show as table" lists every value.
+// Hover, tap or arrow keys pick an hour, and its value shows in a pill above the bar.
 export function PopularTimes({ space }: PopularTimesProps) {
   const { data, isLoading, error, refetch, isRefetching } = usePopularTimes(space)
   const today = BY_JS_DAY[new Date().getDay()]
   const [day, setDay] = useState<Weekday>(today)
   const [picked, setPicked] = useState<number | null>(null)
-  const [showTable, setShowTable] = useState(false)
   const barsRef = useRef<HTMLDivElement>(null)
 
   const heading = (
@@ -170,111 +169,74 @@ export function PopularTimes({ space }: PopularTimesProps) {
       {!values ? (
         <p className="text-sm text-muted-foreground">Closed on {dayInfo.long}s.</p>
       ) : (
-        <>
-          <figure className="flex flex-col gap-2">
-            {/* The selected hour's value, above its bar: the one direct label, the rest are in the table */}
-            <div className="relative h-9" aria-hidden="true">
-              {selected >= 0 && (
-                <div
-                  className="absolute bottom-0 flex -translate-x-1/2 items-baseline gap-1 rounded-full border bg-popover px-3 py-1 text-xs whitespace-nowrap shadow-soft"
-                  style={{
-                    left: `clamp(3.5rem, ${((selected + 0.5) / values.length) * 100}%, calc(100% - 3.5rem))`,
-                  }}
-                >
-                  <span className="font-semibold text-foreground">
-                    {values[selected] === 0 ? 'Quiet' : `${values[selected]}%`}
-                  </span>
-                  <span className="text-muted-foreground">at {formatHour(hourAt(selected))}</span>
-                </div>
-              )}
-            </div>
-
-            <div
-              ref={barsRef}
-              role="group"
-              aria-label={`Popular times on ${dayInfo.long}, use the arrow keys to move between hours`}
-              className="flex h-32 items-end border-b border-border"
-              // Mouse only: a touch "leaves" as soon as the finger lifts, which would undo the tap
-              onPointerLeave={(event) => {
-                if (event.pointerType === 'mouse') setPicked(null)
-              }}
-            >
-              {values.map((value, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  tabIndex={index === selected ? 0 : -1}
-                  aria-label={`${formatHour(hourAt(index))}, ${describe(value)}`}
-                  aria-current={index === selected ? 'true' : undefined}
-                  className="flex h-full flex-1 items-end justify-center px-px outline-none focus-visible:rounded-xs focus-visible:ring-[3px] focus-visible:ring-ring"
-                  onPointerEnter={() => setPicked(index)}
-                  onFocus={() => setPicked(index)}
-                  onClick={() => setPicked(index)}
-                  onKeyDown={(event) => onBarKey(event, index)}
-                >
-                  <span
-                    className={barVariants({ selected: index === selected })}
-                    style={{ height: value === 0 ? 0 : `max(${value}%, 4px)` }}
-                  />
-                </button>
-              ))}
-            </div>
-
-            {/* x axis: a label every 3 hours, centered under its bar */}
-            <div className="relative h-4 text-xs text-muted-foreground tabular-nums" aria-hidden="true">
-              {AXIS_HOURS.map((hour) => (
-                <span
-                  key={hour}
-                  className="absolute -translate-x-1/2"
-                  style={{ left: `${((hour - data.firstHour + 0.5) / values.length) * 100}%` }}
-                >
-                  {hour}
+        <figure className="flex flex-col gap-2">
+          {/* The selected hour's value, above its bar; screen readers get every hour from the bars' labels */}
+          <div className="relative h-9" aria-hidden="true">
+            {selected >= 0 && (
+              <div
+                className="absolute bottom-0 flex -translate-x-1/2 items-baseline gap-1 rounded-full border bg-popover px-3 py-1 text-xs whitespace-nowrap shadow-soft"
+                style={{
+                  left: `clamp(3.5rem, ${((selected + 0.5) / values.length) * 100}%, calc(100% - 3.5rem))`,
+                }}
+              >
+                <span className="font-semibold text-foreground">
+                  {values[selected] === 0 ? 'Quiet' : `${values[selected]}%`}
                 </span>
-              ))}
-            </div>
+                <span className="text-muted-foreground">at {formatHour(hourAt(selected))}</span>
+              </div>
+            )}
+          </div>
 
-            <figcaption className="text-sm">
-              {busiest >= 0 && values[busiest] > 0
-                ? `Usually busiest around ${formatHour(hourAt(busiest))}`
-                : `Usually quiet on ${dayInfo.long}s`}
-            </figcaption>
-          </figure>
-
-          <button
-            type="button"
-            aria-expanded={showTable}
-            aria-controls="popular-table"
-            className="inline-flex min-h-11 items-center self-start rounded-sm text-sm font-medium text-primary underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring md:min-h-0"
-            onClick={() => setShowTable((open) => !open)}
+          <div
+            ref={barsRef}
+            role="group"
+            aria-label={`Popular times on ${dayInfo.long}, use the arrow keys to move between hours`}
+            className="flex h-32 items-end border-b border-border"
+            // Mouse only: a touch "leaves" as soon as the finger lifts, which would undo the tap
+            onPointerLeave={(event) => {
+              if (event.pointerType === 'mouse') setPicked(null)
+            }}
           >
-            {showTable ? 'Hide table' : 'Show as table'}
-          </button>
-          {showTable && (
-            <table id="popular-table" className="w-full max-w-sm text-sm">
-              <caption className="sr-only">Popular times on {dayInfo.long}</caption>
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th scope="col" className="py-2 font-medium">
-                    Hour
-                  </th>
-                  <th scope="col" className="py-2 text-right font-medium">
-                    Usually booked
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="tabular-nums">
-                {values.map((value, index) => (
-                  <tr key={index} className="border-b last:border-b-0">
-                    <td className="py-2">
-                      {formatHour(hourAt(index))}–{formatHour(hourAt(index) + 1)}
-                    </td>
-                    <td className="py-2 text-right">{value === 0 ? '—' : `${value}%`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </>
+            {values.map((value, index) => (
+              <button
+                key={index}
+                type="button"
+                tabIndex={index === selected ? 0 : -1}
+                aria-label={`${formatHour(hourAt(index))}, ${describe(value)}`}
+                aria-current={index === selected ? 'true' : undefined}
+                className="flex h-full flex-1 items-end justify-center px-px outline-none focus-visible:rounded-xs focus-visible:ring-[3px] focus-visible:ring-ring"
+                onPointerEnter={() => setPicked(index)}
+                onFocus={() => setPicked(index)}
+                onClick={() => setPicked(index)}
+                onKeyDown={(event) => onBarKey(event, index)}
+              >
+                <span
+                  className={barVariants({ selected: index === selected })}
+                  style={{ height: value === 0 ? 0 : `max(${value}%, 4px)` }}
+                />
+              </button>
+            ))}
+          </div>
+
+          {/* x axis: a label every 3 hours, centered under its bar */}
+          <div className="relative h-4 text-xs text-muted-foreground tabular-nums" aria-hidden="true">
+            {AXIS_HOURS.map((hour) => (
+              <span
+                key={hour}
+                className="absolute -translate-x-1/2"
+                style={{ left: `${((hour - data.firstHour + 0.5) / values.length) * 100}%` }}
+              >
+                {hour}
+              </span>
+            ))}
+          </div>
+
+          <figcaption className="text-sm">
+            {busiest >= 0 && values[busiest] > 0
+              ? `Usually busiest around ${formatHour(hourAt(busiest))}`
+              : `Usually quiet on ${dayInfo.long}s`}
+          </figcaption>
+        </figure>
       )}
     </section>
   )

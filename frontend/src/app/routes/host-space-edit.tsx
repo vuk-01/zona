@@ -1,7 +1,9 @@
-import { MapPinOff } from 'lucide-react'
+import { CircleAlert, MapPinOff } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 
 import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
+import { HeroPanel } from '@/components/layout/hero-panel'
 import { PageTitle } from '@/components/layout/page-title'
 import { Button } from '@/components/ui/button'
 import { useCurrentUser } from '@/features/auth/api/use-auth'
@@ -12,7 +14,9 @@ import { SpaceFormSkeleton } from '@/features/spaces/components/space-form-skele
 import { savedNotice } from '@/features/spaces/hooks/use-saved-notice'
 import { NotFoundError } from '@/lib/mock-db'
 
-// Wrapped in RequireAuth mode="host", so the user is signed in once the page renders.
+// Wrapped in RequireAuth mode="host", so the user is signed in once the page renders. The back link and
+// the title share the hero panel in every state, so the title stays mounted (and keeps focus) when the
+// space arrives; below it the form skeleton, the error or the form.
 export function HostSpaceEdit() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -20,16 +24,6 @@ export function HostSpaceEdit() {
   const { data: space, isLoading, error, refetch, isRefetching } = useSpace(Number(id))
   const { data: user } = useCurrentUser()
   const updateSpace = useUpdateSpace()
-
-  if (isLoading) {
-    return (
-      <section>
-        <BackToSpacesLink />
-        <PageTitle>Edit space</PageTitle>
-        <SpaceFormSkeleton />
-      </section>
-    )
-  }
 
   // Someone else's space is "not found" too: a host only ever edits their own
   if (error instanceof NotFoundError || (space && space.host.id !== user?.id)) {
@@ -47,28 +41,31 @@ export function HostSpaceEdit() {
     )
   }
 
-  if (error || !space) {
-    return (
-      <section role="alert" className="flex flex-col items-start gap-4">
-        <BackToSpacesLink />
-        <PageTitle>Edit space</PageTitle>
-        <p className="text-destructive">This space failed to load.</p>
+  let body: ReactNode
+  if (isLoading) {
+    body = <SpaceFormSkeleton />
+  } else if (error || !space) {
+    body = (
+      <div
+        role="alert"
+        className="flex flex-col items-start gap-4 rounded-lg border bg-card p-6 text-destructive motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300"
+      >
+        <p className="flex items-center gap-2">
+          <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
+          This space failed to load.
+        </p>
         <Button
           variant="outline"
-          className="h-11 rounded-full bg-transparent hover:bg-accent focus-visible:ring-ring md:h-9"
+          className="h-11 rounded-full bg-transparent text-foreground hover:bg-accent focus-visible:ring-ring md:h-9"
           disabled={isRefetching}
           onClick={() => refetch()}
         >
           Try again
         </Button>
-      </section>
+      </div>
     )
-  }
-
-  return (
-    <section>
-      <BackToSpacesLink />
-      <PageTitle>{`Edit ${space.name}`}</PageTitle>
+  } else {
+    body = (
       <SpaceForm
         space={space}
         isPending={updateSpace.isPending}
@@ -80,6 +77,18 @@ export function HostSpaceEdit() {
           )
         }
       />
+    )
+  }
+
+  return (
+    <section className="flex flex-col gap-6 md:gap-8">
+      <HeroPanel>
+        <div className="flex flex-col gap-2">
+          <BackToSpacesLink />
+          <PageTitle>{space ? `Edit ${space.name}` : 'Edit space'}</PageTitle>
+        </div>
+      </HeroPanel>
+      {body}
     </section>
   )
 }

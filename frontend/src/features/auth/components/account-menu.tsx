@@ -6,8 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 import { useCurrentUser, useLogout } from '../api/use-auth'
 
-// Account slot in the top bar (all screens): "Log in" for visitors, the user's name and
-// "Log out" when signed in. Logging out goes home; flushSync commits that before the user is cleared.
+// Account slot in the top bar on phones (md+ has the account at the bottom of the side menu): "Log in"
+// for visitors, the user's name and "Log out" when signed in. Logging out goes home; flushSync commits
+// that before the user is cleared.
 export function AccountMenu() {
   const location = useLocation()
   const { data: user, isPending } = useCurrentUser()

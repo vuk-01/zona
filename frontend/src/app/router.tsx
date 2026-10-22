@@ -1,6 +1,7 @@
 import { createBrowserRouter } from 'react-router'
 
 import { AppShell } from '@/app/app-shell'
+import { AuthShell } from '@/app/auth-shell'
 import { Bookings } from '@/app/routes/bookings'
 import { Home } from '@/app/routes/home'
 import { HostSpaceEdit } from '@/app/routes/host-space-edit'
@@ -12,12 +13,11 @@ import { Profile } from '@/app/routes/profile'
 import { Signup } from '@/app/routes/signup'
 import { SpaceDetail } from '@/app/routes/space-detail'
 import { Spaces } from '@/app/routes/spaces'
-import { AuthLayout } from '@/components/layout/auth-layout'
 import { RequireAuth } from '@/features/auth/components/require-auth'
 
 export const router = createBrowserRouter([
   {
-    element: <AuthLayout />,
+    element: <AuthShell />,
     children: [
       { path: '/login', element: <Login /> },
       { path: '/signup', element: <Signup /> },

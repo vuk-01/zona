@@ -36,6 +36,9 @@ const valueVariants = cva('wrap-break-word', {
 const buttonClass =
   'h-12 w-full rounded-full focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card md:w-auto md:px-8'
 
+// Edit and back: the fields (or the values) fade in where the other ones were
+const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300'
+
 type ProfileDetailsProps = {
   // The signed-in user; the route passes it in from the auth feature
   user: User
@@ -118,7 +121,7 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
       <StatusNotice notice={notice} className="mt-6" />
 
       {isEditing ? (
-        <form noValidate onSubmit={onSubmit} className="mt-6 flex flex-col gap-4">
+        <form noValidate onSubmit={onSubmit} className={`mt-6 flex flex-col gap-4 ${fadeIn}`}>
           <div className="grid gap-4 md:grid-cols-2">
             <FormField
               id="profile-name"
@@ -184,7 +187,7 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
           </div>
         </form>
       ) : (
-        <dl className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <dl className={`mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3 ${fadeIn}`}>
           {details.map(({ label, value }) => (
             <div key={label} className="flex min-w-0 flex-col gap-1">
               <dt className="text-sm text-muted-foreground">{label}</dt>

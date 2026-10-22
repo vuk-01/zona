@@ -1,15 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2 } from 'lucide-react'
+import { LockKeyhole, Loader2, Mail } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
 import { z } from 'zod'
 
 import { FormAlert } from '@/components/form/form-alert'
-import { FormField } from '@/components/form/form-field'
 import { Button } from '@/components/ui/button'
 
 import { useLogin } from '../api/use-auth'
 import { useRedirectTarget } from '../hooks/use-redirect-target'
+import { AuthField } from './auth-field'
 
 const loginSchema = z.object({
   email: z.string().trim().min(1, 'Enter your email').pipe(z.email('Enter a valid email')),
@@ -33,7 +33,8 @@ export function LoginForm() {
 
   return (
     <form noValidate onSubmit={handleSubmit(onSubmit)} className="grid gap-4">
-      <FormField
+      <AuthField
+        icon={Mail}
         id="email"
         label="Email"
         type="email"
@@ -42,7 +43,8 @@ export function LoginForm() {
         error={errors.email?.message}
         {...register('email')}
       />
-      <FormField
+      <AuthField
+        icon={LockKeyhole}
         id="password"
         label="Password"
         type="password"

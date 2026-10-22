@@ -16,6 +16,8 @@
   --foreground: oklch(0.24 0.06 268);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.24 0.06 268);
+  /* phones: the content sheet under the top bar; white like the cards in light mode */
+  --sheet: oklch(1 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.24 0.06 268);
   --primary: oklch(0.55 0.21 264);
@@ -50,48 +52,56 @@
   --chart-1: oklch(0.55 0.21 264);
   --chart-2: oklch(0.88 0.05 262);
   --shadow-color: oklch(0.45 0.12 264 / 0.08);
+  /* shadow-lift: a clickable card on hover */
+  --lift-color: oklch(0.45 0.12 264 / 0.18);
   /* dims the page behind dialogs: navy foreground at 50% */
   --overlay: oklch(0.24 0.06 268 / 0.5);
   --font-heading: 'Poppins', ui-sans-serif, system-ui, sans-serif;
   --font-body: 'Poppins', ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Dark surfaces step up in lightness: page (L 0.155) < phone sheet (0.195) < navigation (0.225, with
+   a border) < cards (0.275), so cards always stand out from what they sit on. Every text pair is at
+   least 4.5:1 (DESIGN.md "Dark mode"). */
 .dark {
   color-scheme: dark;
-  --background: oklch(0.18 0.04 268);
-  --foreground: oklch(0.96 0.01 262);
-  --card: oklch(0.23 0.05 268);
-  --card-foreground: oklch(0.96 0.01 262);
-  --popover: oklch(0.23 0.05 268);
-  --popover-foreground: oklch(0.96 0.01 262);
-  --primary: oklch(0.68 0.17 262);
-  --primary-foreground: oklch(0.18 0.05 268);
-  --secondary: oklch(0.3 0.05 266);
-  --secondary-foreground: oklch(0.94 0.02 262);
-  --muted: oklch(0.28 0.05 266);
-  --muted-foreground: oklch(0.72 0.03 262);
-  --accent: oklch(0.3 0.05 266);
-  --accent-foreground: oklch(0.94 0.02 262);
+  --background: oklch(0.155 0.035 268);
+  --foreground: oklch(0.975 0.008 262);
+  --card: oklch(0.275 0.052 267);
+  --card-foreground: oklch(0.975 0.008 262);
+  --sheet: oklch(0.195 0.042 268);
+  --popover: oklch(0.275 0.052 267);
+  --popover-foreground: oklch(0.975 0.008 262);
+  --primary: oklch(0.72 0.16 260);
+  --primary-foreground: oklch(0.17 0.05 268);
+  --secondary: oklch(0.35 0.08 264);
+  --secondary-foreground: oklch(0.97 0.02 262);
+  --muted: oklch(0.32 0.05 266);
+  --muted-foreground: oklch(0.8 0.03 262);
+  --accent: oklch(0.33 0.06 265);
+  --accent-foreground: oklch(0.97 0.02 262);
   --highlight: oklch(0.7 0.17 360);
   --highlight-foreground: oklch(0.18 0.05 268);
-  --success: oklch(0.72 0.15 150);
+  --success: oklch(0.77 0.15 152);
   --success-foreground: oklch(0.18 0.05 268);
   --destructive: oklch(0.68 0.19 25);
   --destructive-foreground: oklch(0.18 0.05 268);
-  --border: oklch(0.32 0.04 268);
-  --input: oklch(0.52 0.05 266);
-  --ring: oklch(0.68 0.17 262);
-  --sidebar: oklch(0.14 0.04 270);
-  --sidebar-foreground: oklch(0.96 0.01 262);
-  --sidebar-primary: oklch(0.68 0.17 262);
-  --sidebar-primary-foreground: oklch(0.18 0.05 268);
-  --sidebar-accent: oklch(0.22 0.05 270);
-  --sidebar-accent-foreground: oklch(0.96 0.01 262);
-  --sidebar-border: oklch(0.22 0.05 270);
+  --border: oklch(0.39 0.05 266);
+  --input: oklch(0.6 0.05 266);
+  --ring: oklch(0.72 0.16 260);
+  /* navy between the page and the cards; sidebar-border outlines it toward the content */
+  --sidebar: oklch(0.225 0.055 268);
+  --sidebar-foreground: oklch(0.975 0.008 262);
+  --sidebar-primary: oklch(0.72 0.16 260);
+  --sidebar-primary-foreground: oklch(0.17 0.05 268);
+  --sidebar-accent: oklch(0.3 0.06 268);
+  --sidebar-accent-foreground: oklch(0.975 0.008 262);
+  --sidebar-border: oklch(0.33 0.05 268);
   /* L 0.66: inside the dark-mode band for chart marks (dataviz validator), ≥3:1 on the dark card */
   --chart-1: oklch(0.66 0.17 262);
-  --chart-2: oklch(0.35 0.06 266);
+  --chart-2: oklch(0.4 0.065 266);
   --shadow-color: oklch(0 0 0 / 0.3);
+  --lift-color: oklch(0 0 0 / 0.55);
   --overlay: oklch(0 0 0 / 0.6);
 }
 
@@ -100,6 +110,7 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-sheet: var(--sheet);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
@@ -136,8 +147,21 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 8px);
   --shadow-soft: 0 8px 24px -8px var(--shadow-color);
+  --shadow-lift: 0 18px 36px -18px var(--lift-color), 0 6px 14px -8px var(--lift-color);
   --font-heading: var(--font-heading);
   --font-sans: var(--font-body);
+}
+
+/* Auth pages (DESIGN.md "Auth pages"): the category illustrations float and the dashed ring turns, slowly.
+   Always used as motion-safe:animate-*, so with reduced motion nothing moves. */
+@theme {
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-spin-slow: spin 60s linear infinite;
+  @keyframes float {
+    50% {
+      translate: 0 -0.5rem;
+    }
+  }
 }
 
 @layer base {
@@ -147,7 +171,7 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
-  /* Phones: a focused field scrolls to just above the floating bottom nav, and above the booking bar
+  /* Phones: a focused field scrolls to just above the tab bar at the bottom, and above the booking bar
      on a space page (data-booking-bar), instead of ending up hidden under them */
   html {
     @variant max-md {
@@ -171,4 +195,25 @@
     animation: none;
     mix-blend-mode: normal;
   }
+  /* Reveal (src/components/motion/reveal.tsx): content fades in, a little upward, the first time it
+     scrolls into view. Only without reduced motion; with it, nothing is hidden and nothing moves. */
+  [data-reveal] {
+    @variant motion-safe {
+      transition:
+        opacity 600ms cubic-bezier(0.2, 0.7, 0.2, 1),
+        translate 600ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    }
+  }
+  [data-reveal='hidden'] {
+    @variant motion-safe {
+      opacity: 0;
+      translate: 0 1rem;
+    }
+  }
+}
+
+/* Hero panel: a patch of dots, drawn with the input token */
+@utility bg-dots {
+  background-image: radial-gradient(var(--color-input) 1.5px, transparent 1.5px);
+  background-size: 14px 14px;
 }
