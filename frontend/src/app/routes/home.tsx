@@ -20,7 +20,7 @@ export function Home() {
           </h2>
           <Link
             to="/spaces"
-            className="rounded-sm text-sm font-medium text-primary underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+            className="inline-flex min-h-11 items-center rounded-sm text-sm font-medium text-primary underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring md:min-h-0"
           >
             See all
           </Link>

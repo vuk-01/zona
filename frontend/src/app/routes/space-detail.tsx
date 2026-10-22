@@ -43,7 +43,12 @@ export function SpaceDetail() {
       <section role="alert" className="flex flex-col items-start gap-4">
         <PageTitle>Space details</PageTitle>
         <p className="text-destructive">This space failed to load.</p>
-        <Button variant="outline" className="rounded-full" disabled={isRefetching} onClick={() => refetch()}>
+        <Button
+          variant="outline"
+          className="h-11 rounded-full focus-visible:ring-ring md:h-9"
+          disabled={isRefetching}
+          onClick={() => refetch()}
+        >
           Try again
         </Button>
       </section>

@@ -225,7 +225,9 @@ replace them.
 - Focus is always visible: `focus-visible:ring-[3px] focus-visible:ring-ring` (full opacity), with
   `ring-offset-2` on filled pill buttons so the ring does not blend into `primary`.
 - When an action disables or removes the focused element, move focus to its result.
-- Tap targets at least 44 px tall on phones: buttons are `h-11 md:h-9` (shadcn's default is 36 px).
+- Tap targets at least 44 px tall on phones: buttons and chips are `h-11 md:h-9` (shadcn's default is
+  36 px), text links `inline-flex min-h-11 items-center md:min-h-0`, and a smaller control (`Switch`)
+  gets a larger `after:` hit area.
 
 ## Dark mode
 

@@ -45,8 +45,10 @@ export function OpeningHoursFields({ form }: OpeningHoursFieldsProps) {
                   control={control}
                   name={`openingHours.${day}.isOpen`}
                   render={({ field }) => (
+                    // after: grows the 18 px switch to a 44 px+ tap target without changing its look
                     <Switch
                       id={`${day}-open`}
+                      className="relative after:absolute after:-inset-x-2 after:-inset-y-4"
                       checked={field.value}
                       onCheckedChange={field.onChange}
                       onBlur={field.onBlur}

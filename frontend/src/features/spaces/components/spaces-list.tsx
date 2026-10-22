@@ -50,7 +50,7 @@ export function SpacesList({
           <p className="text-destructive">Spaces failed to load.</p>
           <Button
             variant="outline"
-            className="rounded-full"
+            className="h-11 rounded-full focus-visible:ring-ring md:h-9"
             disabled={isRefetching}
             onClick={() => refetch()}
           >

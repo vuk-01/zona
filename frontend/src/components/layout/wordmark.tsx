@@ -13,11 +13,12 @@ type WordmarkProps = {
 export function Wordmark({ to, isHosting, className }: WordmarkProps) {
   return (
     <div className="flex items-center gap-2">
-      {/* px-2 -mx-2: room for the focus ring around the letters without moving the text */}
+      {/* px-2 -mx-2: room for the focus ring around the letters without moving the text;
+          min-h-11: a 44 px tap target in the mobile top bar */}
       <Link
         to={to}
         className={cn(
-          '-mx-2 rounded-full px-2 font-heading text-xl font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring',
+          '-mx-2 inline-flex min-h-11 items-center rounded-full px-2 font-heading text-xl font-bold outline-none focus-visible:ring-[3px] focus-visible:ring-ring md:min-h-0',
           className,
         )}
       >

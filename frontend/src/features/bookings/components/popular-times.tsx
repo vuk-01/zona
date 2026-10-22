@@ -21,7 +21,7 @@ const BY_JS_DAY: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 const AXIS_HOURS = [9, 12, 15, 18, 21]
 
 const chipVariants = cva(
-  'h-9 w-11 shrink-0 rounded-full border text-sm font-medium md:w-auto md:px-4 outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2',
+  'h-11 w-11 shrink-0 rounded-full border text-sm font-medium md:h-9 md:w-auto md:px-4 outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2',
   {
     variants: {
       selected: {
@@ -87,7 +87,12 @@ export function PopularTimes({ space }: PopularTimesProps) {
         <p role="alert" className="text-sm text-destructive">
           Popular times failed to load.
         </p>
-        <Button variant="outline" className="rounded-full" disabled={isRefetching} onClick={() => refetch()}>
+        <Button
+          variant="outline"
+          className="h-11 rounded-full focus-visible:ring-ring md:h-9"
+          disabled={isRefetching}
+          onClick={() => refetch()}
+        >
           Try again
         </Button>
       </section>
@@ -239,7 +244,7 @@ export function PopularTimes({ space }: PopularTimesProps) {
             type="button"
             aria-expanded={showTable}
             aria-controls="popular-table"
-            className="self-start rounded-sm text-sm font-medium text-primary underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring"
+            className="inline-flex min-h-11 items-center self-start rounded-sm text-sm font-medium text-primary underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring md:min-h-0"
             onClick={() => setShowTable((open) => !open)}
           >
             {showTable ? 'Hide table' : 'Show as table'}

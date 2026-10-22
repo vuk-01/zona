@@ -86,10 +86,17 @@ export function BookingForm({ space, user }: BookingFormProps) {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button asChild className="rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2">
+          <Button
+            asChild
+            className="h-11 rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2 md:h-9"
+          >
             <Link to="/bookings">View my bookings</Link>
           </Button>
-          <Button variant="outline" className="rounded-full px-6" onClick={() => createBooking.reset()}>
+          <Button
+            variant="outline"
+            className="h-11 rounded-full px-6 focus-visible:ring-ring md:h-9"
+            onClick={() => createBooking.reset()}
+          >
             Book another time
           </Button>
         </div>
