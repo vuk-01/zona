@@ -1,5 +1,7 @@
-import { useNavigate, useParams } from 'react-router'
+import { MapPinOff } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router'
 
+import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
 import { PageTitle } from '@/components/layout/page-title'
 import { Button } from '@/components/ui/button'
 import { useCurrentUser } from '@/features/auth/api/use-auth'
@@ -32,11 +34,16 @@ export function HostSpaceEdit() {
   // Someone else's space is "not found" too: a host only ever edits their own
   if (error instanceof NotFoundError || (space && space.host.id !== user?.id)) {
     return (
-      <section className="flex flex-col items-start gap-4">
-        <BackToSpacesLink />
-        <PageTitle>Space not found</PageTitle>
-        <p className="text-muted-foreground">This space does not exist or is not one of yours.</p>
-      </section>
+      <EmptyState
+        icon={MapPinOff}
+        title={<PageTitle>Space not found</PageTitle>}
+        text="This space does not exist or is not one of yours."
+        action={
+          <Button asChild className={emptyStateAction}>
+            <Link to="/host/spaces">Back to My spaces</Link>
+          </Button>
+        }
+      />
     )
   }
 

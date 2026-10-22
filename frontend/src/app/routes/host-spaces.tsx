@@ -1,11 +1,11 @@
 import { Plus } from 'lucide-react'
 import { Link } from 'react-router'
 
+import { StatusNotice } from '@/components/feedback/status-notice'
 import { PageTitle } from '@/components/layout/page-title'
 import { Button } from '@/components/ui/button'
 import { useCurrentUser } from '@/features/auth/api/use-auth'
 import { HostSpacesList } from '@/features/spaces/components/host-spaces-list'
-import { SavedNotice } from '@/features/spaces/components/saved-notice'
 import { useSavedNotice } from '@/features/spaces/hooks/use-saved-notice'
 
 // Wrapped in RequireAuth mode="host" in the router, so the user is a host once the page renders.
@@ -28,7 +28,7 @@ export function HostSpaces() {
           </Link>
         </Button>
       </div>
-      <SavedNotice notice={notice} />
+      <StatusNotice notice={notice} className="mt-6" />
       {user && <HostSpacesList hostId={user.id} />}
     </section>
   )

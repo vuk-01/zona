@@ -2,6 +2,8 @@ import { Building2, CircleAlert, Loader2, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
+import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
+import { StatusNotice } from '@/components/feedback/status-notice'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -95,26 +97,21 @@ export function HostSpacesList({ hostId }: HostSpacesListProps) {
       aria-label="Your spaces"
       className="mt-8 rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-card md:focus-visible:ring-offset-background"
     >
-      <p role="status" className="sr-only">
-        {announcement}
-      </p>
+      <StatusNotice notice={announcement || null} className="mb-6" />
       {isEmpty ? (
-        <div className="flex flex-col items-center gap-4 rounded-lg border bg-card px-6 py-12 text-center">
-          <Building2 className="size-10 text-primary" aria-hidden="true" />
-          <h2 className="text-lg font-semibold">You have no spaces yet</h2>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            Add a desk, a meeting room, an office or an event hall and start getting bookings.
-          </p>
-          <Button
-            asChild
-            className="h-12 rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-          >
-            <Link to="/host/spaces/new">
-              <Plus aria-hidden="true" />
-              Add your space
-            </Link>
-          </Button>
-        </div>
+        <EmptyState
+          icon={Building2}
+          title="You have no spaces yet"
+          text="Add a desk, a meeting room, an office or an event hall and start getting bookings."
+          action={
+            <Button asChild className={emptyStateAction}>
+              <Link to="/host/spaces/new">
+                <Plus aria-hidden="true" />
+                Add your space
+              </Link>
+            </Button>
+          }
+        />
       ) : (
         <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {spaces.map((space) => (

@@ -104,8 +104,8 @@ color token.
 
 - **Real photos** of the spaces: 16:10 at the top of the space card, rounded, `object-cover`, always
   with `alt`.
-- **Flat illustrations** for the category options (All, Desk, Meeting room, Office, Event hall) and for
-  empty states, in the style of slika2. They are inline SVG components
+- **Flat illustrations** for the category options (All, Desk, Meeting room, Office, Event hall), in the
+  style of slika2. They are inline SVG components
   (`features/spaces/components/category-illustration.tsx`) filled only with tokens: `primary`,
   `chart-2` (pale blue) and `foreground` (navy outlines), so they follow light and dark mode and need
   no hex values.
@@ -156,13 +156,12 @@ replace them.
   `destructive`; a server error in the `role="alert"` box above the buttons. New: `primary` "Publish
   space" + outline "Save as draft"; Edit: a "Listed" `Switch` row and `primary` "Save changes". Full
   width on phones, auto width from `md`; disabled with a spinner while saving. After saving the app
-  returns to My spaces, where a `role="status"` line (`secondary` with a `primary` border and a
-  `CircleCheck`) says "{name} is published", "{name} was saved as a draft" or "Changes to {name} were
-  saved".
+  returns to My spaces, where a status notice says "{name} is published", "{name} was saved as a
+  draft" or "Changes to {name} were saved".
 - **Delete confirmation**: `AlertDialog` "Delete {name}?" with what happens and that it can't be
   undone; Cancel (outline) + "Delete" (`bg-destructive text-destructive-foreground`). The dialog
-  stays open while deleting and on an error; afterwards focus moves to the list and a `role="status"`
-  line announces "{name} was deleted".
+  stays open while deleting and on an error; afterwards focus moves to the list and a status notice
+  says "{name} was deleted".
 - **Blocked delete**: a space with active bookings cannot be deleted. "Delete" still opens the dialog,
   so the reason is always reachable (a disabled button would hide it): "You can't delete {name} yet",
   "It has 2 active bookings. You can delete it once they are finished or cancelled.", one outline "OK",
@@ -178,10 +177,16 @@ replace them.
   name); an active booking also has a ghost "Cancel booking" in `destructive` above that link.
 - **Cancel booking**: `AlertDialog` "Cancel your booking?" with the space, date and slot; "Keep booking"
   (outline) + "Cancel booking" (`bg-destructive`). Same behavior as the delete confirmation; afterwards
-  focus moves to the Upcoming panel and `role="status"` says "Your booking at {space} was cancelled.
+  focus moves to the Upcoming panel and a status notice says "Your booking at {space} was cancelled.
   You can find it under Past."
 - **Empty state**: white card with a `lucide` icon in `primary`, one heading, one line of text and one
-  `primary` pill action ("You have no spaces yet" → "Add your space").
+  `primary` pill action ("You have no spaces yet" → "Add your space"). Every empty list and every
+  "not found" page renders `EmptyState` (`src/components/feedback/empty-state.tsx`); a "not found"
+  page passes its `PageTitle` as the heading. The action is left out only when there is nothing to do
+  next.
+- **Status notice**: the visible result of an action, a line in `secondary` with a `primary` border and
+  a `CircleCheck`, always rendered as a `role="status"` live region. Code:
+  `src/components/feedback/status-notice.tsx`.
 
 ## Popular time (from slika3)
 

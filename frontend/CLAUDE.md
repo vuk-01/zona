@@ -20,7 +20,7 @@ All paths below are relative to `frontend/`.
 Every feature (spaces, bookings, users…) lives in `src/features/<name>/` and has only the
 subfolders it needs: `api/`, `components/`, `hooks/`, `types.ts`. Features do not import each
 other; a route in `src/app/routes/` combines them on one page. Shared code goes to
-`src/components/ui` or `src/lib`, and only once at least two features use it.
+`src/components` or `src/lib`, and only once at least two features use it.
 Dependency direction: shared code -> features -> app, never the other way around.
 
 ## Structure
@@ -34,6 +34,8 @@ Dependency direction: shared code -> features -> app, never the other way around
 - `src/components/ui/`: shadcn/ui components, added with `pnpm dlx shadcn@latest add <name>` (run inside `frontend/`)
 - `src/components/layout/`: app layout (sidebar, bottom nav, top bar, `nav-items.ts`, `page-title.tsx`)
   and the auth page shell; it imports no features
+- `src/components/feedback/`: `EmptyState` (every empty list and "not found" page) and `StatusNotice`
+  (the visible result of an action)
 - `src/app/app-shell.tsx`: reads the signed-in user and passes the guest/host `mode` and the account
   menu into `AppLayout`; the mode switch lives in `src/app/routes/profile.tsx`
 - Protected routes are wrapped in `RequireAuth` (`mode="host"` for `/host/*`) in `src/app/router.tsx`

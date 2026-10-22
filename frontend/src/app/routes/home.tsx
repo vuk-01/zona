@@ -25,11 +25,7 @@ export function Home() {
             See all
           </Link>
         </div>
-        <SpacesList
-          filters={{ status: 'listed' }}
-          limit={6}
-          emptyMessage="No spaces are listed yet. Check back soon."
-        />
+        <SpacesList filters={{ status: 'listed' }} limit={6} />
       </section>
     </section>
   )

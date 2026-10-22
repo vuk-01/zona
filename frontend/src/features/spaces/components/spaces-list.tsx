@@ -1,5 +1,7 @@
+import { Building2, SearchX } from 'lucide-react'
 import { useRef } from 'react'
 
+import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -16,19 +18,12 @@ type SpacesListProps = {
   limit?: number
   // "5 spaces" above the grid (Explore)
   showCount?: boolean
-  emptyMessage?: string
   // When filters are on, the empty state offers "Clear filters" (Explore)
   onClearFilters?: () => void
 }
 
 // Spaces with all three states: loading, empty and error.
-export function SpacesList({
-  filters = {},
-  limit,
-  showCount = false,
-  emptyMessage = 'No spaces are listed yet. Check back soon.',
-  onClearFilters,
-}: SpacesListProps) {
+export function SpacesList({ filters = {}, limit, showCount = false, onClearFilters }: SpacesListProps) {
   const { data: spaces, isLoading, error, refetch, isRefetching } = useSpaces(filters)
   // "Clear filters" disappears once it is used, so focus moves to the results instead of <body>.
   const resultsRef = useRef<HTMLDivElement>(null)
@@ -61,23 +56,32 @@ export function SpacesList({
     }
 
     if (!spaces || spaces.length === 0) {
-      if (!onClearFilters) return <p className="text-muted-foreground">{emptyMessage}</p>
+      if (!onClearFilters) {
+        return (
+          <EmptyState
+            icon={Building2}
+            title="No spaces yet"
+            text="Hosts are adding desks, rooms and halls. Check back soon."
+          />
+        )
+      }
       return (
-        <div className="flex flex-col items-start gap-4 rounded-lg border border-dashed p-6">
-          <div className="flex flex-col gap-1">
-            <p className="font-semibold">No spaces match this search</p>
-            <p className="text-sm text-muted-foreground">Try another name, city, category or price.</p>
-          </div>
-          <Button
-            className="rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2"
-            onClick={() => {
-              onClearFilters()
-              resultsRef.current?.focus()
-            }}
-          >
-            Clear filters
-          </Button>
-        </div>
+        <EmptyState
+          icon={SearchX}
+          title="No spaces match this search"
+          text="Try another name, city, category or price."
+          action={
+            <Button
+              className={emptyStateAction}
+              onClick={() => {
+                onClearFilters()
+                resultsRef.current?.focus()
+              }}
+            >
+              Clear filters
+            </Button>
+          }
+        />
       )
     }
 
