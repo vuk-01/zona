@@ -49,6 +49,8 @@ Dependency direction: shared code -> features -> app, never the other way around
 - Every list and data page has loading, empty and error states
 - No `any` and no `!` (non-null assertion)
 - If you are not sure how a library API works (Tailwind v4, React Router 8, TanStack Query 5), check the docs via Context7, do not guess.
+- Changes to shared data (`types.ts`, `api/`, `src/lib/mock-db.ts`) are announced to the team and go in a small separate PR
+- Before creating a helper, check `src/lib` for an existing one
 
 ## Done when
 
