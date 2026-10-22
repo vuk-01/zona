@@ -1,7 +1,9 @@
-import { CalendarDays, CircleAlert, Loader2, Search } from 'lucide-react'
+import { CalendarDays, CircleAlert, History, Loader2, type LucideIcon, Search } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
+import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
+import { StatusNotice } from '@/components/feedback/status-notice'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -18,17 +20,36 @@ type BookingsListProps = {
   spaceImages?: Map<number, string>
 }
 
-const TABS: { value: BookingTab; label: string; empty: string }[] = [
-  {
-    value: 'upcoming',
-    label: 'Upcoming',
-    empty: 'No upcoming bookings. Find a space for your next work day.',
-  },
-  { value: 'past', label: 'Past', empty: 'Nothing here yet. Finished and cancelled bookings show up here.' },
-]
+const TABS: { value: BookingTab; label: string; empty: { icon: LucideIcon; title: string; text: string } }[] =
+  [
+    {
+      value: 'upcoming',
+      label: 'Upcoming',
+      empty: {
+        icon: CalendarDays,
+        title: 'No upcoming bookings',
+        text: 'Find a space for your next work day.',
+      },
+    },
+    {
+      value: 'past',
+      label: 'Past',
+      empty: {
+        icon: History,
+        title: 'Nothing here yet',
+        text: 'Finished and cancelled bookings show up here.',
+      },
+    },
+  ]
 
-const exploreButtonClass =
-  'h-12 rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card'
+const exploreSpaces = (
+  <Button asChild className={emptyStateAction}>
+    <Link to="/spaces">
+      <Search aria-hidden="true" />
+      Explore spaces
+    </Link>
+  </Button>
+)
 
 // The guest's bookings in two tabs, Upcoming and Past, with loading, empty and error states.
 export function BookingsList({ guestId, spaceImages }: BookingsListProps) {
@@ -110,18 +131,13 @@ export function BookingsList({ guestId, spaceImages }: BookingsListProps) {
 
   if (bookings.length === 0) {
     return (
-      <div className="mt-8 flex flex-col items-center gap-4 rounded-lg border bg-card px-6 py-12 text-center">
-        <CalendarDays className="size-10 text-primary" aria-hidden="true" />
-        <h2 className="text-lg font-semibold">You have no bookings yet</h2>
-        <p className="max-w-sm text-sm text-muted-foreground">
-          Find a desk, a meeting room or a hall and book your first hours.
-        </p>
-        <Button asChild className={exploreButtonClass}>
-          <Link to="/spaces">
-            <Search aria-hidden="true" />
-            Explore spaces
-          </Link>
-        </Button>
+      <div className="mt-8">
+        <EmptyState
+          icon={CalendarDays}
+          title="You have no bookings yet"
+          text="Find a desk, a meeting room or a hall and book your first hours."
+          action={exploreSpaces}
+        />
       </div>
     )
   }
@@ -130,9 +146,7 @@ export function BookingsList({ guestId, spaceImages }: BookingsListProps) {
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="mt-6 gap-6">
-      <p role="status" className="sr-only">
-        {announcement}
-      </p>
+      <StatusNotice notice={announcement || null} />
       <TabsList variant="line" className="h-auto gap-6 border-b pb-0" aria-label="Bookings">
         {TABS.map(({ value, label }) => (
           <TabsTrigger
@@ -157,17 +171,12 @@ export function BookingsList({ guestId, spaceImages }: BookingsListProps) {
           className="rounded-lg focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-card md:focus-visible:ring-offset-background"
         >
           {byTab[value].length === 0 ? (
-            <div className="flex flex-col items-start gap-4 rounded-lg border bg-card p-6">
-              <p className="text-sm text-muted-foreground">{empty}</p>
-              {value === 'upcoming' && (
-                <Button asChild className={exploreButtonClass}>
-                  <Link to="/spaces">
-                    <Search aria-hidden="true" />
-                    Explore spaces
-                  </Link>
-                </Button>
-              )}
-            </div>
+            <EmptyState
+              icon={empty.icon}
+              title={empty.title}
+              text={empty.text}
+              action={value === 'upcoming' ? exploreSpaces : undefined}
+            />
           ) : (
             <ul className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {byTab[value].map((booking) => (

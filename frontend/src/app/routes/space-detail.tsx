@@ -1,5 +1,7 @@
+import { MapPinOff } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 
+import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
 import { PageTitle } from '@/components/layout/page-title'
 import { Button } from '@/components/ui/button'
 import { useCurrentUser } from '@/features/auth/api/use-auth'
@@ -14,9 +16,6 @@ import { canView } from '@/features/spaces/types'
 import { HostCard } from '@/features/users/components/host-card'
 import { NotFoundError } from '@/lib/mock-db'
 
-const linkClass =
-  'rounded-sm font-semibold text-primary underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring'
-
 // A space: gallery, details, opening hours and host on the left; booking on the right (fixed bar on phones).
 export function SpaceDetail() {
   const { id } = useParams()
@@ -28,13 +27,16 @@ export function SpaceDetail() {
 
   if (error instanceof NotFoundError || (space && !canView(space, user?.id))) {
     return (
-      <section className="flex flex-col items-start gap-4">
-        <PageTitle>Space not found</PageTitle>
-        <p className="text-muted-foreground">This space does not exist or is no longer listed.</p>
-        <Link to="/spaces" className={linkClass}>
-          Explore other spaces
-        </Link>
-      </section>
+      <EmptyState
+        icon={MapPinOff}
+        title={<PageTitle>Space not found</PageTitle>}
+        text="This space does not exist or is no longer listed."
+        action={
+          <Button asChild className={emptyStateAction}>
+            <Link to="/spaces">Explore other spaces</Link>
+          </Button>
+        }
+      />
     )
   }
 
@@ -43,7 +45,12 @@ export function SpaceDetail() {
       <section role="alert" className="flex flex-col items-start gap-4">
         <PageTitle>Space details</PageTitle>
         <p className="text-destructive">This space failed to load.</p>
-        <Button variant="outline" className="rounded-full" disabled={isRefetching} onClick={() => refetch()}>
+        <Button
+          variant="outline"
+          className="h-11 rounded-full focus-visible:ring-ring md:h-9"
+          disabled={isRefetching}
+          onClick={() => refetch()}
+        >
           Try again
         </Button>
       </section>

@@ -14,7 +14,7 @@ export function AccountMenu() {
   const navigate = useNavigate()
   const logout = useLogout(() => navigate('/', { flushSync: true }))
 
-  if (isPending) return <Skeleton className="h-9 w-24 rounded-full" />
+  if (isPending) return <Skeleton className="h-11 w-24 rounded-full md:h-9" />
 
   // A visitor (or a failed session check) can still browse; they just see "Log in".
   if (!user) {
@@ -22,7 +22,7 @@ export function AccountMenu() {
     return (
       <Button
         asChild
-        className="rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="h-11 rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:h-9"
       >
         <Link to={`/login?redirect=${redirect}`}>Log in</Link>
       </Button>
@@ -36,7 +36,7 @@ export function AccountMenu() {
       </span>
       <Button
         variant="outline"
-        className="shrink-0 rounded-full text-foreground focus-visible:ring-ring"
+        className="h-11 shrink-0 rounded-full text-foreground focus-visible:ring-ring md:h-9"
         aria-label={`Log out ${user.name}`}
         disabled={logout.isPending}
         onClick={() => logout.mutate()}

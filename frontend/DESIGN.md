@@ -70,7 +70,7 @@ Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palett
 | `card`, `popover`                        | white cards, sheets and dialogs                                                            |
 | `primary`                                | main CTA (Book, Checkout), active tab, selected bar, links                                 |
 | `secondary`                              | pale blue pills: price pill ("€4–8 /hr"), selected list row, mode switch button            |
-| `muted` / `muted-foreground`             | search field and inactive chips / addresses, "/hour", meta text                            |
+| `muted` / `muted-foreground`             | search field and inactive chips / addresses, "/hr", meta text                              |
 | `accent`                                 | hover backgrounds only (shadcn uses it this way), pale blue                                |
 | `highlight`                              | pink: **only** for discounts ("−30%") and the "Popular" badge                              |
 | `success`                                | green: availability ("23 desks available", "Open now")                                     |
@@ -79,6 +79,7 @@ Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palett
 | `sidebar-*`                              | navy navigation: bottom nav on mobile, sidebar on desktop; `sidebar-primary` = active item |
 | `chart-1` / `chart-2`                    | Popular time: selected (busy) hour / other hours                                           |
 | `shadow-soft`                            | the only shadow, for floating elements (bottom nav, sheets, popovers)                      |
+| `overlay`                                | dims the page behind dialogs (navy at 50%, black at 60% in dark)                           |
 
 All text/background pairs are at least 4.5:1 in both themes. Check this again after changing a
 color token.
@@ -89,7 +90,8 @@ color token.
 - Page title: 24 px (`text-2xl`) on mobile, 28–30 px (`md:text-3xl`), weight 600.
 - Section title ("Spaces near you"): 18 px (`text-lg`), weight 600.
 - Body: 14–16 px (`text-sm`/`text-base`), weight 400; meta 12–14 px in `muted-foreground`.
-- Prices: weight 600, unit in `muted-foreground` ("€4 /hour").
+- Prices: weight 600, unit in `muted-foreground`: "€4 /hr", desks "€3 /desk·hr". `SpacePrice`
+  (`features/spaces/components/space-price.tsx`) writes every price pill, so the unit is the same everywhere.
 - At most two heading sizes per screen.
 
 ### Shape
@@ -103,8 +105,8 @@ color token.
 
 - **Real photos** of the spaces: 16:10 at the top of the space card, rounded, `object-cover`, always
   with `alt`.
-- **Flat illustrations** for the category options (All, Desk, Meeting room, Office, Event hall) and for
-  empty states, in the style of slika2. They are inline SVG components
+- **Flat illustrations** for the category options (All, Desk, Meeting room, Office, Event hall), in the
+  style of slika2. They are inline SVG components
   (`features/spaces/components/category-illustration.tsx`) filled only with tokens: `primary`,
   `chart-2` (pale blue) and `foreground` (navy outlines), so they follow light and dark mode and need
   no hex values.
@@ -120,6 +122,8 @@ replace them.
   (`bg-card rounded-t-xl`). A slim top bar holds the wordmark (+ "Hosting" badge) and the account
   button. A navy pill bottom nav floats at the bottom (`bg-sidebar rounded-full shadow-soft`) with
   the mode's items as icons; the active item is a blue pill with icon and label.
+- **Fixed bars on phones**: the scroll padding in `index.css` keeps a focused field above the bottom
+  nav; a bar fixed above it (the booking bar) sets `data-booking-bar`, which raises that padding.
 - **Desktop (md+)**: a navy sidebar on the left with only the wordmark and the same items (icon +
   label). The account ("Log in", or name + "Log out") sits in a slim top bar on the right, above the
   content. Nothing important goes at the bottom of the fixed sidebar: a short window can hide it.
@@ -145,23 +149,24 @@ replace them.
 - **Main action**: one full-width `primary` pill button at the bottom of the screen.
 - **Host space card** (My spaces): the space card plus a "Draft" `secondary` badge for unlisted
   spaces, the active booking count ("2 bookings · 1 pending" or "No active bookings", it wraps on
-  phones instead of truncating) and two actions: outline pill "Edit" and ghost "Delete" in `destructive`.
+  phones instead of truncating), the price pill on its own row at the right, and two actions: outline
+  pill "Edit" and ghost "Delete" in `destructive`.
 - **Space form** (Add a space / Edit space): one column (`max-w-2xl`) under a "My spaces" back link,
   in sections with a `text-lg` title: About the space (name, optional description, category chips),
   Location, size and price ("Number of desks" appears only for Desk), Opening hours (a row per day:
   `Switch` + two pill selects in whole hours, "Closed" when off), Photos (link fields with a 16:10
   thumbnail, the first is the cover, "Add photo" up to 8). Category chips are radio buttons styled as
-  pills; selected = `secondary` background + `primary` border and label. Errors under each field in
+  pills; selected = `secondary` background, `primary` border and `secondary-foreground` label
+  (`primary` text on `secondary` is under 4.5:1). Errors under each field in
   `destructive`; a server error in the `role="alert"` box above the buttons. New: `primary` "Publish
   space" + outline "Save as draft"; Edit: a "Listed" `Switch` row and `primary` "Save changes". Full
   width on phones, auto width from `md`; disabled with a spinner while saving. After saving the app
-  returns to My spaces, where a `role="status"` line (`secondary` with a `primary` border and a
-  `CircleCheck`) says "{name} is published", "{name} was saved as a draft" or "Changes to {name} were
-  saved".
+  returns to My spaces, where a status notice says "{name} is published", "{name} was saved as a
+  draft" or "Changes to {name} were saved".
 - **Delete confirmation**: `AlertDialog` "Delete {name}?" with what happens and that it can't be
   undone; Cancel (outline) + "Delete" (`bg-destructive text-destructive-foreground`). The dialog
-  stays open while deleting and on an error; afterwards focus moves to the list and a `role="status"`
-  line announces "{name} was deleted".
+  stays open while deleting and on an error; afterwards focus moves to the list and a status notice
+  says "{name} was deleted".
 - **Blocked delete**: a space with active bookings cannot be deleted. "Delete" still opens the dialog,
   so the reason is always reachable (a disabled button would hide it): "You can't delete {name} yet",
   "It has 2 active bookings. You can delete it once they are finished or cancelled.", one outline "OK",
@@ -177,10 +182,16 @@ replace them.
   name); an active booking also has a ghost "Cancel booking" in `destructive` above that link.
 - **Cancel booking**: `AlertDialog` "Cancel your booking?" with the space, date and slot; "Keep booking"
   (outline) + "Cancel booking" (`bg-destructive`). Same behavior as the delete confirmation; afterwards
-  focus moves to the Upcoming panel and `role="status"` says "Your booking at {space} was cancelled.
+  focus moves to the Upcoming panel and a status notice says "Your booking at {space} was cancelled.
   You can find it under Past."
 - **Empty state**: white card with a `lucide` icon in `primary`, one heading, one line of text and one
-  `primary` pill action ("You have no spaces yet" → "Add your space").
+  `primary` pill action ("You have no spaces yet" → "Add your space"). Every empty list and every
+  "not found" page renders `EmptyState` (`src/components/feedback/empty-state.tsx`); a "not found"
+  page passes its `PageTitle` as the heading. The action is left out only when there is nothing to do
+  next.
+- **Status notice**: the visible result of an action, a line in `secondary` with a `primary` border and
+  a `CircleCheck`, always rendered as a `role="status"` live region. Code:
+  `src/components/feedback/status-notice.tsx`.
 
 ## Popular time (from slika3)
 
@@ -224,7 +235,9 @@ replace them.
 - Focus is always visible: `focus-visible:ring-[3px] focus-visible:ring-ring` (full opacity), with
   `ring-offset-2` on filled pill buttons so the ring does not blend into `primary`.
 - When an action disables or removes the focused element, move focus to its result.
-- Tap targets at least 44 px tall on phones: buttons are `h-11 md:h-9` (shadcn's default is 36 px).
+- Tap targets at least 44 px tall on phones: buttons and chips are `h-11 md:h-9` (shadcn's default is
+  36 px), text links `inline-flex min-h-11 items-center md:min-h-0`, and a smaller control (`Switch`)
+  gets a larger `after:` hit area.
 
 ## Dark mode
 

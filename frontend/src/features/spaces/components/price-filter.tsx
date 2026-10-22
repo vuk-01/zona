@@ -3,7 +3,7 @@ import { cva } from 'class-variance-authority'
 import { PRICE_RANGES, type PriceRange } from '../types'
 
 const chipVariants = cva(
-  'h-10 shrink-0 rounded-full border px-3 text-sm md:px-4 font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2',
+  'h-11 shrink-0 rounded-full border px-3 text-sm md:h-9 md:px-4 font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-2',
   {
     variants: {
       selected: {

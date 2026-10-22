@@ -5,6 +5,7 @@ import { Link } from 'react-router'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 import { CATEGORY_LABELS, bookingUnit, type Space, type Weekday } from '../types'
+import { SpacePrice } from './space-price'
 
 const WEEKDAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
@@ -75,10 +76,7 @@ export function SpaceCard({ space }: SpaceCardProps) {
               </span>
             )}
           </div>
-          <span className="shrink-0 rounded-full bg-secondary px-3 py-1 whitespace-nowrap text-secondary-foreground">
-            <span className="font-semibold">€{space.pricePerHour}</span>{' '}
-            <span className="text-muted-foreground">/hr</span>
-          </span>
+          <SpacePrice space={space} />
         </CardContent>
       </Card>
     </Link>

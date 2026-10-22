@@ -3,6 +3,7 @@ import { Armchair, MapPin, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 import { CATEGORY_LABELS, bookingUnit, type Space } from '../types'
+import { SpacePrice } from './space-price'
 
 type SpaceSummaryProps = {
   space: Space
@@ -30,10 +31,7 @@ export function SpaceSummary({ space }: SpaceSummaryProps) {
           )}
           {perDesk ? `${space.deskCount ?? 0} desks, one per booking` : `Up to ${space.capacity} people`}
         </span>
-        <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
-          <span className="font-semibold">€{space.pricePerHour}</span>{' '}
-          <span className="text-muted-foreground">{perDesk ? '/desk·hr' : '/hr'}</span>
-        </span>
+        <SpacePrice space={space} />
       </div>
     </div>
   )
