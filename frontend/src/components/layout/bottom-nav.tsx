@@ -5,7 +5,7 @@ import { NavLink, useLocation } from 'react-router'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveIndicator } from '@/lib/use-active-indicator'
 
-import { type NavItem, navItems } from './nav-items'
+import { type NavBadges, type NavItem, navItems } from './nav-items'
 
 const tabVariants = cva(
   'flex h-16 flex-col items-center justify-center gap-1 text-xs outline-none transition-colors duration-200 focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-inset',
@@ -33,12 +33,14 @@ type BottomNavProps = {
   items: NavItem[]
   // While the signed-in user loads, the mode is unknown: show placeholders, not the guest items
   isLoading: boolean
+  badges: NavBadges
 }
 
 // Phones only: a full-width navy tab bar at the bottom (DESIGN.md "Layout") with every item as icon and
 // label. The active tab has a blue icon, a semibold label and a short blue line on top, which slides to
 // the tab that opens. It keeps clear of the phone's home indicator (safe area); a border line outlines it.
-export function BottomNav({ items, isLoading }: BottomNavProps) {
+// A count (the pending reservations) sits on the top right of its icon as a small blue pill.
+export function BottomNav({ items, isLoading, badges }: BottomNavProps) {
   const { pathname } = useLocation()
   const [list, setList] = useState<HTMLDivElement | null>(null)
   const active = useActiveIndicator(list, '[aria-current="page"]', pathname)
@@ -66,18 +68,36 @@ export function BottomNav({ items, isLoading }: BottomNavProps) {
             />
           )}
           <ul className="grid auto-cols-fr grid-flow-col">
-            {items.map(({ to, label, icon: Icon, end }) => (
-              <li key={to}>
-                <NavLink to={to} end={end} className={({ isActive }) => tabVariants({ active: isActive })}>
-                  {({ isActive }) => (
-                    <>
-                      <Icon className={iconVariants({ active: isActive })} aria-hidden="true" />
-                      {label}
-                    </>
-                  )}
-                </NavLink>
-              </li>
-            ))}
+            {items.map(({ to, label, icon: Icon, end }) => {
+              const badge = badges[to]
+              return (
+                <li key={to}>
+                  <NavLink to={to} end={end} className={({ isActive }) => tabVariants({ active: isActive })}>
+                    {({ isActive }) => (
+                      <>
+                        <span className="relative">
+                          <Icon className={iconVariants({ active: isActive })} aria-hidden="true" />
+                          {badge && badge.count > 0 && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute -top-1.5 left-3 h-4 min-w-4 rounded-full bg-sidebar-primary px-1 text-center text-xs leading-4 font-semibold text-sidebar-primary-foreground ring-2 ring-sidebar"
+                            >
+                              {badge.count}
+                            </span>
+                          )}
+                        </span>
+                        {label}
+                        {badge && badge.count > 0 && (
+                          <span className="sr-only">
+                            , {badge.count} {badge.label}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </NavLink>
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}

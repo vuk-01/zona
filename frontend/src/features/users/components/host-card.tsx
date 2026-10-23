@@ -1,9 +1,9 @@
 import { MapPin } from 'lucide-react'
 
 import { Skeleton } from '@/components/ui/skeleton'
+import { UserAvatar } from '@/components/user-avatar'
 
 import { useUser } from '../api/use-users'
-import { UserAvatar } from './user-avatar'
 
 const sinceFormat = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 

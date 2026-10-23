@@ -2,20 +2,25 @@
 // desks, and a space with active bookings cannot be deleted). The overlap rule itself lives in
 // src/features/bookings/api/bookings-api.ts.
 
-// Stored rows only hold pending, confirmed or cancelled. Finished and expired are what a booking
-// becomes once its time has passed; they are worked out on read (see statusNow), never stored.
-export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'finished' | 'expired'
+// Stored rows only hold pending, confirmed, declined or cancelled. Finished and expired are what a
+// booking becomes once its time has passed; they are worked out on read (see statusNow), never stored.
+// Declined: the host said no to a pending booking.
+export type BookingStatus = 'pending' | 'confirmed' | 'declined' | 'cancelled' | 'finished' | 'expired'
 
 // Read-only summaries the backend joins in, so a booking can be shown without loading the space or user.
 export type BookingSpace = {
   id: number
   name: string
   address: string
+  // The space's host, so a host's bookings can be listed (GET /bookings?hostId=)
+  hostId: number
 }
 
 export type BookingGuest = {
   id: number
   name: string
+  // The guest's photo for the host's Reservations page; null shows their initials
+  avatarUrl: string | null
 }
 
 export type Booking = {
@@ -42,7 +47,7 @@ function endsAt({ date, endTime }: Pick<Booking, 'date' | 'endTime'>) {
 }
 
 // The status right now: once the slot has ended, a confirmed booking is finished and a pending one
-// (never confirmed by the host) is expired. Cancelled stays cancelled.
+// (never confirmed by the host) is expired. Declined and cancelled stay as they are.
 export function statusNow(booking: Pick<Booking, 'date' | 'endTime' | 'status'>, now = new Date()) {
   if (endsAt(booking) > now) return booking.status
   if (booking.status === 'confirmed') return 'finished'

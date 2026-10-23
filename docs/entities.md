@@ -39,7 +39,7 @@ their spaces.
 **Relations:** a host (`isHost = true`) has many spaces (`Space.host.id`); a guest has many bookings
 (`Booking.guest.id`). The same user can have both. The users feature does not load spaces or bookings
 itself: a route in `frontend/src/app/routes/` combines the profile with `GET /spaces?hostId=` and
-`GET /bookings?guestId=`.
+`GET /bookings?guestId=` (a guest's bookings) or `GET /bookings?hostId=` (the bookings of a host's spaces).
 
 **Access rules:** anyone, signed in or not, can browse, search and view spaces and public profiles;
 booking a space and listing a space require a signed-in user; a user can see their full profile
@@ -121,19 +121,21 @@ other people's bookings.
 | --- | --- | --- | --- |
 | id | number | yes | assigned by the backend |
 | spaceId | number | yes | the booked space |
-| space | `{ id: number, name: string, address: string }` | yes | read-only summary joined by the backend |
-| guest | `{ id: number, name: string }` | yes | read-only; set by the backend from the signed-in user |
+| space | `{ id: number, name: string, address: string, hostId: number }` | yes | read-only summary joined by the backend; `hostId` is the space's host |
+| guest | `{ id: number, name: string, avatarUrl: URL \| null }` | yes | read-only; set by the backend from the signed-in user; `avatarUrl` is joined from the guest's profile (the host's Reservations page shows it) |
 | date | `YYYY-MM-DD` | yes | local date in Podgorica |
 | startTime | `HH:mm`, whole hour | yes | inside the space's opening hours for that weekday |
 | endTime | `HH:mm`, whole hour | yes | after `startTime`, at most the closing time |
 | totalPrice | number ≥ 0, EUR | yes | read-only; `pricePerHour × hours` at the moment of booking, it does not change later |
-| status | `pending` \| `confirmed` \| `cancelled` \| `finished` \| `expired` | yes | always `pending` on create; `finished` and `expired` are never stored, see below |
+| status | `pending` \| `confirmed` \| `declined` \| `cancelled` \| `finished` \| `expired` | yes | always `pending` on create; `finished` and `expired` are never stored, see below |
 | createdAt | date | yes | assigned by the backend |
 
-**Status flow:** `pending` → `confirmed` (by the host) or `cancelled`; `confirmed` → `cancelled`.
+**Status flow:** `pending` → `confirmed` (approved by the host), `declined` (the host said no) or
+`cancelled`; `confirmed` → `cancelled`. Only a `pending` booking can be declined (400 otherwise).
 Once the slot has ended (`date` + `endTime`, Podgorica time), the backend returns a `confirmed` booking
 as `finished` and a `pending` one (never confirmed) as `expired`; the stored status does not change.
-`cancelled`, `finished` and `expired` are final: they cannot be confirmed, cancelled or deleted.
+`declined`, `cancelled`, `finished` and `expired` are final: they cannot be confirmed, declined,
+cancelled or deleted.
 **Active** bookings are the upcoming `pending` and `confirmed` ones; only they count on "My spaces" and
 block deleting the space. The `status` filter matches the status as returned (so `status=finished`
 works).
@@ -160,14 +162,17 @@ A slot outside opening hours, not on whole hours, or with the end before the sta
 The host is the space's host.
 
 **Access rules:** only a signed-in user can create a booking, and not for their own space; a guest
-sees and cancels only their own bookings; a host sees the bookings of their spaces and is the only one
-who can confirm them, and can also cancel them. Only a `pending` booking can be deleted (by its guest);
+sees and cancels only their own bookings; a host sees the bookings of their spaces
+(`GET /bookings?hostId=` with their own id; 403 otherwise) and is the only one who can confirm or
+decline them, and can also cancel them. Only a `pending` booking can be deleted (by its guest);
 a confirmed booking is cancelled instead, so the history stays.
 
-**API the frontend expects:** `GET /bookings?spaceId=&guestId=&status=&date=` (sorted by date and start
-time), `GET /bookings/:id` (404 if it does not exist), `POST /bookings` (`spaceId`, `date`,
-`startTime`, `endTime` → Booking with `status: pending`), `PATCH /bookings/:id` (`{ status }`;
-409 if confirming breaks the overlap rule), `DELETE /bookings/:id` (only `pending`),
+**API the frontend expects:** `GET /bookings?spaceId=&guestId=&hostId=&status=&date=` (sorted by date and
+start time; `hostId` lists the bookings of every space that host has, for their Reservations page and
+the pending count next to it in the menu: `hostId=<own id>&status=pending`), `GET /bookings/:id` (404 if
+it does not exist), `POST /bookings` (`spaceId`, `date`, `startTime`, `endTime` → Booking with
+`status: pending`), `PATCH /bookings/:id` (`{ status: confirmed | declined | cancelled }`; 409 if
+confirming breaks the overlap rule; 400 when declining a booking that is not pending), `DELETE /bookings/:id` (only `pending`),
 `GET /bookings/popular-times?spaceId=` (open to everyone, for "Popular time" on the space page:
 `{ firstHour: 8, days: { mon: number[14] | null, … } }`, how booked the space usually is per hour
 08:00–21:00 as 0–100, averaged over the last 8 weeks of bookings; `null` for a closed day; the whole

@@ -1,8 +1,7 @@
 import { MapPin } from 'lucide-react'
 
+import { UserAvatar } from '@/components/user-avatar'
 import type { User } from '@/lib/user'
-
-import { UserAvatar } from './user-avatar'
 
 type ProfileHeaderProps = {
   user: User

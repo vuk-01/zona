@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react'
 import { Outlet } from 'react-router'
 
+import { Toaster } from '@/components/ui/sonner'
 import type { UserMode } from '@/lib/user'
 
 import { BottomNav } from './bottom-nav'
-import { type NavAccount, modeHome, navItems, navSections } from './nav-items'
+import { type NavAccount, type NavBadges, modeHome, navItems, navSections } from './nav-items'
 import { Sidebar } from './sidebar'
 import { ThemeToggle } from './theme-toggle'
 import { Wordmark } from './wordmark'
@@ -19,12 +20,15 @@ type AppLayoutProps = {
   account?: ReactNode
   // md+: the account at the bottom of the side menu
   navAccount: NavAccount
+  // Counts next to nav items, by path (the host's pending reservations)
+  badges?: NavBadges
 }
 
 // Mobile: top bar (wordmark, theme toggle + account) on the sky background, content in a white sheet,
 // the tab bar at the bottom. Desktop (md+): the navy side menu with the navigation and, at its bottom,
-// the account; the theme toggle top right above the content.
-export function AppLayout({ mode, isLoading, account, navAccount }: AppLayoutProps) {
+// the account; the theme toggle top right above the content. Toasts (the result of an action that keeps
+// the user on the page, e.g. approving a reservation) come in bottom right, above the tab bar on phones.
+export function AppLayout({ mode, isLoading, account, navAccount, badges = {} }: AppLayoutProps) {
   const isHosting = !isLoading && mode === 'host'
 
   return (
@@ -35,6 +39,7 @@ export function AppLayout({ mode, isLoading, account, navAccount }: AppLayoutPro
         homePath={modeHome[mode]}
         isHosting={isHosting}
         account={navAccount}
+        badges={badges}
       />
       <div className="flex min-h-dvh flex-col md:pl-72">
         <header className="flex items-center justify-between gap-4 px-4 py-4 md:justify-end md:px-8 md:pt-6 md:pb-0">
@@ -50,7 +55,8 @@ export function AppLayout({ mode, isLoading, account, navAccount }: AppLayoutPro
           <Outlet />
         </main>
       </div>
-      <BottomNav items={navItems[mode]} isLoading={isLoading} />
+      <BottomNav items={navItems[mode]} isLoading={isLoading} badges={badges} />
+      <Toaster />
     </div>
   )
 }

@@ -35,6 +35,8 @@
   /* green: availability ("23 desks available") */
   --success: oklch(0.52 0.14 150);
   --success-foreground: oklch(0.99 0 0);
+  /* amber: a pending booking, waiting for the host; 5:1 on card */
+  --warning: oklch(0.55 0.12 70);
   /* red: only the favorite heart (hover and saved); 4.8:1 on card */
   --favorite: oklch(0.58 0.22 20);
   --destructive: oklch(0.58 0.2 27);
@@ -86,6 +88,8 @@
   --highlight-foreground: oklch(0.18 0.05 268);
   --success: oklch(0.77 0.15 152);
   --success-foreground: oklch(0.18 0.05 268);
+  /* 7.9:1 on the dark card */
+  --warning: oklch(0.8 0.14 80);
   /* 5.1:1 on the dark card */
   --favorite: oklch(0.7 0.19 18);
   --destructive: oklch(0.68 0.19 25);
@@ -129,6 +133,7 @@
   --color-highlight-foreground: var(--highlight-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
   --color-favorite: var(--favorite);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
@@ -196,6 +201,13 @@
   html:has([data-booking-bar]) {
     @variant max-md {
       scroll-padding-bottom: --spacing(44);
+    }
+  }
+  /* Toasts (components/ui/sonner.tsx) sit above the tab bar on phones, and bottom right on md+ */
+  :root {
+    --toast-offset: calc(--spacing(20) + env(safe-area-inset-bottom));
+    @variant md {
+      --toast-offset: --spacing(6);
     }
   }
   h1,

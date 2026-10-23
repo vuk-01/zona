@@ -20,8 +20,11 @@ hosts list their own spaces for rent.
 - It sits in Profile, on every screen. There is no role choice at sign-up.
 - Switching changes the navigation items and the home screen, **never the colors**:
   - Guest nav: "Discover" (Home, Explore) and "You" (Favorites, Bookings, Profile)
-  - Host nav: "Hosting" (My spaces) and "You" (Profile); "Add a space" is a CTA on My spaces, not a nav
-    item. The section titles only show in the side menu (desktop).
+  - Host nav: "Hosting" (My spaces, Reservations) and "You" (Profile); "Add a space" is a CTA on My
+    spaces, not a nav item. The section titles only show in the side menu (desktop).
+  - Reservations carries the number of pending bookings as a small `sidebar-primary` pill: at the right
+    end of the row in the side menu, on the top right of the icon in the tab bar (with a `sidebar` ring).
+    It is left out at 0; screen readers hear "Reservations, 2 pending".
   - After switching, the app goes to that mode's home: guest → `/`, host → `/host/spaces`
 - In host mode a small "Hosting" `Badge` sits next to the logo in the side menu and in the mobile top
   bar, so it is always clear which mode is on.
@@ -41,6 +44,7 @@ hosts list their own spaces for rent.
 | host  | `/host/spaces`          | My spaces               | signed in, in host mode |
 | host  | `/host/spaces/new`      | Add a space             | signed in, in host mode |
 | host  | `/host/spaces/:id/edit` | Edit space              | signed in, in host mode |
+| host  | `/host/reservations`    | Reservations            | signed in, in host mode |
 
 - Signed out on a protected page: go to `/login?redirect=<page>`, and back there after logging in.
 - In guest mode on a host page: go to `/`, the guest home. Switching from host to guest on a host page
@@ -78,6 +82,7 @@ Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palett
 | `accent`                                 | hover backgrounds only (shadcn uses it this way), pale blue                                                   |
 | `highlight`                              | pink: **only** for discounts ("−30%") and the "Popular" badge                                                 |
 | `success`                                | green: availability ("23 desks available", "Open now")                                                        |
+| `warning`                                | amber: **only** the "Pending" booking badge (waiting for the host); 5:1 on `card`, 7.9:1 in dark               |
 | `favorite`                               | red: **only** the favorite heart (its outline on hover, filled once saved); 4.8:1 on `card`, 5.1:1 in dark      |
 | `destructive` / `destructive-foreground` | errors, cancel booking, delete / text on a `destructive` button (white light, navy dark)                      |
 | `border` / `input`                       | dividers and card borders / input borders (stronger, 3:1 against `card`)                                      |
@@ -246,15 +251,31 @@ replace them.
   so the reason is always reachable (a disabled button would hide it): "You can't delete {name} yet",
   "It has 2 active bookings. You can delete it once they are finished or cancelled.", one outline "OK",
   no destructive button.
-- **Booking status badges** (outline): Pending muted, Confirmed `success`, Cancelled `destructive`,
-  Finished muted, Expired muted with a dashed border. Only Pending and Confirmed (upcoming) are
-  "active"; past bookings become Finished (was confirmed) or Expired (was never confirmed).
+- **Booking status badges** (outline): Pending `warning`, Confirmed `success`, Declined and Cancelled
+  `destructive`, Finished muted, Expired muted with a dashed border. Only Pending and Confirmed
+  (upcoming) are "active"; past bookings become Finished (was confirmed) or Expired (was never
+  confirmed). Guests and hosts see the same badges.
 - **My bookings** (`/bookings`): the title and the text tabs "Upcoming" and "Past" (with a count pill)
-  share the hero panel; the cards are below it. The open tab is in the URL (`?tab=past`). Upcoming = pending and confirmed, soonest first; Past = finished, expired and
-  every cancelled booking, newest first. Booking card = the space card layout: cover photo (joined in
+  share the hero panel; the cards are below it. The open tab is in the URL (`?tab=past`). Upcoming = pending and confirmed, soonest first; Past = finished, expired,
+  declined and every cancelled booking, newest first. The count pill has a `card` ring, so it still
+  reads where it sits on the hero panel's `secondary` circle (phones). Booking card = the space card layout: cover photo (joined in
   by the route), status badge, space name, address, date (`CalendarDays`) and slot with hours
   (`Clock`), total in the price pill. The whole card links to `/spaces/:id` (stretched link on the
   name); an active booking also has a ghost "Cancel booking" in `destructive` above that link.
+- **Reservations** (`/host/reservations`): the host's side of My bookings, the same list and booking
+  card (`features/bookings/components/bookings-list.tsx` with `view="host"`). Tabs "Pending" (the
+  default, no `?tab`), "Upcoming" (confirmed) and "Past" (finished, expired, declined, cancelled), each
+  with its count pill. The card adds the guest (`UserAvatar` 32 px and name, weight 500) above the date,
+  and a pending booking has a `primary` "Approve" (`Check`, fills the row) and a ghost "Decline" (`X`,
+  `destructive`) in place of "Cancel booking". Approve needs no confirmation; Decline asks first.
+  Afterwards the booking leaves Pending, focus moves to the Pending panel and a toast says
+  "Booking confirmed" / "Booking declined" with the guest, space, date and slot. A failed approve (e.g.
+  the slot filled up meanwhile) is an error toast with the reason. The count next to Reservations, the
+  guest's badge and the counts on My spaces all follow at once. Empty: "No reservations yet" with "Go
+  to My spaces"; per tab "All caught up" (Pending), "No upcoming reservations", "Nothing here yet".
+- **Decline booking**: `AlertDialog` "Decline this booking?" with the space, guest, date and slot and
+  that the guest will see it as declined; "Keep booking" (outline) + "Decline" (`bg-destructive`). Same
+  behavior as the cancel dialog.
 - **Cancel booking**: `AlertDialog` "Cancel your booking?" with the space, date and slot; "Keep booking"
   (outline) + "Cancel booking" (`bg-destructive`). Same behavior as the delete confirmation; afterwards
   focus moves to the Upcoming panel and a status notice says "Your booking at {space} was cancelled.
@@ -267,6 +288,12 @@ replace them.
 - **Status notice**: the visible result of an action, a line in `secondary` with a `primary` border and
   a `CircleCheck`, always rendered as a `role="status"` live region. Code:
   `src/components/feedback/status-notice.tsx`.
+- **Toast**: the result of a quick action in a list that keeps going (Approve / Decline on
+  Reservations): a floating `card` (`rounded-lg`, thin border, `shadow-soft`) with a `CircleCheck` in
+  `primary` (or an `OctagonX` in `destructive` for an error), a weight-600 title and one line in
+  `muted-foreground`. Bottom right on md+, full width above the tab bar on phones; it leaves after 4s and
+  can be swiped away. Code: `src/components/ui/sonner.tsx` (shadcn's Sonner, drawn only with tokens),
+  mounted once in `AppLayout`; call `toast.success(title, { description })` from `sonner`.
 
 ## Popular time (from slika3)
 
