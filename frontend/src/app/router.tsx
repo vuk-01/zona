@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router'
 import { AppShell } from '@/app/app-shell'
 import { AuthShell } from '@/app/auth-shell'
 import { Bookings } from '@/app/routes/bookings'
+import { Favorites } from '@/app/routes/favorites'
 import { Home } from '@/app/routes/home'
 import { HostSpaceEdit } from '@/app/routes/host-space-edit'
 import { HostSpaceNew } from '@/app/routes/host-space-new'
@@ -26,10 +27,18 @@ export const router = createBrowserRouter([
   {
     element: <AppShell />,
     children: [
-      // Guest mode: browsing is open to everyone, bookings need a signed-in user
+      // Guest mode: browsing is open to everyone, favorites and bookings need a signed-in user
       { path: '/', element: <Home /> },
       { path: '/spaces', element: <Spaces /> },
       { path: '/spaces/:id', element: <SpaceDetail /> },
+      {
+        path: '/favorites',
+        element: (
+          <RequireAuth>
+            <Favorites />
+          </RequireAuth>
+        ),
+      },
       {
         path: '/bookings',
         element: (

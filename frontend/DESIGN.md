@@ -19,7 +19,7 @@ hosts list their own spaces for rent.
   icon: "Switch to hosting" in guest mode, "Switch to renting" in host mode.
 - It sits in Profile, on every screen. There is no role choice at sign-up.
 - Switching changes the navigation items and the home screen, **never the colors**:
-  - Guest nav: "Discover" (Home, Explore) and "You" (Bookings, Profile)
+  - Guest nav: "Discover" (Home, Explore) and "You" (Favorites, Bookings, Profile)
   - Host nav: "Hosting" (My spaces) and "You" (Profile); "Add a space" is a CTA on My spaces, not a nav
     item. The section titles only show in the side menu (desktop).
   - After switching, the app goes to that mode's home: guest → `/`, host → `/host/spaces`
@@ -35,6 +35,7 @@ hosts list their own spaces for rent.
 | guest | `/`                     | Home ("Find your zone") | everyone                |
 | guest | `/spaces`               | Explore spaces          | everyone                |
 | guest | `/spaces/:id`           | Space details           | everyone                |
+| guest | `/favorites`            | Favorites               | signed in               |
 | guest | `/bookings`             | My bookings             | signed in               |
 | both  | `/profile`              | Profile + mode switch   | signed in               |
 | host  | `/host/spaces`          | My spaces               | signed in, in host mode |
@@ -48,8 +49,9 @@ hosts list their own spaces for rent.
 ## Sign-in rules
 
 - Browsing, searching and viewing spaces work **without** signing in.
-- Booking a space and listing a space **require** signing in. The user is sent to `/login?redirect=…`
-  and comes back to the same page afterwards.
+- Booking a space, saving a favorite and listing a space **require** signing in. The user is sent to
+  `/login?redirect=…` and comes back to the same page afterwards (a visitor's click on a heart does this
+  too; the space is not saved by that click).
 - Login: email and password. Sign-up: name, email and password.
 - Google login and "Forgot password" come later with the real backend; they are not shown at all now.
 
@@ -76,6 +78,7 @@ Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palett
 | `accent`                                 | hover backgrounds only (shadcn uses it this way), pale blue                                                   |
 | `highlight`                              | pink: **only** for discounts ("−30%") and the "Popular" badge                                                 |
 | `success`                                | green: availability ("23 desks available", "Open now")                                                        |
+| `favorite`                               | red: **only** the favorite heart (its outline on hover, filled once saved); 4.8:1 on `card`, 5.1:1 in dark      |
 | `destructive` / `destructive-foreground` | errors, cancel booking, delete / text on a `destructive` button (white light, navy dark)                      |
 | `border` / `input`                       | dividers and card borders / input borders (stronger, 3:1 against `card`)                                      |
 | `sidebar-*`                              | navy navigation: tab bar on phones, side menu on desktop; `sidebar-primary` = the active item's icon and line |
@@ -150,8 +153,8 @@ replace them.
 
 ## Key patterns (from slika2)
 
-- **Hero panel** (`src/components/layout/hero-panel.tsx`): the top of Home, Explore, My bookings,
-  Profile and the host pages (My spaces with "Add a space", Add a space and Edit space with the "My spaces"
+- **Hero panel** (`src/components/layout/hero-panel.tsx`): the top of Home, Explore, Favorites, My
+  bookings, Profile and the host pages (My spaces with "Add a space", Add a space and Edit space with the "My spaces"
   back link above the title). One `card` panel (`rounded-xl`, thin border, `p-8` on md+) holds the page title and the page's
   main controls, over flat shapes in the style of the category illustrations: a big `secondary` circle top
   right, a patch of `input` dots (`bg-dots`, `lg` only, next to the title) and, on the tall panels with
@@ -170,8 +173,8 @@ replace them.
 - **Live line** (Home, under the title): "● 5 open now · 5 spaces in Podgorica"; the open count in
   `success` with a slowly pulsing dot.
 - **New on Zona** (Home aside): the newest listed space as a photo card (4:3 photo, `primary` "New on
-  Zona" badge, name, category · city, price pill) on a small fanned stack (`chart-2` and `primary/30`
-  cards behind it) that opens a little further on hover.
+  Zona" badge, the favorite heart top right, name, category · city, price pill) on a small fanned stack
+  (`chart-2` and `primary/30` cards behind it) that opens a little further on hover.
 - **Category spotlight** (Explore aside): the selected category's illustration on a `background` circle,
   its name and one line about it, "Spaces" and "From" (price pill), and one status line ("25 desks free
   now", "2 open now" in `success`, or "Closed now" / "None listed yet" in `muted-foreground`). It keeps
@@ -179,8 +182,27 @@ replace them.
 - **Space card**: photo, name (600), address (`muted-foreground`, one line, truncated), opening hours
   with a `Clock` icon, availability in `success` (desks: "23 desks available"; "Fully booked now" /
   "Closed now" and "Up to 8 people" stay `muted-foreground`), price pill "€3 /hr" in `secondary` at the
-  bottom right. The price per hour is **always** visible. The whole card links to `/spaces/:id`. Cards always
-  stack down the page on phones (one column), never in a sideways row.
+  bottom right. The price per hour is **always** visible. The favorite heart sits top right on the photo
+  (Home, Explore, Favorites). The whole card links to `/spaces/:id`: the name is a link stretched over the
+  card and the heart sits above it, so a click on the heart never opens the space; the card stays lifted
+  while the pointer is on the heart. Cards always stack down the page on phones (one column), never in a
+  sideways row.
+- **Home**: the hero panel, then "Spaces near you" with **three** listed spaces; the rest are on Explore.
+  "See all" is an outline pill button (`h-11 md:h-9`) at the right of the section title, with an
+  `ArrowRight` that nudges right on hover, and goes to `/spaces`.
+- **Favorite heart** (`features/favorites/components/favorite-button.tsx`, wired to the signed-in user in
+  `src/app/favorite-heart.tsx`): a round toggle button (`aria-pressed`, `size-11 md:size-9`) with a
+  `Heart`. On a card's photo it is a `card` disc with `shadow-soft` (it floats over the photo); next to
+  the title on the space page it is an outline button like the theme toggle (only for listed spaces). The
+  outline is `foreground` and turns `favorite` on hover; a click fills it `favorite` and saves the space,
+  the next click empties it and removes it again. Every click pulses the heart once. All hearts of a
+  space read one query, so Home, Explore, Favorites and the space page always agree, and they change at
+  once (optimistic) and go back if saving fails.
+- **Favorites** (`/favorites`): the title and one line in the hero panel, then "3 spaces" and the saved
+  spaces as space cards, newest saved first. Removing one on this page fades and shrinks its card away
+  (300ms) before the grid closes the gap; focus moves to the list. Empty: `EmptyState` with a `Heart`,
+  "No favorites yet", "Tap the heart on any space to save it here." and "Explore spaces"; when the last
+  card is removed, it comes in once that card has faded out.
 - **Tabs**: text tabs with a `primary` underline under the active one; the underline slides to the tab
   that opens.
 - **Selectable list rows**: white row with border; selected = `secondary` background + `primary`
@@ -337,14 +359,17 @@ reduced motion nothing moves, zooms or fades, and color and shadow changes stay.
   `primary`. Cards that are not clickable (Profile, empty states) never lift.
 - **Buttons** with a surface (default, secondary, outline, destructive) and the price chips lift 2px with
   `shadow-soft` on hover and settle back when pressed (`components/ui/button.tsx`); ghost and link
-  buttons only change color. "See all" nudges its arrow right.
+  buttons only change color. "See all" nudges its arrow right. The favorite heart pulses once on every
+  click (450ms, `animate-heart-pulse` in `index.css`).
 - **Changes**: the category selection box and the tab underline slide to the new item (300ms, measured
   with `src/lib/use-active-indicator.ts`); the price filter panel slides in when it opens; the category
   spotlight fades in again on a new category; the hero panel fades in when a page opens; a time select's
   list fades and slides in and out, and its chevron chip turns; the side menu's accent line and the tab
   bar's line slide to the item that opens (300ms).
 - **Results**: skeletons, results and empty states fade in (300ms). On every filter or tab change the
-  cards come in again, one after another along a row (90ms apart).
+  cards come in again, one after another along a row (90ms apart). A card removed from Favorites fades and
+  shrinks to 95% (300ms; `display` is transitioned with `transition-discrete`, so it leaves the grid at
+  the end).
 - **On scroll**: section headings and cards further down fade in, 1rem upward, once
   (`src/components/motion/reveal.tsx`, 600ms).
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+import { FavoriteHeart } from '@/app/favorite-heart'
 import { HeroPanel } from '@/components/layout/hero-panel'
 import { PageTitle } from '@/components/layout/page-title'
 import { CategoryRow } from '@/features/spaces/components/category-row'
@@ -42,6 +43,7 @@ export function Spaces() {
         filters={filters.filters}
         showCount
         onClearFilters={filters.hasFilters ? filters.clear : undefined}
+        cardAction={(space) => <FavoriteHeart space={space} />}
       />
     </section>
   )

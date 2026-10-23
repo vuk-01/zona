@@ -35,7 +35,7 @@ Dependency direction: shared code -> features -> app, never the other way around
 - `src/features/<name>/components/`: components of that feature (e.g. `space-card.tsx`)
 - `src/components/ui/`: shadcn/ui components, added with `pnpm dlx shadcn@latest add <name>` (run inside `frontend/`)
 - `src/components/layout/`: app layout (sidebar, bottom nav, top bar, `nav-items.ts`, `page-title.tsx`,
-  `hero-panel.tsx`: the page top on Home, Explore, My bookings, Profile and the host pages) and the auth
+  `hero-panel.tsx`: the page top on Home, Explore, Favorites, My bookings, Profile and the host pages) and the auth
   page shell; it imports no features
 - `src/components/form/`: `FormField`, `FormAlert` and `TimeSelect` (a whole hour, on `ui/select.tsx`)
 - `src/components/feedback/`: `EmptyState` (every empty list and "not found" page) and `StatusNotice`
@@ -43,6 +43,8 @@ Dependency direction: shared code -> features -> app, never the other way around
 - `src/app/app-shell.tsx`: reads the signed-in user and passes the guest/host `mode`, the account menu
   (top bar on phones) and the account for the bottom of the side menu into `AppLayout`; the mode switch
   lives in `src/app/routes/profile.tsx`
+- `src/app/favorite-heart.tsx`: the favorite heart (favorites feature) with the signed-in user (auth); routes
+  pass it into space cards through `cardAction` / `action` and next to the title on the space page
 - `src/app/auth-shell.tsx`: passes the spaces showcase (category illustrations, live line) into
   `AuthLayout` for `/login` and `/signup`
 - Protected routes are wrapped in `RequireAuth` (`mode="host"` for `/host/*`) in `src/app/router.tsx`
