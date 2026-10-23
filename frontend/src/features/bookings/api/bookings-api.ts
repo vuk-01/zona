@@ -134,9 +134,10 @@ function popularTimes(space: BookableSpace): NonNullable<PopularTimes> | null {
   return { firstHour: POPULAR_FIRST_HOUR, days }
 }
 
-const matches = (booking: Booking, { spaceId, guestId, status, date }: BookingFilters) =>
+const matches = (booking: Booking, { spaceId, guestId, hostId, status, date }: BookingFilters) =>
   (spaceId === undefined || booking.spaceId === spaceId) &&
   (guestId === undefined || booking.guest.id === guestId) &&
+  (hostId === undefined || booking.space.hostId === hostId) &&
   (status === undefined || booking.status === status) &&
   (date === undefined || booking.date === date)
 
@@ -182,13 +183,13 @@ export const bookingsApi = {
   create: async (input: NewBooking, space: BookableSpace, guest: BookingGuest) => {
     await delay(undefined)
     if (input.spaceId !== space.id) throw new InvalidBookingError('The booking does not match this space')
-    if (space.host?.id === guest.id) throw new InvalidBookingError('You cannot book your own space')
+    if (space.host.id === guest.id) throw new InvalidBookingError('You cannot book your own space')
     const hours = assertSlotAvailable(input, space)
     const booking: Booking = {
       ...input,
       id: Date.now(),
-      space: { id: space.id, name: space.name, address: space.address },
-      guest: { id: guest.id, name: guest.name },
+      space: { id: space.id, name: space.name, address: space.address, hostId: space.host.id },
+      guest: { id: guest.id, name: guest.name, avatarUrl: guest.avatarUrl },
       totalPrice: space.pricePerHour * hours,
       status: 'pending',
       createdAt: new Date().toISOString().slice(0, 10),
@@ -198,14 +199,22 @@ export const bookingsApi = {
   },
 
   // Only the status changes after a booking is made, and only while it is pending or confirmed:
-  // cancelled, finished and expired are final (a pending booking whose time has passed is expired, so
-  // it can no longer be confirmed). Confirming checks the overlap rule again, because other bookings
-  // may have been confirmed since this one was created; it needs `space` for that.
-  update: async (id: number, changes: { status: 'confirmed' | 'cancelled' }, space?: BookableSpace) => {
+  // declined, cancelled, finished and expired are final (a pending booking whose time has passed is
+  // expired, so it can no longer be confirmed). The host confirms or declines a pending booking; a
+  // confirmed one can only be cancelled. Confirming checks the overlap rule again, because other
+  // bookings may have been confirmed since this one was created; it needs `space` for that.
+  update: async (
+    id: number,
+    changes: { status: 'confirmed' | 'declined' | 'cancelled' },
+    space?: BookableSpace,
+  ) => {
     const booking = await bookingsApi.get(id)
     if (booking.status === changes.status) return booking
     if (booking.status !== 'pending' && booking.status !== 'confirmed') {
       throw new InvalidBookingError(`${STATUS_LABELS[booking.status]} bookings cannot be changed`)
+    }
+    if (changes.status === 'declined' && booking.status !== 'pending') {
+      throw new InvalidBookingError('Only a pending booking can be declined')
     }
     if (changes.status === 'confirmed') {
       if (space?.id !== booking.spaceId)

@@ -6,6 +6,7 @@ import type { Booking, BookingStatus } from '@/lib/booking'
 export const STATUS_LABELS: Record<BookingStatus, string> = {
   pending: 'Pending',
   confirmed: 'Confirmed',
+  declined: 'Declined',
   cancelled: 'Cancelled',
   finished: 'Finished',
   expired: 'Expired',
@@ -17,6 +18,8 @@ export type NewBooking = Pick<Booking, 'spaceId' | 'date' | 'startTime' | 'endTi
 export type BookingFilters = {
   spaceId?: number
   guestId?: number
+  // The bookings of every space this host has (their Reservations page)
+  hostId?: number
   // Matches the status right now, so 'finished' finds past confirmed bookings
   status?: BookingStatus
   date?: string
@@ -34,8 +37,8 @@ export type BookableSpace = {
   deskCount?: number
   pricePerHour: number
   openingHours: Record<Weekday, { open: string; close: string } | null>
-  // A host cannot book their own space
-  host?: { id: number }
+  // A host cannot book their own space, and a booking remembers whose space it is (hostId)
+  host: { id: number }
   // Popular times need a few weeks of bookings; a newer space has "not enough data"
   createdAt?: string
 }

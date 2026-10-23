@@ -122,20 +122,24 @@ const users: StoredUser[] = [
 // Today's date in the browser's time zone ('YYYY-MM-DD'), for seed rows that should always be current.
 const today = new Intl.DateTimeFormat('en-CA').format(new Date())
 
-const ANA: BookingGuest = { id: 1, name: 'Ana Petrović' }
-const JELENA: BookingGuest = { id: 3, name: 'Jelena Nikolić' }
-const LUKA: BookingGuest = { id: 7, name: 'Luka Šćepanović' }
+const ANA: BookingGuest = { id: 1, name: 'Ana Petrović', avatarUrl: avatar(47) }
+const JELENA: BookingGuest = { id: 3, name: 'Jelena Nikolić', avatarUrl: avatar(45) }
+const NIKOLA: BookingGuest = { id: 5, name: 'Nikola Bulatović', avatarUrl: null }
+const LUKA: BookingGuest = { id: 7, name: 'Luka Šćepanović', avatarUrl: avatar(53) }
 
-const HUB = { id: 1, name: 'Hub Morača Coworking', address: 'Bulevar Svetog Petra Cetinjskog 9' }
-const STUDIO = { id: 2, name: 'Njegoševa Studio Desks', address: 'Njegoševa 24' }
-const GLASS = { id: 3, name: 'Glass Room at City Kvart', address: 'Bulevar Džordža Vašingtona 98' }
-const RIVERSIDE = { id: 4, name: 'Riverside Boardroom', address: 'Ulica Vaka Đurovića 5' }
-const LOFT = { id: 6, name: 'Preko Morače Event Loft', address: 'Bulevar Ivana Crnojevića 64' }
+// Hosts: Marko (2) has Hub Morača, Njegoševa and the Event Loft; Milica (4) has the two meeting rooms.
+const HUB = { id: 1, name: 'Hub Morača Coworking', address: 'Bulevar Svetog Petra Cetinjskog 9', hostId: 2 }
+const STUDIO = { id: 2, name: 'Njegoševa Studio Desks', address: 'Njegoševa 24', hostId: 2 }
+const GLASS = { id: 3, name: 'Glass Room at City Kvart', address: 'Bulevar Džordža Vašingtona 98', hostId: 4 }
+const RIVERSIDE = { id: 4, name: 'Riverside Boardroom', address: 'Ulica Vaka Đurovića 5', hostId: 4 }
+const LOFT = { id: 6, name: 'Preko Morače Event Loft', address: 'Bulevar Ivana Crnojevića 64', hostId: 2 }
 
 // Njegoševa has 2 desks, so 10:00–12:00 on 22 Oct is full. Booking 5 overlaps the confirmed booking 4
 // in the Glass Room, so confirming it is refused. Booking 11 is always today, so Hub Morača shows one
-// desk taken ("23 desks available") whenever it is open. Stored statuses are pending, confirmed or
-// cancelled; finished and expired are worked out on read (see statusNow in ./booking.ts).
+// desk taken ("23 desks available") whenever it is open. Marko has three requests waiting (9, 14, 15)
+// on Reservations; Milica declined booking 16, so Ana sees it under Past. Stored statuses are pending,
+// confirmed, declined or cancelled; finished and expired are worked out on read (see statusNow in
+// ./booking.ts).
 const bookings: Booking[] = [
   {
     id: 1,
@@ -293,6 +297,42 @@ const bookings: Booking[] = [
     totalPrice: 340,
     status: 'pending',
     createdAt: '2026-10-11',
+  },
+  {
+    id: 14,
+    spaceId: LOFT.id,
+    space: LOFT,
+    guest: LUKA,
+    date: '2026-11-06',
+    startTime: '18:00',
+    endTime: '22:00',
+    totalPrice: 340,
+    status: 'pending',
+    createdAt: '2026-10-21',
+  },
+  {
+    id: 15,
+    spaceId: STUDIO.id,
+    space: STUDIO,
+    guest: NIKOLA,
+    date: '2026-10-28',
+    startTime: '10:00',
+    endTime: '14:00',
+    totalPrice: 16,
+    status: 'pending',
+    createdAt: '2026-10-22',
+  },
+  {
+    id: 16,
+    spaceId: RIVERSIDE.id,
+    space: RIVERSIDE,
+    guest: ANA,
+    date: '2026-10-29',
+    startTime: '10:00',
+    endTime: '12:00',
+    totalPrice: 60,
+    status: 'declined',
+    createdAt: '2026-10-20',
   },
 ]
 

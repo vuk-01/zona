@@ -48,7 +48,7 @@ export function BookingForm({ space, user }: BookingFormProps) {
   const resultRef = useRef<HTMLDivElement>(null)
 
   const isDesk = space.category === 'desk'
-  const isOwnSpace = user != null && space.host?.id === user.id
+  const isOwnSpace = user != null && space.host.id === user.id
   const total = space.pricePerHour * slot.hours
   const isFree = availability.data?.available === true
   const canBook = slot.slot !== null && isFree && !isOwnSpace && !createBooking.isPending

@@ -16,6 +16,7 @@ const statusBadge = cva('rounded-full', {
     status: {
       pending: 'text-muted-foreground',
       confirmed: 'border-success text-success',
+      declined: 'border-destructive text-destructive',
       cancelled: 'border-destructive text-destructive',
       // Past bookings: quiet, they no longer need attention
       finished: 'text-muted-foreground',
