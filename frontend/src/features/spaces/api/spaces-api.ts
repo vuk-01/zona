@@ -159,9 +159,13 @@ const matchesSearch = (space: StoredSpace, search: string) => {
   return space.name.toLowerCase().includes(term) || space.city.toLowerCase().includes(term)
 }
 
+// When the user saved the space (shared favorites table in src/lib/mock-db.ts); undefined if they did not
+const savedAt = (spaceId: number, userId: number) =>
+  db.favorites.find((f) => f.spaceId === spaceId && f.userId === userId)?.createdAt
+
 const matches = (
   space: StoredSpace,
-  { search = '', category, city, hostId, status, minPrice, maxPrice }: SpaceFilters,
+  { search = '', category, city, hostId, favoriteOf, status, minPrice, maxPrice }: SpaceFilters,
 ) =>
   matchesSearch(space, search) &&
   (minPrice === undefined || space.pricePerHour >= minPrice) &&
@@ -169,7 +173,14 @@ const matches = (
   (!category || space.category === category) &&
   (!city || space.city.toLowerCase() === city.toLowerCase()) &&
   (hostId === undefined || space.host.id === hostId) &&
+  (favoriteOf === undefined || savedAt(space.id, favoriteOf) !== undefined) &&
   (status === undefined || space.status === status)
+
+// Favorites: the newest saved first, like GET /spaces?favoriteOf= on the backend
+function newestSavedFirst(found: StoredSpace[], userId: number) {
+  const at = (space: StoredSpace) => savedAt(space.id, userId) ?? ''
+  return found.toSorted((a, b) => at(b).localeCompare(at(a)))
+}
 
 export class InvalidSpaceError extends Error {}
 
@@ -211,7 +222,10 @@ export const spacesApi = {
   // The host's own listing (hostId) also gets bookingCounts, like GET /spaces?hostId= on the backend.
   list: async (filters: SpaceFilters = {}) => {
     await delay(undefined)
-    const found = spaces.filter((s) => matches(s, filters)).map(withAvailability)
+    const matching = spaces.filter((s) => matches(s, filters))
+    const sorted =
+      filters.favoriteOf === undefined ? matching : newestSavedFirst(matching, filters.favoriteOf)
+    const found = sorted.map(withAvailability)
     return filters.hostId === undefined
       ? found
       : found.map((s) => ({ ...s, bookingCounts: bookingCounts(s.id) }))

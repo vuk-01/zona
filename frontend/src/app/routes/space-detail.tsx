@@ -1,6 +1,7 @@
 import { MapPinOff } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 
+import { FavoriteHeart } from '@/app/favorite-heart'
 import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
 import { PageTitle } from '@/components/layout/page-title'
 import { Button } from '@/components/ui/button'
@@ -63,7 +64,11 @@ export function SpaceDetail() {
     <section className="flex flex-col gap-8 pb-24 md:pb-0 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:grid-rows-[auto_1fr] lg:gap-x-12">
       <div className="flex min-w-0 flex-col gap-8">
         <div className="flex flex-col gap-4">
-          <PageTitle>{space.name}</PageTitle>
+          {/* A draft is only seen by its host and never shows in Favorites, so it has no heart */}
+          <div className="flex items-start justify-between gap-4">
+            <PageTitle>{space.name}</PageTitle>
+            {space.status === 'listed' && <FavoriteHeart space={space} placement="page" />}
+          </div>
           <SpaceSummary space={space} />
         </div>
         <SpaceGallery images={space.images} name={space.name} />

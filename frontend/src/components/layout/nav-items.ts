@@ -1,4 +1,4 @@
-import { Building2, CalendarDays, CircleUser, House, type LucideIcon, Search } from 'lucide-react'
+import { Building2, CalendarDays, CircleUser, Heart, House, type LucideIcon, Search } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { UserMode } from '@/lib/user'
@@ -19,6 +19,7 @@ export type NavSection = {
 
 const home: NavItem = { to: '/', label: 'Home', icon: House, end: true }
 const explore: NavItem = { to: '/spaces', label: 'Explore', icon: Search }
+const favorites: NavItem = { to: '/favorites', label: 'Favorites', icon: Heart }
 const bookings: NavItem = { to: '/bookings', label: 'Bookings', icon: CalendarDays }
 const mySpaces: NavItem = { to: '/host/spaces', label: 'My spaces', icon: Building2 }
 const profile: NavItem = { to: '/profile', label: 'Profile', icon: CircleUser }
@@ -28,7 +29,7 @@ const profile: NavItem = { to: '/profile', label: 'Profile', icon: CircleUser }
 export const navSections: Record<UserMode, NavSection[]> = {
   guest: [
     { title: 'Discover', items: [home, explore] },
-    { title: 'You', items: [bookings, profile] },
+    { title: 'You', items: [favorites, bookings, profile] },
   ],
   host: [
     { title: 'Hosting', items: [mySpaces] },
