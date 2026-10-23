@@ -72,6 +72,9 @@ export type SpaceFilters = {
   city?: string
   // The host's user id, for "My spaces" and a host's profile.
   hostId?: number
+  // A user's id: only the spaces they saved, newest saved first (Favorites). The backend only allows
+  // the signed-in user's own id.
+  favoriteOf?: number
   // Guests only see 'listed' spaces; drafts are for their host.
   status?: SpaceStatus
   // Price per hour in EUR, both inclusive.

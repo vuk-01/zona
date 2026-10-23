@@ -84,15 +84,18 @@ A space a host rents out by the hour. Code: `frontend/src/features/spaces/` (`ty
 How many bookings fit in the same hour is described under **Booking → Overlap rule**.
 
 **Relations:** a space belongs to one user with `isHost = true` (the host, see **User**); a host can
-have many spaces. A space has many bookings (see **Booking**).
+have many spaces. A space has many bookings (see **Booking**) and can be saved by many users (see
+**Favorite**).
 
 **Access rules:** anyone, signed in or not, can list and view `listed` spaces; only a signed-in user
 with `isHost = true` can create a space; only its host can edit or delete it, or see it while it is a
 `draft`. A space with **active bookings** (see Booking) cannot be deleted: the host can delete it once
 they are all finished, expired or cancelled.
 
-**API the frontend expects:** `GET /spaces?search=&category=&city=&hostId=&status=&minPrice=&maxPrice=`
+**API the frontend expects:** `GET /spaces?search=&category=&city=&hostId=&favoriteOf=&status=&minPrice=&maxPrice=`
 (`search` matches the name or the city, case-insensitive; `hostId` lists one host's spaces;
+`favoriteOf` lists the spaces a user saved, newest saved first, and is only allowed with the signed-in
+user's own id (403 otherwise; the Favorites page sends it with `status=listed`);
 `status=listed` is what guests use, e.g. on Home and Explore; `minPrice`/`maxPrice` filter
 `pricePerHour` in EUR, both inclusive; Explore's price chips send Under €10 → `maxPrice=9.99`,
 €10–30 → `minPrice=10&maxPrice=30`, Over €30 → `minPrice=30.01`),
@@ -178,3 +181,32 @@ whole-space categories; it never returns anyone's bookings; 400 for a slot outsi
 signed-in user is the space's host.
 The mock takes the space (and, for `create`, the signed-in guest) as extra arguments; the backend
 looks the space up by `spaceId` and takes the guest from the session.
+
+## Favorite
+
+A space a user saved with the heart on a space card or the space page. Code:
+`frontend/src/features/favorites/` (`api/favorites-api.ts`, `api/use-favorites.ts`,
+`components/favorite-button.tsx`). The `Favorite` type is shared in `frontend/src/lib/favorite.ts` and
+the mock rows are in `db.favorites` in `frontend/src/lib/mock-db.ts`, because the spaces mock reads them
+for `GET /spaces?favoriteOf=`.
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| userId | number | yes | read-only; set by the backend from the signed-in user |
+| spaceId | number | yes | the saved space; only a space the user can view (`listed`, or their own draft) |
+| createdAt | date-time | yes | assigned by the backend; Favorites shows the newest saved first |
+
+There is no separate id: a user saves a space at most once, so `userId` + `spaceId` is the key.
+
+**Relations:** a favorite belongs to one user and one space; a user has many favorites, a space is saved
+by many users. Deleting a space deletes its favorites.
+
+**Access rules:** only a signed-in user can save or remove a favorite, and only their own; favorites are
+private (nobody else sees who saved what). A visitor's click on a heart goes to `/login?redirect=…`.
+
+**API the frontend expects:** `GET /favorites` (the signed-in user's favorites, newest first →
+Favorite[]), `POST /favorites` (`{ spaceId }` → Favorite; saving a space that is already saved returns
+the saved one unchanged, so repeated clicks are safe; 404 if the space does not exist or the user cannot
+view it), `DELETE /favorites/:spaceId` (204, also when the space was not saved). The cards on the
+Favorites page come from `GET /spaces?favoriteOf=<own id>&status=listed` (see **Space**). The mock
+takes the user's id as an extra argument; the backend takes it from the session.
