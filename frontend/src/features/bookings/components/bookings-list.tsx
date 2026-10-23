@@ -1,4 +1,14 @@
-import { CalendarDays, CircleAlert, History, Loader2, type LucideIcon, Search } from 'lucide-react'
+import {
+  Building2,
+  CalendarCheck,
+  CalendarDays,
+  CircleAlert,
+  History,
+  Inbox,
+  Loader2,
+  type LucideIcon,
+  Search,
+} from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 
@@ -9,46 +19,37 @@ import { Reveal } from '@/components/motion/reveal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { type Booking, isActive } from '@/lib/booking'
+import type { Booking } from '@/lib/booking'
 import { useActiveIndicator } from '@/lib/use-active-indicator'
 
 import { useBookings } from '../api/use-bookings'
-import { type BookingTab, splitBookings, useBookingTab } from '../hooks/use-booking-tabs'
+import {
+  type BookingTab,
+  type BookingView,
+  VIEW_TABS,
+  splitBookings,
+  useBookingTab,
+} from '../hooks/use-booking-tabs'
+import type { BookableSpace } from '../types'
 import { BookingCard } from './booking-card'
 
+// What the route joins in per space id (the bookings feature does not load spaces): the cover photo and,
+// for the host, what approving checks. A Space from the spaces feature has this shape.
+export type BookingListSpace = BookableSpace & { images: string[] }
+
 type BookingsListProps = {
-  guestId: number
-  // Cover photo per space id, joined in by the route (the bookings feature does not load spaces).
-  // undefined while the spaces load; a space missing from the map shows a placeholder.
-  spaceImages?: Map<number, string>
+  // guest: My bookings (the user's own bookings); host: Reservations (the bookings of the user's spaces)
+  view: BookingView
+  userId: number
+  // undefined while the spaces load; a space missing from the map shows a placeholder photo
+  spaces?: Map<number, BookingListSpace>
   // The page title (the route's PageTitle), shown in the hero panel above the tabs
   title: ReactNode
 }
 
-const TABS: { value: BookingTab; label: string; empty: { icon: LucideIcon; title: string; text: string } }[] =
-  [
-    {
-      value: 'upcoming',
-      label: 'Upcoming',
-      empty: {
-        icon: CalendarDays,
-        title: 'No upcoming bookings',
-        text: 'Find a space for your next work day.',
-      },
-    },
-    {
-      value: 'past',
-      label: 'Past',
-      empty: {
-        icon: History,
-        title: 'Nothing here yet',
-        text: 'Finished and cancelled bookings show up here.',
-      },
-    },
-  ]
+type EmptyCopy = { icon: LucideIcon; title: string; text: string }
 
-const grid = 'grid gap-6 md:grid-cols-2 lg:grid-cols-3'
-const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300'
+const TAB_LABELS: Record<BookingTab, string> = { pending: 'Pending', upcoming: 'Upcoming', past: 'Past' }
 
 const exploreSpaces = (
   <Button asChild className={emptyStateAction}>
@@ -59,39 +60,123 @@ const exploreSpaces = (
   </Button>
 )
 
-// The guest's bookings in two tabs, Upcoming and Past, with loading, empty and error states. The title and
-// the tabs share the hero panel; the panel stays in place in every state, so the title never remounts.
-// The tab underline slides to the open tab, and the cards fade in, one after another along a row.
-export function BookingsList({ guestId, spaceImages, title }: BookingsListProps) {
-  const { data: bookings, isLoading, error, refetch, isFetching } = useBookings({ guestId })
-  const [tab, setTab] = useBookingTab()
+const mySpaces = (
+  <Button asChild className={emptyStateAction}>
+    <Link to="/host/spaces">
+      <Building2 aria-hidden="true" />
+      Go to My spaces
+    </Link>
+  </Button>
+)
+
+const COPY: Record<
+  BookingView,
+  {
+    label: string
+    loading: string
+    failed: string
+    empty: EmptyCopy & { action: ReactNode }
+    tabs: Partial<Record<BookingTab, EmptyCopy & { action?: ReactNode }>>
+  }
+> = {
+  guest: {
+    label: 'Bookings',
+    loading: 'Loading your bookings…',
+    failed: 'Your bookings failed to load.',
+    empty: {
+      icon: CalendarDays,
+      title: 'You have no bookings yet',
+      text: 'Find a desk, a meeting room or a hall and book your first hours.',
+      action: exploreSpaces,
+    },
+    tabs: {
+      upcoming: {
+        icon: CalendarDays,
+        title: 'No upcoming bookings',
+        text: 'Find a space for your next work day.',
+        action: exploreSpaces,
+      },
+      past: {
+        icon: History,
+        title: 'Nothing here yet',
+        text: 'Finished, declined and cancelled bookings show up here.',
+      },
+    },
+  },
+  host: {
+    label: 'Reservations',
+    loading: 'Loading reservations…',
+    failed: 'Reservations failed to load.',
+    empty: {
+      icon: CalendarCheck,
+      title: 'No reservations yet',
+      text: 'When guests book one of your spaces, their requests show up here for you to approve.',
+      action: mySpaces,
+    },
+    tabs: {
+      pending: {
+        icon: Inbox,
+        title: 'All caught up',
+        text: 'New booking requests show up here for you to approve or decline.',
+      },
+      upcoming: {
+        icon: CalendarDays,
+        title: 'No upcoming reservations',
+        text: 'Bookings you approve show up here until their day comes.',
+      },
+      past: {
+        icon: History,
+        title: 'Nothing here yet',
+        text: 'Finished, declined and cancelled bookings show up here.',
+      },
+    },
+  },
+}
+
+const grid = 'grid gap-6 md:grid-cols-2 lg:grid-cols-3'
+const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300'
+
+// Bookings in tabs with loading, empty and error states: the guest's own (Upcoming, Past) or, for a host,
+// those of their spaces (Pending, Upcoming, Past). The title and the tabs share the hero panel; the panel
+// stays in place in every state, so the title never remounts. The tab underline slides to the open tab,
+// and the cards fade in, one after another along a row.
+export function BookingsList({ view, userId, spaces, title }: BookingsListProps) {
+  const {
+    data: bookings,
+    isLoading,
+    error,
+    refetch,
+    isFetching,
+  } = useBookings(view === 'guest' ? { guestId: userId } : { hostId: userId })
+  const copy = COPY[view]
+  const [tab, setTab] = useBookingTab(view)
   const [tabList, setTabList] = useState<HTMLDivElement | null>(null)
   const underline = useActiveIndicator(tabList, '[data-state="active"]', tab)
 
-  // A cancelled booking leaves Upcoming with its button: once the refetched list no longer has it
-  // there, focus moves to the tab panel and the result is announced.
+  // A cancelled (guest) or approved / declined (host) booking leaves the open tab with its button: once
+  // the refetched list no longer has it there, focus moves to the tab panel. The guest's cancel is
+  // announced in the status notice; the host's actions in a toast.
   const panelRef = useRef<HTMLDivElement>(null)
   const [announcement, setAnnouncement] = useState('')
-  const [cancelledId, setCancelledId] = useState<number | null>(null)
+  const [movedId, setMovedId] = useState<number | null>(null)
 
   const onCancelled = (booking: Booking) => {
     setAnnouncement(`Your booking at ${booking.space.name} was cancelled. You can find it under Past.`)
-    setCancelledId(booking.id)
+    setMovedId(booking.id)
   }
+  const onReviewed = (booking: Booking) => setMovedId(booking.id)
 
-  const cancelledLeftUpcoming =
-    cancelledId !== null &&
-    bookings !== undefined &&
-    !bookings.some((b) => b.id === cancelledId && isActive(b.status))
+  const byTab = splitBookings(bookings ?? [], view)
+  const movedOut = movedId !== null && bookings !== undefined && !byTab[tab].some((b) => b.id === movedId)
   useEffect(() => {
-    if (!cancelledLeftUpcoming) return
+    if (!movedOut) return
     // In a timeout: after Radix has tried to give focus back to the (now removed) trigger
     const timer = setTimeout(() => {
       panelRef.current?.focus()
-      setCancelledId(null)
+      setMovedId(null)
     })
     return () => clearTimeout(timer)
-  }, [cancelledLeftUpcoming])
+  }, [movedOut])
 
   // Error first: a retry keeps the error block (and the focused "Try again" button) on screen
   const state = error
@@ -101,7 +186,6 @@ export function BookingsList({ guestId, spaceImages, title }: BookingsListProps)
       : bookings.length === 0
         ? 'empty'
         : 'ready'
-  const byTab = splitBookings(bookings ?? [])
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="gap-6 md:gap-8">
@@ -113,7 +197,7 @@ export function BookingsList({ guestId, spaceImages, title }: BookingsListProps)
             ref={setTabList}
             variant="line"
             className="relative h-auto gap-6 border-b pb-0"
-            aria-label="Bookings"
+            aria-label={copy.label}
           >
             {underline && (
               <span
@@ -122,14 +206,16 @@ export function BookingsList({ guestId, spaceImages, title }: BookingsListProps)
                 style={{ translate: `${underline.x}px 0`, width: underline.width }}
               />
             )}
-            {TABS.map(({ value, label }) => (
+            {VIEW_TABS[view].map((value) => (
               <TabsTrigger
                 key={value}
                 value={value}
                 className="h-11 flex-none rounded-none px-1 pb-3 text-base text-muted-foreground after:hidden hover:text-foreground focus-visible:rounded-sm focus-visible:ring-ring data-[state=active]:font-semibold data-[state=active]:text-primary md:h-9 dark:data-[state=active]:text-primary"
               >
-                {label}
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
+                {TAB_LABELS[value]}
+                {/* The card-colored ring outlines the pill where it sits on the panel's pale-blue circle
+                    (phones, three tabs); on the card itself it does not show */}
+                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground ring-2 ring-card">
                   {byTab[value].length}
                 </span>
               </TabsTrigger>
@@ -145,7 +231,7 @@ export function BookingsList({ guestId, spaceImages, title }: BookingsListProps)
         >
           <p className="flex items-center gap-2">
             <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
-            Your bookings failed to load.
+            {copy.failed}
           </p>
           <Button
             variant="outline"
@@ -163,7 +249,7 @@ export function BookingsList({ guestId, spaceImages, title }: BookingsListProps)
 
       {state === 'loading' && (
         <div aria-busy="true" className={`${grid} ${fadeIn}`}>
-          <span className="sr-only">Loading your bookings…</span>
+          <span className="sr-only">{copy.loading}</span>
           {Array.from({ length: 3 }, (_, i) => (
             <div key={i} className="flex flex-col gap-4 rounded-lg border bg-card pb-4">
               <Skeleton className="aspect-[16/10] w-full rounded-lg" />
@@ -181,10 +267,10 @@ export function BookingsList({ guestId, spaceImages, title }: BookingsListProps)
       {state === 'empty' && (
         <div className={fadeIn}>
           <EmptyState
-            icon={CalendarDays}
-            title="You have no bookings yet"
-            text="Find a desk, a meeting room or a hall and book your first hours."
-            action={exploreSpaces}
+            icon={copy.empty.icon}
+            title={copy.empty.title}
+            text={copy.empty.text}
+            action={copy.empty.action}
           />
         </div>
       )}
@@ -192,38 +278,42 @@ export function BookingsList({ guestId, spaceImages, title }: BookingsListProps)
       {state === 'ready' && (
         <>
           <StatusNotice notice={announcement || null} />
-          {TABS.map(({ value, empty }) => (
-            <TabsContent
-              key={value}
-              value={value}
-              ref={value === 'upcoming' ? panelRef : undefined}
-              tabIndex={-1}
-              className={`rounded-lg focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-sheet md:focus-visible:ring-offset-background ${fadeIn}`}
-            >
-              {byTab[value].length === 0 ? (
-                <EmptyState
-                  icon={empty.icon}
-                  title={empty.title}
-                  text={empty.text}
-                  action={value === 'upcoming' ? exploreSpaces : undefined}
-                />
-              ) : (
-                <ul className={grid}>
-                  {byTab[value].map((booking, index) => (
-                    <li key={booking.id}>
-                      <Reveal delay={(index % 3) * 90} className="h-full">
-                        <BookingCard
-                          booking={booking}
-                          imageUrl={spaceImages ? (spaceImages.get(booking.spaceId) ?? null) : undefined}
-                          onCancelled={onCancelled}
-                        />
-                      </Reveal>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </TabsContent>
-          ))}
+          {VIEW_TABS[view].map((value) => {
+            const empty = copy.tabs[value]
+            return (
+              <TabsContent
+                key={value}
+                value={value}
+                ref={value === tab ? panelRef : undefined}
+                tabIndex={-1}
+                className={`rounded-lg focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-sheet md:focus-visible:ring-offset-background ${fadeIn}`}
+              >
+                {byTab[value].length === 0 && empty ? (
+                  <EmptyState icon={empty.icon} title={empty.title} text={empty.text} action={empty.action} />
+                ) : (
+                  <ul className={grid}>
+                    {byTab[value].map((booking, index) => {
+                      const space = spaces?.get(booking.spaceId)
+                      return (
+                        <li key={booking.id}>
+                          <Reveal delay={(index % 3) * 90} className="h-full">
+                            <BookingCard
+                              booking={booking}
+                              imageUrl={spaces ? (space?.images[0] ?? null) : undefined}
+                              variant={view}
+                              onCancelled={onCancelled}
+                              space={space}
+                              onReviewed={onReviewed}
+                            />
+                          </Reveal>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </TabsContent>
+            )
+          })}
         </>
       )}
     </Tabs>

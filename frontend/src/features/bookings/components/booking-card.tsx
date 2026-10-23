@@ -5,16 +5,19 @@ import { Link } from 'react-router'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { UserAvatar } from '@/components/user-avatar'
 import { type Booking, isActive } from '@/lib/booking'
 
-import { STATUS_LABELS } from '../types'
+import { type BookableSpace, STATUS_LABELS } from '../types'
 import { CancelBookingDialog } from './cancel-booking-dialog'
 import { bookingHours, formatBookingDate } from './format-booking'
+import { ReservationActions, type ReservationDecision } from './reservation-actions'
 
 const statusBadge = cva('rounded-full', {
   variants: {
     status: {
-      pending: 'text-muted-foreground',
+      // Waiting for the host
+      pending: 'border-warning text-warning',
       confirmed: 'border-success text-success',
       declined: 'border-destructive text-destructive',
       cancelled: 'border-destructive text-destructive',
@@ -29,13 +32,26 @@ type BookingCardProps = {
   booking: Booking
   // The space's cover photo, joined in by the route: undefined while the spaces load, null when there is none
   imageUrl?: string | null
+  // guest: one of their own bookings, with "Cancel booking" while it is active. host: a booking of one of
+  // their spaces, with the guest and, while it is pending, Approve and Decline.
+  variant?: 'guest' | 'host'
   onCancelled?: (booking: Booking) => void
+  // host: the booked space, which approving checks the overlap rule against (joined in by the route)
+  space?: BookableSpace
+  onReviewed?: (booking: Booking, decision: ReservationDecision) => void
 }
 
-// One of the guest's bookings. The whole card opens the space page: the name is a link stretched over
-// the card, and "Cancel booking" sits above it, so the button is never inside the link. Hovering the
-// link lifts the card like a space card (DESIGN.md "Motion"); hovering the button does not.
-export function BookingCard({ booking, imageUrl, onCancelled }: BookingCardProps) {
+// A booking. The whole card opens the space page: the name is a link stretched over the card, and the
+// actions sit above it, so a button is never inside the link. Hovering the link lifts the card like a
+// space card (DESIGN.md "Motion"); hovering a button does not.
+export function BookingCard({
+  booking,
+  imageUrl,
+  variant = 'guest',
+  onCancelled,
+  space,
+  onReviewed,
+}: BookingCardProps) {
   const hours = bookingHours(booking.startTime, booking.endTime)
 
   return (
@@ -70,6 +86,19 @@ export function BookingCard({ booking, imageUrl, onCancelled }: BookingCardProps
         <p className="truncate text-sm text-muted-foreground">{booking.space.address}</p>
       </CardHeader>
       <CardContent className="mt-auto flex flex-col gap-3 px-4 text-sm">
+        {variant === 'host' && (
+          <p className="flex min-w-0 items-center gap-2">
+            <UserAvatar
+              name={booking.guest.name}
+              avatarUrl={booking.guest.avatarUrl}
+              className="size-8 text-xs"
+            />
+            <span className="min-w-0 truncate font-medium">
+              <span className="sr-only">Guest: </span>
+              {booking.guest.name}
+            </span>
+          </p>
+        )}
         <div className="flex items-end justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1 text-muted-foreground">
             <span className="flex items-center gap-2">
@@ -85,9 +114,14 @@ export function BookingCard({ booking, imageUrl, onCancelled }: BookingCardProps
             <span className="sr-only">Total </span>€{booking.totalPrice}
           </span>
         </div>
-        {isActive(booking.status) && (
+        {variant === 'guest' && isActive(booking.status) && (
           <div className="relative z-10 self-start">
             <CancelBookingDialog booking={booking} onCancelled={onCancelled} />
+          </div>
+        )}
+        {variant === 'host' && booking.status === 'pending' && (
+          <div className="relative z-10">
+            <ReservationActions booking={booking} space={space} onReviewed={onReviewed} />
           </div>
         )}
       </CardContent>

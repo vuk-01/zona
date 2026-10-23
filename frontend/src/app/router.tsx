@@ -5,6 +5,7 @@ import { AuthShell } from '@/app/auth-shell'
 import { Bookings } from '@/app/routes/bookings'
 import { Favorites } from '@/app/routes/favorites'
 import { Home } from '@/app/routes/home'
+import { HostReservations } from '@/app/routes/host-reservations'
 import { HostSpaceEdit } from '@/app/routes/host-space-edit'
 import { HostSpaceNew } from '@/app/routes/host-space-new'
 import { HostSpaces } from '@/app/routes/host-spaces'
@@ -78,6 +79,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth mode="host">
             <HostSpaceEdit />
+          </RequireAuth>
+        ),
+      },
+      {
+        path: '/host/reservations',
+        element: (
+          <RequireAuth mode="host">
+            <HostReservations />
           </RequireAuth>
         ),
       },

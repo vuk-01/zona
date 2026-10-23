@@ -1,4 +1,13 @@
-import { Building2, CalendarDays, CircleUser, Heart, House, type LucideIcon, Search } from 'lucide-react'
+import {
+  Building2,
+  CalendarCheck,
+  CalendarDays,
+  CircleUser,
+  Heart,
+  House,
+  type LucideIcon,
+  Search,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { UserMode } from '@/lib/user'
@@ -11,6 +20,16 @@ export type NavItem = {
   end?: boolean
 }
 
+// A count next to an item (the host's pending reservations). `label` says what is counted, for screen
+// readers: "Reservations, 2 pending".
+export type NavBadge = {
+  count: number
+  label: string
+}
+
+// Badges by item path. src/app/app-shell.tsx fills them, since layout imports no features.
+export type NavBadges = Partial<Record<string, NavBadge>>
+
 // A group of items in the side menu, under a small title
 export type NavSection = {
   title: string
@@ -22,6 +41,7 @@ const explore: NavItem = { to: '/spaces', label: 'Explore', icon: Search }
 const favorites: NavItem = { to: '/favorites', label: 'Favorites', icon: Heart }
 const bookings: NavItem = { to: '/bookings', label: 'Bookings', icon: CalendarDays }
 const mySpaces: NavItem = { to: '/host/spaces', label: 'My spaces', icon: Building2 }
+const reservations: NavItem = { to: '/host/reservations', label: 'Reservations', icon: CalendarCheck }
 const profile: NavItem = { to: '/profile', label: 'Profile', icon: CircleUser }
 
 // Guest/host mode changes these items, never the colors (see DESIGN.md). The side menu shows them in
@@ -32,7 +52,7 @@ export const navSections: Record<UserMode, NavSection[]> = {
     { title: 'You', items: [favorites, bookings, profile] },
   ],
   host: [
-    { title: 'Hosting', items: [mySpaces] },
+    { title: 'Hosting', items: [mySpaces, reservations] },
     { title: 'You', items: [profile] },
   ],
 }
@@ -51,7 +71,7 @@ export type NavAccount =
       status: 'signed-in'
       name: string
       email: string
-      // The user's photo or initials (UserAvatar from the users feature)
+      // The user's photo or initials (UserAvatar)
       avatar: ReactNode
       onLogout: () => void
       isLoggingOut: boolean

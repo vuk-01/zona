@@ -5,7 +5,7 @@ import { NavLink, useLocation } from 'react-router'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveIndicator } from '@/lib/use-active-indicator'
 
-import { type NavAccount, type NavSection, navItems } from './nav-items'
+import { type NavAccount, type NavBadges, type NavSection, navItems } from './nav-items'
 import { SidebarAccount } from './sidebar-account'
 import { Wordmark } from './wordmark'
 
@@ -38,6 +38,7 @@ type SidebarProps = {
   homePath: string
   isHosting: boolean
   account: NavAccount
+  badges: NavBadges
 }
 
 // Desktop only (md+): the fixed navy side menu (DESIGN.md "Layout"). The wordmark on top, the items in
@@ -45,8 +46,9 @@ type SidebarProps = {
 // so the account stays in view on a short window. The active item has a pale row, a blue icon and a blue
 // accent line in the gutter, which slides to the item that opens; hover tints the row and nudges the label
 // right. Wordmark, section titles and icons all start at 32 px. In dark mode the navy sits between the
-// page and the cards, with a border toward the content.
-export function Sidebar({ sections, isLoading, homePath, isHosting, account }: SidebarProps) {
+// page and the cards, with a border toward the content. A count (the pending reservations) sits at the
+// right end of its item as a blue pill.
+export function Sidebar({ sections, isLoading, homePath, isHosting, account, badges }: SidebarProps) {
   const { pathname } = useLocation()
   const id = useId()
   const [list, setList] = useState<HTMLDivElement | null>(null)
@@ -87,24 +89,34 @@ export function Sidebar({ sections, isLoading, homePath, isHosting, account }: S
                   {section.title}
                 </p>
                 <ul aria-labelledby={`${id}-${index}`} className="grid gap-1">
-                  {section.items.map(({ to, label, icon: Icon, end }) => (
-                    <li key={to}>
-                      <NavLink
-                        to={to}
-                        end={end}
-                        className={({ isActive }) => itemVariants({ active: isActive })}
-                      >
-                        {({ isActive }) => (
-                          <>
-                            <Icon className={iconVariants({ active: isActive })} aria-hidden="true" />
-                            <span className="transition-transform duration-200 motion-safe:group-hover:translate-x-0.5">
-                              {label}
-                            </span>
-                          </>
-                        )}
-                      </NavLink>
-                    </li>
-                  ))}
+                  {section.items.map(({ to, label, icon: Icon, end }) => {
+                    const badge = badges[to]
+                    return (
+                      <li key={to}>
+                        <NavLink
+                          to={to}
+                          end={end}
+                          className={({ isActive }) => itemVariants({ active: isActive })}
+                        >
+                          {({ isActive }) => (
+                            <>
+                              <Icon className={iconVariants({ active: isActive })} aria-hidden="true" />
+                              <span className="transition-transform duration-200 motion-safe:group-hover:translate-x-0.5">
+                                {label}
+                              </span>
+                              {badge && badge.count > 0 && (
+                                <span className="ml-auto rounded-full bg-sidebar-primary px-2 py-0.5 text-xs font-semibold text-sidebar-primary-foreground">
+                                  <span className="sr-only">, </span>
+                                  {badge.count}
+                                  <span className="sr-only"> {badge.label}</span>
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </NavLink>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             ))}
