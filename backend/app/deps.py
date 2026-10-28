@@ -8,6 +8,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.auth.exceptions.auth import NotAuthenticatedException
 from app.auth.schemas.auth import CurrentUser
 from app.auth.services.auth import IAuthService
+from app.database.session_handler import db_session_handler
 from app.utils.di import get_di_entity
 
 __all__ = ["get_current_user", "get_di_entity", "get_optional_user"]
@@ -16,6 +17,10 @@ __all__ = ["get_current_user", "get_di_entity", "get_optional_user"]
 security = HTTPBearer(auto_error=False)
 
 
+# Its own unit of work. Sessions are per thread, and FastAPI may resolve this dependency on another
+# worker thread than the endpoint, or never run the endpoint at all (a 422 on the body). Without
+# this wrapper the session that read the user would stay open and keep its pooled connection.
+@db_session_handler
 def get_optional_user(
     auth_service: Annotated[IAuthService, Depends(get_di_entity(IAuthService))],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],

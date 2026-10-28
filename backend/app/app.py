@@ -26,6 +26,7 @@ from app.utils.exceptions import (
     NotFoundException,
     ServerException,
     UnauthenticatedException,
+    UnprocessableEntityException,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 STATUS_BY_EXCEPTION: dict[type[AppBaseException], int] = {
     NotFoundException: status.HTTP_404_NOT_FOUND,
     InvalidRequestException: status.HTTP_400_BAD_REQUEST,
+    UnprocessableEntityException: status.HTTP_422_UNPROCESSABLE_ENTITY,
     UnauthenticatedException: status.HTTP_401_UNAUTHORIZED,
     ForbiddenException: status.HTTP_403_FORBIDDEN,
     ConflictException: status.HTTP_409_CONFLICT,

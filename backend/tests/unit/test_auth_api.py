@@ -36,6 +36,7 @@ def test_register_returns_201_with_token_and_user(client: TestClient, auth_servi
             "id": 1,
             "email": "ana@example.com",
             "displayName": "Test User",
+            "isHost": False,
             "createdAt": "2026-01-01T00:00:00Z",
         },
     }
