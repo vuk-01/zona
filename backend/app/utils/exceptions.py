@@ -33,6 +33,10 @@ class InvalidRequestException(AppBaseException):
     pass
 
 
+class UnprocessableEntityException(AppBaseException):
+    """422: the input is well-formed but breaks a rule only the service can check."""
+
+
 class UnauthenticatedException(AppBaseException):
     pass
 

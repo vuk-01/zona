@@ -31,6 +31,7 @@ class CurrentUser(BaseModel):
     id: int
     email: str
     display_name: str
+    is_host: bool
     created_at: datetime
 
 

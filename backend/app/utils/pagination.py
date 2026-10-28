@@ -27,8 +27,10 @@ class PaginationParams:
 
 
 def get_pagination_params(
-    page: Annotated[int, Query(ge=1, description="Page number")] = 1,
-    size: Annotated[int, Query(le=500, description="Page size")] = 50,
+    # Upper bound on page: a larger offset overflows SQLite's 64-bit integer (500, not 422).
+    page: Annotated[int, Query(ge=1, le=2**31 - 1, description="Page number")] = 1,
+    # ge=1: size 0 would mean "no LIMIT" in paginate() (ADR-016).
+    size: Annotated[int, Query(ge=1, le=500, description="Page size")] = 50,
 ) -> PaginationParams:
     return PaginationParams(page=page, size=size)
 

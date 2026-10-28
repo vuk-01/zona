@@ -9,4 +9,5 @@ class UserResponseSchema(CamelCaseResponseModel):
     id: int
     email: EmailStr
     display_name: str
+    is_host: bool
     created_at: UtcDatetime
