@@ -5,8 +5,8 @@ description: Patterns for FastAPI endpoints, services, repositories, SQLAlchemy 
 
 # Backend patterns
 
-Every snippet below is copied from `app/listings/`, the reference domain. Copy the shape, rename the
-entity. All paths are relative to the repo root. A domain has no `__init__.py`; file names are the singular entity.
+Every snippet below is copied from `app/listings/`, the reference domain, except §10 and §11, which come from
+`app/bookings/` and `app/spaces/`. Copy the shape, rename the entity. All paths are relative to the repo root. A domain has no `__init__.py`; file names are the singular entity.
 
 ```
 app/listings/
@@ -323,7 +323,53 @@ Unit: the autouse `auth_service` fixture authenticates every request as user 1. 
 3. Read `alembic/versions/<new file>.py`: autogenerate misses renames and data moves and may drop what it does not know
 4. `poetry run migrate`, then `poetry run alembic check` must say "No new upgrade operations detected"
 
-## 10. File uploads: metadata before bytes
+## 10. A rule no constraint can hold: lock first, then read, count, compare-and-set (ADR-023)
+
+"At most `deskCount` confirmed bookings in any hour" spans rows, and no portable constraint counts rows per hour.
+Confirm serializes on the space row instead. The lock is the first statement of the transaction; the space is
+found through the booking inside the same statement, so nothing is read before it:
+
+```python
+# app/spaces/repositories/space.py (a repository may query another domain's table, ADR-020)
+def lock_for_booking(self, booking_id: int) -> int | None:
+    db = self._session_factory()
+    # A no-op UPDATE is a write on both engines (ADR-003): a row lock on Postgres, the write lock on SQLite.
+    space_id = select(Booking.space_id).where(Booking.id == booking_id).scalar_subquery()
+    return db.execute(
+        update(Space).where(Space.id == space_id).values(id=Space.id).returning(Space.id)
+    ).scalar_one_or_none()
+```
+
+Then the service reads the booking, checks the role and the transition, counts the confirmed bookings per hour
+(without this one) and writes with a compare-and-set, which also guards cancel, decline and delete (no lock there):
+
+```python
+# app/bookings/repositories/booking.py
+def set_status(self, booking_id: int, expected: BookingStatus, new: BookingStatus) -> bool:
+    """False when the row is gone or no longer has `expected` (a parallel request changed it)."""
+    db = self._session_factory()
+    changed_id = db.execute(
+        update(Booking)
+        .where(Booking.id == booking_id, Booking.status == expected)
+        .values(status=new)
+        .returning(Booking.id)
+    ).scalar_one_or_none()
+    return changed_id is not None
+```
+
+On `False` the service reads the status again with a `select()` (`get_status`), not `db.get`, because the first
+read is in the identity map: no row → `404 booking_not_found`, another status → `422 invalid_status_change`. It never
+assumes the row is still there. On SQLite this works only in pysqlite's legacy transaction mode (ADR-023).
+
+## 11. Local time (ADR-022)
+
+Booking slots are wall-clock hours in Europe/Podgorica: `date` + `start_hour`/`end_hour`, not timestamps. "Now"
+always comes from `IClock` (`app/utils/clock.py`), next to `LOCAL_TIMEZONE`, `local_hour_to_utc(date, hour)`
+(`24` is the next day's 00:00) and `hour_exists(date, hour)` (`False` for 02:00 on 2027-03-28). `ends_at` is the only
+UTC column, computed in Python at create, so SQL can return `finished`/`expired` with `ends_at <= now`, where
+`now` is a bound parameter from `IClock`, never `func.now()`. Tests fix the time with `FixedClock` (`tests/utils.py`).
+
+## 12. File uploads: metadata before bytes
 
 The database never stores file contents. An upload endpoint saves the file outside the database (a folder
 such as `data/uploads/`, or object storage) and the row keeps only the path or URL (`image_url`),
