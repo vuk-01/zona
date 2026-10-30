@@ -10,7 +10,7 @@ One account switches between guest and host mode, and the app is built phone fir
 - Tailwind CSS v4 and shadcn/ui
 - React Router and TanStack Query
 - React Hook Form and Zod for forms
-- pnpm workspace (monorepo); the backend comes next workshop, until then data lives in an in-memory mock
+- pnpm workspace (monorepo): the frontend in `frontend/`, the backend (FastAPI, SQLite or Postgres) in `backend/`, see `backend/README.md`; until the frontend is connected to the API, its data lives in an in-memory mock
 
 ## Getting started
 
