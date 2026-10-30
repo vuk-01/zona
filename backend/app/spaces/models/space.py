@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 
 if TYPE_CHECKING:
+    from app.favorites.models.favorite import Favorite
     from app.users.models.user import User
 
 
@@ -71,3 +72,7 @@ class Space(Base):
     host_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
 
     host: Mapped[User] = relationship("User", back_populates="spaces")
+    # One-to-many: Space -> Favorite. Deleting a space deletes its favorites (ON DELETE CASCADE).
+    favorites: Mapped[list[Favorite]] = relationship(
+        "Favorite", back_populates="space", cascade="all, delete-orphan", passive_deletes=True
+    )
