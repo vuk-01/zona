@@ -8,11 +8,12 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
 
-from app.auth.exceptions.auth import InvalidTokenException
+from app.auth.exceptions.auth import InvalidTokenException, NotAuthenticatedException
 from app.auth.schemas.auth import CurrentUser
 from app.spaces.exceptions.space import (
     InvalidSpaceException,
     NotAHostException,
+    NotOwnFavoritesException,
     NotSpaceOwnerException,
     SpaceNotFoundException,
 )
@@ -72,6 +73,12 @@ class SpaceService(ISpaceService):
         pagination_params: PaginationParams,
         current_user: CurrentUser | None,
     ) -> Page[SpaceResponseSchema]:
+        if filters.favorite_of is not None:
+            # Favorites are private: only with a token, and only the user's own (docs/entities.md).
+            if current_user is None:
+                raise NotAuthenticatedException
+            if filters.favorite_of != current_user.id:
+                raise NotOwnFavoritesException
         viewer_id = current_user.id if current_user is not None else None
         spaces = self._space_repository.get_all(
             filters=filters, viewer_id=viewer_id, pagination_params=pagination_params
@@ -102,7 +109,7 @@ class SpaceService(ISpaceService):
         except IntegrityError as e:
             # Every CHECK has a Pydantic twin; what is left is the host_id foreign key, refused when
             # the host's account was deleted during the request. Their token is then invalid.
-            if self._user_repository.get_by_id(current_user.id) is None:
+            if not self._user_repository.exists(current_user.id):
                 raise InvalidTokenException from e
             raise  # the host exists: a rule Pydantic lets through, a bug, not a client error
         return self._to_response(space, self._local_now())

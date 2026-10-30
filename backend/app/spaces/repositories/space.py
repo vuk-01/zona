@@ -6,7 +6,8 @@ from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from app.database.session_factory import ISessionFactory
-from app.spaces.models.space import Space, SpaceStatus
+from app.favorites.models.favorite import Favorite
+from app.spaces.models.space import Space, space_visible_to
 from app.spaces.schemas.space import SpaceListFilters
 from app.utils.di import inject
 from app.utils.pagination import Page, PaginationParams, paginate
@@ -18,6 +19,8 @@ class ISpaceRepository(Protocol):
     ) -> Page[Space]: ...
 
     def get_by_id(self, space_id: int) -> Space | None: ...
+
+    def exists(self, space_id: int) -> bool: ...
 
     def add(self, space: Space) -> Space: ...
 
@@ -36,18 +39,29 @@ class SpaceRepository(ISpaceRepository):
     ) -> Page[Space]:
         db = self._session_factory()
         # The host is on every card: load it in the same query, not one query per row (N+1).
-        query = (
-            select(Space)
-            .options(joinedload(Space.host))
-            .order_by(Space.created_at.desc(), Space.id.desc())
-        )
-        query = _visible_to(query, viewer_id)
+        query = select(Space).options(joinedload(Space.host))
+        query = query.where(space_visible_to(viewer_id))
         query = _filtered(query, filters)
+        if filters.favorite_of is not None:
+            # Another domain's table in the same query (ADR-020): only the spaces this user saved,
+            # newest saved first; the other filters and the visibility rule still apply.
+            query = query.join(
+                Favorite,
+                (Favorite.space_id == Space.id) & (Favorite.user_id == filters.favorite_of),
+            ).order_by(Favorite.created_at.desc(), Favorite.id.desc())
+        else:
+            query = query.order_by(Space.created_at.desc(), Space.id.desc())
         return paginate(query=query, pagination_params=pagination_params, db=db)
 
     def get_by_id(self, space_id: int) -> Space | None:
         db = self._session_factory()
         return db.get(Space, space_id, options=[joinedload(Space.host)])
+
+    def exists(self, space_id: int) -> bool:
+        db = self._session_factory()
+        # Always a query to the database. db.get() may answer from the session's identity map when
+        # the space is loaded and not expired, and this check is about rows other requests changed.
+        return db.scalar(select(Space.id).where(Space.id == space_id)) is not None
 
     def add(self, space: Space) -> Space:
         db = self._session_factory()
@@ -74,13 +88,6 @@ class SpaceRepository(ISpaceRepository):
             delete(Space).where(Space.id == space_id).returning(Space.id)
         ).scalar_one_or_none()
         return deleted_id is not None
-
-
-def _visible_to(query: Select[Space], viewer_id: int | None) -> Select[Space]:
-    """Listed spaces for everyone, plus the viewer's own drafts; other people's drafts never."""
-    if viewer_id is None:
-        return query.where(Space.status == SpaceStatus.LISTED)
-    return query.where(or_(Space.status == SpaceStatus.LISTED, Space.host_id == viewer_id))
 
 
 def _filtered(query: Select[Space], filters: SpaceListFilters) -> Select[Space]:

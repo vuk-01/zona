@@ -29,7 +29,9 @@ ownership, domain exceptions, returns response schemas), `repositories/` (`I<Nam
 queries on the session, `flush()`, never `commit()`), `models/` (tables), `schemas/` (request/response),
 `exceptions/` (subclasses of `app/utils/exceptions.py` with a `code`), and `routes.py` (the domain's
 `APIRouter` with tags) registered in `app/routes.py`. No `__init__.py` below `app/` (ADR-014).
-Dependency direction: utils/database/config -> domain -> app, never the other way around.
+Dependency direction: utils/database/config -> domain -> app, never the other way around. A repository may import
+another domain's model for a query (a JOIN, a filter, an ORDER BY); services reach other domains only through their
+Protocols (ADR-020).
 
 ## Structure
 - `manage.py`: `poetry run start | test | lint | typecheck | makemigrations "<what>" | migrate | seed`

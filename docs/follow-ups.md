@@ -31,6 +31,33 @@ reference domain. Remove it once favorites and bookings are done, in this order,
 downgrade brings back an empty table); users and spaces are not touched. Everyone who pulls `main`
 should back up `data/app.db` first.
 
+## Frontend: connect favorites to the backend
+
+The backend has `GET/POST/DELETE /api/favorites` and `GET /api/spaces?favoriteOf=` (branch
+`feat/favorites`); the frontend still uses the mock. When the frontend is connected:
+
+- `frontend/src/features/favorites/api/favorites-api.ts`: `list`, `create` and `remove` take a
+  `userId`; the real API takes the user from the token, so the parameter goes. `list` reads `items`
+  from the paginated answer.
+- `create` answers `201` or `200` (already saved); both are success. `remove` is `204` either way.
+- `list` leaves out a saved space the user can no longer view (another host's space that became a
+  draft), the same as `favoriteOf`; the hearts then show it as not saved until it is listed again.
+- `frontend/src/features/spaces/api/spaces-api.ts`: `favoriteOf` comes back newest saved first from the
+  backend; a `403 not_own_favorites` or `401` means the page asked with the wrong id or no token.
+- `frontend/src/lib/favorite.ts` and the rows in `frontend/src/lib/mock-db.ts` go with the mock.
+
+## From the favorites review (left out of `feat/favorites` on purpose)
+
+- **Index for "newest saved first".** `GET /api/favorites` and `GET /api/spaces?favoriteOf=` find a
+  user's rows through `ix_favorites_user_id`, then sort `created_at desc, id desc` in a temporary
+  B-tree (SQLite's plan: `USE TEMP B-TREE FOR ORDER BY`). Cheap while a user has few favorites. If
+  it grows: `Index("ix_favorites_user_id_created_at", "user_id", "created_at", "id")` on `Favorite`,
+  in a new revision (`156c87f4d970` is committed and is not edited).
+- **One constant for the largest id.** `2**31 - 1` is written four times:
+  `app/favorites/schemas/favorite.py` (`MAX_ID`), `app/spaces/api/space.py` (`_MAX_ID`),
+  `app/users/api/user.py` (`_MAX_ID`) and `app/utils/pagination.py` (the `page` limit). Move it to
+  one `MAX_ID` in `app/utils/schemas.py` and import it everywhere; no behaviour changes.
+
 ## From the users review (left out of `backend-users` on purpose)
 
 - Frontend: the `auth-api.ts` mock that forces `mode: guest`, and the 80-character `city` limit in the

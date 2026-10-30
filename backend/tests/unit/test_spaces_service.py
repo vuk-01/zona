@@ -8,14 +8,20 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
 
-from app.auth.exceptions.auth import InvalidTokenException
-from app.spaces.exceptions.space import SpaceNotFoundException
+from app.auth.exceptions.auth import InvalidTokenException, NotAuthenticatedException
+from app.auth.schemas.auth import CurrentUser
+from app.spaces.exceptions.space import NotOwnFavoritesException, SpaceNotFoundException
 from app.spaces.models.space import Space
 from app.spaces.repositories.space import ISpaceRepository
-from app.spaces.schemas.space import SpaceCreateRequestSchema, SpaceUpdateRequestSchema
+from app.spaces.schemas.space import (
+    SpaceCreateRequestSchema,
+    SpaceListFilters,
+    SpaceUpdateRequestSchema,
+)
 from app.spaces.services.space import SpaceService
 from app.users.repositories.user import IUserRepository
 from app.utils.clock import IClock
+from app.utils.pagination import PaginationParams
 from tests.utils import create_current_user, space_body
 
 pytestmark = pytest.mark.unit
@@ -48,7 +54,7 @@ def test_create_for_a_host_deleted_meanwhile_is_invalid_token(
     service: SpaceService, space_repository: Mock, user_repository: Mock
 ) -> None:
     space_repository.add.side_effect = IntegrityError("INSERT", {}, Exception("FOREIGN KEY"))
-    user_repository.get_by_id.return_value = None
+    user_repository.exists.return_value = False
 
     with pytest.raises(InvalidTokenException):
         service.create(
@@ -61,7 +67,7 @@ def test_create_refused_while_the_host_exists_is_not_hidden(
     service: SpaceService, space_repository: Mock, user_repository: Mock
 ) -> None:
     space_repository.add.side_effect = IntegrityError("INSERT", {}, Exception("CHECK"))
-    user_repository.get_by_id.return_value = Mock()
+    user_repository.exists.return_value = True
 
     with pytest.raises(IntegrityError):
         service.create(
@@ -90,3 +96,23 @@ def test_update_of_a_space_deleted_meanwhile_is_not_found(
             data=SpaceUpdateRequestSchema(name="Hub Morača"),
             current_user=create_current_user(1, is_host=True),
         )
+
+
+@pytest.mark.parametrize(
+    ("current_user", "error"),
+    [(None, NotAuthenticatedException), (create_current_user(2), NotOwnFavoritesException)],
+    ids=["no-token", "another-id"],
+)
+def test_favorite_of_is_only_the_signed_in_users_own(
+    service: SpaceService,
+    space_repository: Mock,
+    current_user: CurrentUser | None,
+    error: type[Exception],
+) -> None:
+    with pytest.raises(error):
+        service.list(
+            filters=SpaceListFilters(favorite_of=1),
+            pagination_params=PaginationParams(page=1, size=50),
+            current_user=current_user,
+        )
+    space_repository.get_all.assert_not_called()

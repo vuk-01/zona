@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base
 
 if TYPE_CHECKING:
+    from app.favorites.models.favorite import Favorite
     from app.listings.models.listing import Listing
     from app.spaces.models.space import Space
 
@@ -57,4 +58,8 @@ class User(Base):
     # One-to-many: User -> Space. Deleting a user deletes the spaces they host (ON DELETE CASCADE).
     spaces: Mapped[list[Space]] = relationship(
         "Space", back_populates="host", cascade="all, delete-orphan", passive_deletes=True
+    )
+    # One-to-many: User -> Favorite. Deleting a user deletes their favorites (ON DELETE CASCADE).
+    favorites: Mapped[list[Favorite]] = relationship(
+        "Favorite", back_populates="user", cascade="all, delete-orphan", passive_deletes=True
     )

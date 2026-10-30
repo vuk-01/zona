@@ -16,6 +16,7 @@ from sqlalchemy import delete
 from app.config.settings import DBSettings, Settings
 from app.database.base import Base
 from app.database.session_factory import ISessionFactory, SessionFactory
+from app.favorites.models.favorite import Favorite
 from app.listings.models.listing import Listing
 from app.spaces.models.space import Space
 from app.users.models.user import User
@@ -65,6 +66,7 @@ def clean_tables() -> Generator[None]:
     yield
     session_factory = get_from_di_container(ISessionFactory)
     with session_factory() as session:
+        session.execute(delete(Favorite))
         session.execute(delete(Listing))
         session.execute(delete(Space))
         session.execute(delete(User))

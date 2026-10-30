@@ -172,7 +172,7 @@ class ListingService(IListingService):
         except IntegrityError as e:
             # Every CHECK and NOT NULL has a Pydantic twin; what is left is the owner_id foreign key,
             # refused when the owner's account was deleted during the request. Their token is then invalid.
-            if self._user_repository.get_by_id(current_user.id) is None:
+            if not self._user_repository.exists(current_user.id):
                 raise InvalidTokenException from e
             raise  # the owner exists: a rule Pydantic lets through, a bug, not a client error
         return ListingResponseSchema.model_validate(listing)
@@ -256,15 +256,16 @@ except IntegrityError as e:
 
 Catch `IntegrityError` only for a rule the input cannot check, and answer by the rule that refused (ADR-019):
 
-- a UNIQUE column → `409` with `fieldErrors` (above);
+- a UNIQUE column → `409` with `fieldErrors` (above), or `200` with the existing row when the contract makes the
+  `POST` idempotent (favorites; ADR-021);
 - a foreign key to the signed-in user on `POST` (`owner_id`, `host_id`) → `401 invalid_token` (`create` in §5);
 - a foreign key to another row named in the request (`spaceId` on a favorite or a booking) → `404` for that entity:
 
 ```python
 except IntegrityError as e:
-    if self._user_repository.get_by_id(current_user.id) is None:   # the signed-in user first
+    if not self._user_repository.exists(current_user.id):   # the signed-in user first
         raise InvalidTokenException from e
-    if self._space_repository.get_by_id(data.space_id) is None:     # then the row from the request
+    if not self._space_repository.exists(data.space_id):     # then the row from the request
         raise SpaceNotFoundException from e
     raise  # both exist: a rule Pydantic lets through, a bug
 ```
@@ -272,7 +273,24 @@ except IntegrityError as e:
 For a foreign key, `add` runs inside `db.begin_nested()` so the session stays usable for the lookup, and the
 service reaches the other domain through its Protocol (`IUserRepository`, `ISpaceRepository`). Every `CHECK`
 and `NOT NULL` gets a Pydantic twin instead; never a catch-all `409` "please try again". A row deleted while
-its `PATCH` or `DELETE` runs is a `404`: `StaleDataError` from `save()`, or `False` from `delete()`.
+its `PATCH` or `DELETE` runs is a `404`: `StaleDataError` from `save()`, or `False` from `delete()`; an idempotent
+`DELETE` answers `204` either way (ADR-021).
+
+The lookups use `exists()`, a `select()` of the id, not `get_by_id()`: `db.get` may answer from the session's
+identity map, and the question is about a row another request changed.
+
+An idempotent `POST` answers `201` or `200`, and the status code stays out of the service: the service returns a
+small result with the schema and whether it created the row (`FavoriteSaved(favorite, created)` in
+`app/favorites/schemas/favorite.py`), and the endpoint picks the status. This is the one `if` an endpoint may have
+(`app/favorites/api/favorite.py`, the route declared with `status_code=status.HTTP_201_CREATED`):
+
+```python
+saved = favorite_service.create(data=data, current_user=current_user)
+if not saved.created:
+    # The status code is HTTP's business, so it is set here, not in the service (ADR-021).
+    response.status_code = status.HTTP_200_OK
+return saved.favorite
+```
 
 ## 8. Tests: unit (service mocked) and integration (real database)
 

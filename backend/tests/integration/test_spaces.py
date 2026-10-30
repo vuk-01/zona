@@ -549,3 +549,87 @@ def test_create_by_a_host_deleted_meanwhile_is_401(
     # Nothing was created, and the next request on the same thread works.
     listed = client.get("/api/spaces")
     assert (listed.status_code, listed.json()["total"]) == (200, 0)
+
+
+# --- favoriteOf ---------------------------------------------------------------------------------
+
+
+def save_favorite(client: TestClient, headers: dict[str, str], space_id: int) -> None:
+    response = client.post("/api/favorites", json={"spaceId": space_id}, headers=headers)
+    assert response.status_code == 201, response.text
+
+
+def test_favorite_of_lists_the_saved_spaces_newest_saved_first(
+    client: TestClient, host_auth_headers: dict[str, str], other_auth_headers: dict[str, str]
+) -> None:
+    older = create(client, host_auth_headers, name="Older space")
+    newer = create(client, host_auth_headers, name="Newer space")
+    create(client, host_auth_headers, name="Not saved")
+    save_favorite(client, other_auth_headers, newer["id"])
+    save_favorite(client, other_auth_headers, older["id"])  # created first, saved last
+    save_favorite(client, host_auth_headers, newer["id"])  # someone else's favorite
+    marko_id = user_id(client, other_auth_headers)
+
+    response = client.get(f"/api/spaces?favoriteOf={marko_id}", headers=other_auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert [item["name"] for item in body["items"]] == ["Older space", "Newer space"]
+
+
+def test_favorite_of_keeps_the_other_filters(
+    client: TestClient, host_auth_headers: dict[str, str]
+) -> None:
+    draft = create(client, host_auth_headers, name="Draft", status="draft")
+    listed = create(client, host_auth_headers, name="Listed")
+    create(client, host_auth_headers, name="Not saved")
+    save_favorite(client, host_auth_headers, listed["id"])
+    save_favorite(client, host_auth_headers, draft["id"])  # created first, saved last
+    ana_id = user_id(client, host_auth_headers)
+
+    every = client.get(f"/api/spaces?favoriteOf={ana_id}", headers=host_auth_headers).json()
+    only_listed = client.get(
+        f"/api/spaces?favoriteOf={ana_id}&status=listed", headers=host_auth_headers
+    ).json()
+
+    assert [item["name"] for item in every["items"]] == ["Draft", "Listed"]
+    assert [item["name"] for item in only_listed["items"]] == ["Listed"]
+
+
+def test_favorite_of_hides_a_saved_space_that_became_someone_elses_draft(
+    client: TestClient, host_auth_headers: dict[str, str], other_auth_headers: dict[str, str]
+) -> None:
+    space = create(client, host_auth_headers, name="Listed for now")
+    create(client, host_auth_headers, name="Listed, not saved")
+    save_favorite(client, other_auth_headers, space["id"])
+    patched = client.patch(
+        f"/api/spaces/{space['id']}", json={"status": "draft"}, headers=host_auth_headers
+    )
+    assert patched.status_code == 200
+    marko_id = user_id(client, other_auth_headers)
+
+    cards = client.get(f"/api/spaces?favoriteOf={marko_id}", headers=other_auth_headers).json()
+    hearts = client.get("/api/favorites", headers=other_auth_headers).json()
+
+    assert cards["total"] == 0
+    assert hearts["total"] == 0  # both lists use the one rule; the row stays in the database
+
+
+def test_favorite_of_needs_a_token_and_the_own_id(
+    client: TestClient, auth_headers: dict[str, str], other_auth_headers: dict[str, str]
+) -> None:
+    ana_id = user_id(client, auth_headers)
+
+    anonymous = client.get(f"/api/spaces?favoriteOf={ana_id}")
+    someone_else = client.get(f"/api/spaces?favoriteOf={ana_id}", headers=other_auth_headers)
+    invalid = client.get("/api/spaces?favoriteOf=abc", headers=auth_headers)
+
+    assert (anonymous.status_code, anonymous.json()["code"]) == (401, "not_authenticated")
+    assert anonymous.headers["WWW-Authenticate"] == "Bearer"
+    assert someone_else.json() == {
+        "detail": "You can only list your own favorites",
+        "code": "not_own_favorites",
+    }
+    assert someone_else.status_code == 403
+    assert (invalid.status_code, set(invalid.json()["fieldErrors"])) == (422, {"favoriteOf"})

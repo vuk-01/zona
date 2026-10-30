@@ -7,6 +7,7 @@ import pytest
 
 from app.auth.services.auth import IAuthService
 from app.database.session_factory import ISessionFactory
+from app.favorites.services.favorite import IFavoriteService
 from app.listings.services.listing import IListingService
 from app.spaces.services.space import ISpaceService
 from app.users.services.user import IUserService
@@ -56,3 +57,11 @@ def user_service() -> Generator[Mock]:
     add_to_di_container(IUserService, mock_service)
     yield mock_service
     remove_from_di_container(IUserService)
+
+
+@pytest.fixture
+def favorite_service() -> Generator[Mock]:
+    mock_service = create_autospec(IFavoriteService, instance=True)
+    add_to_di_container(IFavoriteService, mock_service)
+    yield mock_service
+    remove_from_di_container(IFavoriteService)
