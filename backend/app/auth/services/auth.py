@@ -21,7 +21,7 @@ from app.auth.schemas.auth import (
     TokenPayload,
 )
 from app.config.settings import Settings
-from app.users.models.user import User
+from app.users.models.user import User, UserMode
 from app.users.schemas.user import UserResponseSchema
 from app.utils.di import inject
 
@@ -44,7 +44,7 @@ class AuthService(IAuthService):
         user = User(
             email=data.email.lower(),
             password_hash=hash_password(data.password),
-            display_name=data.display_name,
+            name=data.name,
         )
         try:
             user = self._auth_repository.add_user(user)
@@ -57,6 +57,7 @@ class AuthService(IAuthService):
         user = self._auth_repository.get_user_by_email(data.email.lower())
         if user is None or not verify_password(data.password, user.password_hash):
             raise InvalidCredentialsException
+        # The stored mode is kept: the user comes back in the mode they used last.
         return self._authentication_response(user)
 
     def get_current_user(self, token: str) -> CurrentUser:
@@ -67,8 +68,12 @@ class AuthService(IAuthService):
         return CurrentUser(
             id=user.id,
             email=user.email,
-            display_name=user.display_name,
+            name=user.name,
+            avatar_url=user.avatar_url,
+            city=user.city,
+            bio=user.bio,
             is_host=user.is_host,
+            mode=UserMode(user.mode),
             created_at=user.created_at,
         )
 

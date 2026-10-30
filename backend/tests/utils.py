@@ -7,6 +7,7 @@ from pydantic_settings import SettingsConfigDict
 
 from app.auth.schemas.auth import CurrentUser
 from app.config.settings import Settings
+from app.users.models.user import UserMode
 from app.utils.clock import IClock
 
 
@@ -27,13 +28,20 @@ class FixedClock(IClock):
 
 
 def create_current_user(
-    id: int = 1, email: str = "test@example.com", is_host: bool = False
+    id: int = 1,
+    email: str = "test@example.com",
+    is_host: bool = False,
+    mode: UserMode = UserMode.GUEST,
 ) -> CurrentUser:
     return CurrentUser(
         id=id,
         email=email,
-        display_name="Test User",
+        name="Test User",
+        avatar_url=None,
+        city="",
+        bio="",
         is_host=is_host,
+        mode=mode,
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 

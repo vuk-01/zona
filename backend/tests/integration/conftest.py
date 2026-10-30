@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, update
+from sqlalchemy import delete
 
 from app.config.settings import DBSettings, Settings
 from app.database.base import Base
@@ -74,7 +74,7 @@ def clean_tables() -> Generator[None]:
 def register(client: TestClient, email: str) -> dict[str, str]:
     response = client.post(
         "/api/auth/register",
-        json={"email": email, "password": "secret123", "displayName": email.split("@")[0]},
+        json={"email": email, "password": "secret123", "name": email.split("@")[0]},
     )
     assert response.status_code == 201, response.text
     return {"Authorization": f"Bearer {response.json()['token']}"}
@@ -90,13 +90,19 @@ def other_auth_headers(client: TestClient) -> dict[str, str]:
     return register(client, "marko@example.com")
 
 
+def user_id(client: TestClient, headers: dict[str, str]) -> int:
+    response = client.get("/api/auth/me", headers=headers)
+    assert response.status_code == 200, response.text
+    return int(response.json()["id"])
+
+
 @pytest.fixture
-def host_auth_headers(auth_headers: dict[str, str]) -> dict[str, str]:
-    """`auth_headers` (ana) as a host. There is no route that makes a host yet (users feature)."""
-    session_factory = get_from_di_container(ISessionFactory)
-    with session_factory() as session:
-        session.execute(update(User).where(User.email == "ana@example.com").values(is_host=True))
-        session.commit()
+def host_auth_headers(client: TestClient, auth_headers: dict[str, str]) -> dict[str, str]:
+    """`auth_headers` (ana) as a host, switched to host mode through the API."""
+    response = client.patch(
+        f"/api/users/{user_id(client, auth_headers)}", json={"mode": "host"}, headers=auth_headers
+    )
+    assert response.status_code == 200, response.text
     return auth_headers
 
 
