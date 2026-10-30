@@ -43,7 +43,9 @@ _INVALID_FILTER = ValidationFailedException({"size": "Input should be greater th
 _INVALID_ID = ValidationFailedException(
     {"booking_id": "Input should be a valid integer, unable to parse string as an integer"}
 )
-_INVALID_STATUS = ValidationFailedException({"status": "Input should be 'declined' or 'cancelled'"})
+_INVALID_STATUS = ValidationFailedException(
+    {"status": "Input should be 'confirmed', 'declined' or 'cancelled'"}
+)
 _INVALID_BODY = ValidationFailedException(
     {"startTime": "String should match pattern '^([01]\\d|2[0-3]):[0-5]\\d$'"}
 )
@@ -136,16 +138,19 @@ def create_booking(
 
 @router.patch(
     path="/{booking_id}",
-    summary="Decline or cancel a booking",
+    summary="Confirm, decline or cancel a booking",
     description=(
-        "The host declines a `pending` booking; the guest or the host cancels a `pending` or "
-        "`confirmed` one. The same status again is `422`, not a no-op."
+        "The host confirms or declines a `pending` booking; the guest or the host cancels a "
+        "`pending` or `confirmed` one. Confirming checks the room again under a lock on the "
+        "space: `409 slot_full` when an hour of the slot is full. The same status again is "
+        "`422`, not a no-op."
     ),
     responses=error_responses(
         *CURRENT_USER_ERRORS,
         NotBookingParticipantException(),
         NotBookingHostException(),
         BookingNotFoundException(),
+        SlotFullException(),
         InvalidStatusChangeException(),
         _INVALID_STATUS,
     ),

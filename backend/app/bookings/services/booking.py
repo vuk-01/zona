@@ -108,8 +108,14 @@ class BookingService(IBookingService):
     def update(
         self, booking_id: int, data: BookingUpdateRequestSchema, current_user: CurrentUser
     ) -> BookingResponseSchema:
-        booking = self._get_as_participant_or_raise(booking_id, current_user)
         change = BookingStatus(data.status)
+        # Confirming takes room: the space lock is the first statement, nothing is read before
+        # it, so the read and the count below see every confirm that committed first (ADR-023).
+        if change == BookingStatus.CONFIRMED and (
+            self._space_repository.lock_for_booking(booking_id) is None
+        ):
+            raise BookingNotFoundException
+        booking = self._get_as_participant_or_raise(booking_id, current_user)
         # Cancelling is for the guest and the host; everything else only for the host.
         if change != BookingStatus.CANCELLED and current_user.id != booking.space.host_id:
             raise NotBookingHostException
@@ -117,7 +123,19 @@ class BookingService(IBookingService):
         error = _status_change_error(_returned_status(booking, now), change)
         if error is not None:
             raise error
-        # Compare-and-set, no lock: declining and cancelling take no room (ADR-023).
+        if change == BookingStatus.CONFIRMED:
+            # Under the lock: the count is the truth. This booking is still pending, so it is
+            # not counted, and `exclude_id` keeps it that way.
+            self._raise_if_full(
+                space_id=booking.space_id,
+                desk_count=booking.space.desk_count,
+                day=booking.date,
+                start_hour=booking.start_hour,
+                end_hour=booking.end_hour,
+                exclude_id=booking.id,
+            )
+        # Compare-and-set; declining and cancelling take no room, so they run without the lock.
+        # It also guards confirm: on Postgres a parallel cancel does not wait for the space lock.
         if not self._booking_repository.set_status(booking_id, expected=booking.status, new=change):
             self._raise_lost_race(booking_id, change)
         # The UPDATE also set the new status on `booking` in the session.
@@ -165,7 +183,13 @@ class BookingService(IBookingService):
         if local_hour_to_utc(data.date, start_hour) <= now:
             raise BookingInPastException
         # Advice only: a pending booking takes no room, confirm checks again under the lock (ADR-023).
-        self._raise_if_full(space, data.date, start_hour, end_hour)
+        self._raise_if_full(
+            space_id=space.id,
+            desk_count=space.desk_count,
+            day=data.date,
+            start_hour=start_hour,
+            end_hour=end_hour,
+        )
         # The guest is always the signed-in user, never an id from the request body (ADR-006).
         booking = Booking(
             space_id=space.id,
@@ -190,14 +214,22 @@ class BookingService(IBookingService):
         return _to_response(booking, now)
 
     def _raise_if_full(
-        self, space: SpaceResponseSchema, day: date, start_hour: int, end_hour: int
+        self,
+        space_id: int,
+        desk_count: int | None,
+        day: date,
+        start_hour: int,
+        end_hour: int,
+        exclude_id: int | None = None,
     ) -> None:
-        taken = self._booking_repository.confirmed_per_hour(space_id=space.id, day=day)
+        taken = self._booking_repository.confirmed_per_hour(
+            space_id=space_id, day=day, exclude_id=exclude_id
+        )
         # A database CHECK keeps desk_count NULL for every category but desk.
-        units = space.desk_count or 1
+        units = desk_count or 1
         for hour in range(start_hour, end_hour):
             if taken.get(hour, 0) >= units:
-                raise SlotFullException.at(_hh_mm(hour), has_desks=space.desk_count is not None)
+                raise SlotFullException.at(_hh_mm(hour), has_desks=desk_count is not None)
 
 
 def _slot_hours(space: SpaceResponseSchema, data: BookingCreateRequestSchema) -> tuple[int, int]:
@@ -243,6 +275,7 @@ def _hh_mm(hour: int) -> str:
 # The statuses each change may start from (docs/entities.md, status flow).
 _PENDING = (BookingReturnedStatus.PENDING,)
 _ALLOWED_FROM: dict[BookingStatus, tuple[BookingReturnedStatus, ...]] = {
+    BookingStatus.CONFIRMED: _PENDING,
     BookingStatus.DECLINED: _PENDING,
     BookingStatus.CANCELLED: (BookingReturnedStatus.PENDING, BookingReturnedStatus.CONFIRMED),
 }

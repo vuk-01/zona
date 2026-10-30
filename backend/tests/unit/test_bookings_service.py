@@ -186,7 +186,9 @@ def test_a_full_hour_is_slot_full_with_the_first_full_hour(
         service.create(WEDNESDAY_10_TO_12, GUEST)
 
     assert error.value.message == message
-    booking_repository.confirmed_per_hour.assert_called_once_with(space_id=7, day=date(2026, 11, 4))
+    booking_repository.confirmed_per_hour.assert_called_once_with(
+        space_id=7, day=date(2026, 11, 4), exclude_id=None
+    )
     booking_repository.add.assert_not_called()
 
 
@@ -343,18 +345,24 @@ def change_to(status: str) -> BookingUpdateRequestSchema:
 @pytest.mark.parametrize(
     ("stored", "ended", "change", "error"),
     [
+        ("pending", False, "confirmed", None),
         ("pending", False, "declined", None),
         ("pending", False, "cancelled", None),
         ("confirmed", False, "cancelled", None),
+        ("confirmed", False, "confirmed", "Confirmed bookings cannot be confirmed again"),
         ("confirmed", False, "declined", "Only a pending booking can be declined"),
+        ("declined", False, "confirmed", "Only a pending booking can be confirmed"),
         ("declined", False, "declined", "Declined bookings cannot be declined again"),
         ("declined", False, "cancelled", "Only a pending or confirmed booking can be cancelled"),
+        ("cancelled", False, "confirmed", "Only a pending booking can be confirmed"),
         ("cancelled", False, "cancelled", "Cancelled bookings cannot be cancelled again"),
         ("cancelled", False, "declined", "Only a pending booking can be declined"),
         # expired
+        ("pending", True, "confirmed", "Only a pending booking can be confirmed"),
         ("pending", True, "declined", "Only a pending booking can be declined"),
         ("pending", True, "cancelled", "Only a pending or confirmed booking can be cancelled"),
         # finished
+        ("confirmed", True, "confirmed", "Only a pending booking can be confirmed"),
         ("confirmed", True, "cancelled", "Only a pending or confirmed booking can be cancelled"),
     ],
 )
@@ -377,13 +385,110 @@ def test_status_change_follows_the_flow(
     booking_repository.set_status.assert_not_called()
 
 
-def test_the_guest_cannot_decline(service: BookingService, booking_repository: Mock) -> None:
+@pytest.mark.parametrize("change", ["confirmed", "declined"])
+def test_the_guest_cannot_confirm_or_decline(
+    service: BookingService, booking_repository: Mock, change: str
+) -> None:
     booking_repository.get_by_id.return_value = stored_booking()
 
     with pytest.raises(NotBookingHostException):
-        service.update(3, change_to("declined"), GUEST)
+        service.update(3, change_to(change), GUEST)
 
     booking_repository.set_status.assert_not_called()
+
+
+# --- confirm under the space lock (ADR-023) -------------------------------------------------------
+
+
+def test_confirm_takes_the_space_lock_before_anything_is_read(
+    service: BookingService, booking_repository: Mock, space_repository: Mock
+) -> None:
+    calls = Mock()
+    calls.attach_mock(space_repository.lock_for_booking, "lock_for_booking")
+    calls.attach_mock(booking_repository.get_by_id, "get_by_id")
+    calls.attach_mock(booking_repository.confirmed_per_hour, "confirmed_per_hour")
+    calls.attach_mock(booking_repository.set_status, "set_status")
+    space_repository.lock_for_booking.return_value = 7
+    booking_repository.get_by_id.return_value = stored_booking()
+    booking_repository.set_status.return_value = True
+
+    service.update(3, change_to("confirmed"), HOST)
+
+    assert [name for name, _, _ in calls.mock_calls] == [
+        "lock_for_booking",
+        "get_by_id",
+        "confirmed_per_hour",
+        "set_status",
+    ]
+    space_repository.lock_for_booking.assert_called_once_with(3)
+    booking_repository.confirmed_per_hour.assert_called_once_with(
+        space_id=7, day=date(2026, 11, 4), exclude_id=3
+    )
+    booking_repository.set_status.assert_called_once_with(3, expected="pending", new="confirmed")
+
+
+def test_confirm_of_a_booking_gone_before_the_lock_is_404(
+    service: BookingService, booking_repository: Mock, space_repository: Mock
+) -> None:
+    space_repository.lock_for_booking.return_value = None
+
+    with pytest.raises(BookingNotFoundException):
+        service.update(3, change_to("confirmed"), HOST)
+
+    booking_repository.get_by_id.assert_not_called()
+
+
+@pytest.mark.parametrize("change", ["declined", "cancelled"])
+def test_decline_and_cancel_take_no_lock(
+    service: BookingService, booking_repository: Mock, space_repository: Mock, change: str
+) -> None:
+    booking_repository.get_by_id.return_value = stored_booking()
+    booking_repository.set_status.return_value = True
+
+    service.update(3, change_to(change), HOST)
+
+    space_repository.lock_for_booking.assert_not_called()
+    booking_repository.confirmed_per_hour.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("desk_count", "taken", "message"),
+    [
+        (None, {11: 1}, "This space is already booked at 11:00"),
+        (2, {10: 1, 11: 2}, "No desks left at 11:00"),
+    ],
+)
+def test_confirm_into_a_full_hour_is_slot_full(
+    service: BookingService,
+    booking_repository: Mock,
+    desk_count: int | None,
+    taken: dict[int, int],
+    message: str,
+) -> None:
+    booking = stored_booking()
+    booking.space.desk_count = desk_count
+    booking_repository.get_by_id.return_value = booking
+    booking_repository.confirmed_per_hour.return_value = taken
+
+    with pytest.raises(SlotFullException) as raised:
+        service.update(3, change_to("confirmed"), HOST)
+
+    assert raised.value.message == message
+    booking_repository.set_status.assert_not_called()
+
+
+def test_confirm_with_a_desk_left_in_every_hour_sets_confirmed(
+    service: BookingService, booking_repository: Mock
+) -> None:
+    booking = stored_booking()
+    booking.space.desk_count = 2
+    booking_repository.get_by_id.return_value = booking
+    booking_repository.confirmed_per_hour.return_value = {10: 1, 11: 1}
+    booking_repository.set_status.return_value = True
+
+    service.update(3, change_to("confirmed"), HOST)
+
+    booking_repository.set_status.assert_called_once_with(3, expected="pending", new="confirmed")
 
 
 @pytest.mark.parametrize("user", [GUEST, HOST])
@@ -416,6 +521,8 @@ def test_someone_else_cannot_change_or_delete(
     ("status_now", "change", "error"),
     [
         (None, "cancelled", BookingNotFoundException),
+        (None, "confirmed", BookingNotFoundException),
+        ("cancelled", "confirmed", "Only a pending booking can be confirmed"),
         ("cancelled", "declined", "Only a pending booking can be declined"),
         ("declined", "cancelled", "Only a pending or confirmed booking can be cancelled"),
         ("confirmed", "cancelled", "This booking was confirmed meanwhile"),

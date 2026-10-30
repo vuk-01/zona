@@ -79,6 +79,25 @@ def as_utc(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
+def change(client: TestClient, headers: dict[str, str], booking_id: int, status: str) -> Response:
+    return client.patch(f"/api/bookings/{booking_id}", json={"status": status}, headers=headers)
+
+
+def confirm(client: TestClient, host_headers: dict[str, str], booking_id: int) -> None:
+    """The host confirms through the route, as the frontend does."""
+    response = change(client, host_headers, booking_id, "confirmed")
+    assert response.status_code == 200, response.text
+
+
+def invalid_status_change(message: str) -> dict[str, str]:
+    return {"detail": message, "code": "invalid_status_change"}
+
+
+def stored_status(booking_id: int) -> str | None:
+    with get_from_di_container(ISessionFactory)() as session:
+        return session.scalar(select(Booking.status).where(Booking.id == booking_id))
+
+
 # --- POST: created ------------------------------------------------------------------------------
 
 
@@ -328,13 +347,6 @@ def test_ends_at_on_the_day_the_clocks_go_back_takes_the_first_02_00(
 # --- POST: room (advice only, ADR-023) ----------------------------------------------------------
 
 
-def confirm_in_db(booking_id: int) -> None:
-    """Confirms a booking straight in the database: the confirm route comes with the space lock."""
-    on_second_connection(
-        update(Booking).where(Booking.id == booking_id).values(status=BookingStatus.CONFIRMED)
-    )
-
-
 @pytest.mark.parametrize(
     ("changes", "message"),
     [
@@ -355,7 +367,7 @@ def test_create_into_a_full_hour_is_409_slot_full(
     space_id = new_space(client, host_auth_headers, **changes)
     taken = book(client, other_auth_headers, space_id, startTime="11:00", endTime="12:00")
     assert taken.status_code == 201, taken.text
-    confirm_in_db(taken.json()["id"])
+    confirm(client, host_auth_headers, taken.json()["id"])
 
     response = book(client, other_auth_headers, space_id, startTime="10:00", endTime="12:00")
 
@@ -388,7 +400,7 @@ def test_a_confirmed_booking_takes_no_room_on_another_space_or_day(
     one_desk = new_space(client, host_auth_headers, deskCount=1)
     another_one_desk = new_space(client, host_auth_headers, deskCount=1)
     taken = book(client, other_auth_headers, one_desk)
-    confirm_in_db(taken.json()["id"])
+    confirm(client, host_auth_headers, taken.json()["id"])
 
     assert book(client, other_auth_headers, another_one_desk).status_code == 201
     assert book(client, other_auth_headers, one_desk, date="2026-11-05").status_code == 201
@@ -562,6 +574,7 @@ def test_list_with_space_id_and_date_narrows(
 
 def test_list_with_status_matches_the_status_as_returned(
     client: TestClient,
+    host_auth_headers: dict[str, str],
     other_auth_headers: dict[str, str],
     space_id: int,
     set_now: Callable[[datetime], None],
@@ -569,8 +582,8 @@ def test_list_with_status_matches_the_status_as_returned(
     pending = book(client, other_auth_headers, space_id, startTime="08:00", endTime="09:00")
     confirmed = book(client, other_auth_headers, space_id, startTime="09:00", endTime="10:00")
     future = book(client, other_auth_headers, space_id, startTime="12:00", endTime="13:00")
-    confirm_in_db(confirmed.json()["id"])
-    confirm_in_db(future.json()["id"])
+    confirm(client, host_auth_headers, confirmed.json()["id"])
+    confirm(client, host_auth_headers, future.json()["id"])
     set_now(datetime(2026, 11, 4, 10, 0, tzinfo=UTC))  # Wednesday 11:00 in Podgorica
 
     def with_status(status: str) -> list[int]:
@@ -738,17 +751,18 @@ def test_get_with_an_invalid_id_is_422(
     assert (body["code"], set(body["fieldErrors"])) == ("validation_error", {"booking_id"})
 
 
-@pytest.mark.parametrize(("confirm", "returned"), [(False, "expired"), (True, "finished")])
+@pytest.mark.parametrize(("confirmed", "returned"), [(False, "expired"), (True, "finished")])
 def test_get_after_the_slot_ended_returns_expired_or_finished(
     client: TestClient,
+    host_auth_headers: dict[str, str],
     other_auth_headers: dict[str, str],
     booking_id: int,
     set_now: Callable[[datetime], None],
-    confirm: bool,
+    confirmed: bool,
     returned: str,
 ) -> None:
-    if confirm:
-        confirm_in_db(booking_id)
+    if confirmed:
+        confirm(client, host_auth_headers, booking_id)
     path = f"/api/bookings/{booking_id}"
     # The slot ends Wednesday 12:00 in Podgorica = 11:00 UTC.
     set_now(datetime(2026, 11, 4, 10, 59, tzinfo=UTC))
@@ -756,9 +770,9 @@ def test_get_after_the_slot_ended_returns_expired_or_finished(
     set_now(datetime(2026, 11, 4, 11, 0, tzinfo=UTC))
     after = client.get(path, headers=other_auth_headers).json()["status"]
 
-    assert (before, after) == ("confirmed" if confirm else "pending", returned)
+    assert (before, after) == ("confirmed" if confirmed else "pending", returned)
     [row] = booking_rows()
-    assert row.status == ("confirmed" if confirm else "pending")  # the stored status stays
+    assert row.status == ("confirmed" if confirmed else "pending")  # the stored status stays
 
 
 def test_guest_still_sees_the_booking_after_the_host_turns_the_space_into_a_draft(
@@ -779,19 +793,6 @@ def test_guest_still_sees_the_booking_after_the_host_turns_the_space_into_a_draf
 
 
 # --- PATCH: decline and cancel ------------------------------------------------------------------
-
-
-def change(client: TestClient, headers: dict[str, str], booking_id: int, status: str) -> Response:
-    return client.patch(f"/api/bookings/{booking_id}", json={"status": status}, headers=headers)
-
-
-def invalid_status_change(message: str) -> dict[str, str]:
-    return {"detail": message, "code": "invalid_status_change"}
-
-
-def stored_status(booking_id: int) -> str | None:
-    with get_from_di_container(ISessionFactory)() as session:
-        return session.scalar(select(Booking.status).where(Booking.id == booking_id))
 
 
 def test_host_declines_a_pending_booking(
@@ -815,7 +816,7 @@ def test_guest_or_host_cancels_a_pending_or_confirmed_booking(
     confirmed: bool,
 ) -> None:
     if confirmed:
-        confirm_in_db(booking_id)
+        confirm(client, host_auth_headers, booking_id)
     headers = other_auth_headers if who == "guest" else host_auth_headers
 
     response = change(client, headers, booking_id, "cancelled")
@@ -851,9 +852,12 @@ def test_patch_by_someone_else_is_403(
 @pytest.mark.parametrize(
     ("first", "then", "message"),
     [
+        ("confirmed", "confirmed", "Confirmed bookings cannot be confirmed again"),
         ("cancelled", "cancelled", "Cancelled bookings cannot be cancelled again"),
         ("declined", "declined", "Declined bookings cannot be declined again"),
+        ("declined", "confirmed", "Only a pending booking can be confirmed"),
         ("declined", "cancelled", "Only a pending or confirmed booking can be cancelled"),
+        ("cancelled", "confirmed", "Only a pending booking can be confirmed"),
         ("cancelled", "declined", "Only a pending booking can be declined"),
     ],
 )
@@ -877,7 +881,7 @@ def test_a_change_the_flow_does_not_allow_is_422(
 def test_declining_a_confirmed_booking_is_422(
     client: TestClient, host_auth_headers: dict[str, str], booking_id: int
 ) -> None:
-    confirm_in_db(booking_id)
+    confirm(client, host_auth_headers, booking_id)
 
     response = change(client, host_auth_headers, booking_id, "declined")
 
@@ -888,6 +892,7 @@ def test_declining_a_confirmed_booking_is_422(
 @pytest.mark.parametrize("confirmed", [False, True])
 def test_cancelling_after_the_slot_ended_is_422(
     client: TestClient,
+    host_auth_headers: dict[str, str],
     other_auth_headers: dict[str, str],
     booking_id: int,
     set_now: Callable[[datetime], None],
@@ -895,7 +900,7 @@ def test_cancelling_after_the_slot_ended_is_422(
 ) -> None:
     """An expired or finished booking is final."""
     if confirmed:
-        confirm_in_db(booking_id)
+        confirm(client, host_auth_headers, booking_id)
     set_now(datetime(2026, 11, 4, 11, 0, tzinfo=UTC))  # Wednesday 12:00 in Podgorica, the end
 
     response = change(client, other_auth_headers, booking_id, "cancelled")
@@ -939,6 +944,183 @@ def test_patch_without_token_is_401(client: TestClient, booking_id: int) -> None
     assert stored_status(booking_id) == "pending"
 
 
+# --- PATCH: confirm under the space lock (ADR-023) ----------------------------------------------
+
+
+def space_row(space_id: int) -> tuple[Any, ...]:
+    """Every column of the space as the database has it."""
+    with get_from_di_container(ISessionFactory)() as session:
+        return tuple(session.execute(select(Space.__table__).where(Space.id == space_id)).one())
+
+
+def test_host_confirms_a_pending_booking(
+    client: TestClient, host_auth_headers: dict[str, str], booking_id: int
+) -> None:
+    response = change(client, host_auth_headers, booking_id, "confirmed")
+
+    assert response.status_code == 200, response.text
+    assert (response.json()["id"], response.json()["status"]) == (booking_id, "confirmed")
+    assert stored_status(booking_id) == "confirmed"
+
+
+def test_the_lock_leaves_the_space_row_unchanged(
+    client: TestClient, host_auth_headers: dict[str, str], space_id: int, booking_id: int
+) -> None:
+    before = space_row(space_id)
+
+    confirm(client, host_auth_headers, booking_id)
+
+    assert space_row(space_id) == before
+
+
+def test_guest_confirms_is_403_not_booking_host(
+    client: TestClient, other_auth_headers: dict[str, str], booking_id: int
+) -> None:
+    response = change(client, other_auth_headers, booking_id, "confirmed")
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Only the host can confirm or decline this booking",
+        "code": "not_booking_host",
+    }
+    assert stored_status(booking_id) == "pending"
+
+
+def test_confirm_by_someone_else_is_403(
+    client: TestClient, jovana_headers: dict[str, str], booking_id: int
+) -> None:
+    response = change(client, make_host(client, jovana_headers), booking_id, "confirmed")
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_booking_participant"
+    assert stored_status(booking_id) == "pending"
+
+
+def test_confirm_an_unknown_booking_is_404(
+    client: TestClient, host_auth_headers: dict[str, str]
+) -> None:
+    response = change(client, host_auth_headers, 2_000_000, "confirmed")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+
+
+def test_confirm_without_token_is_401(client: TestClient, booking_id: int) -> None:
+    response = change(client, {}, booking_id, "confirmed")
+
+    assert response.status_code == 401
+    assert response.json() == NOT_AUTHENTICATED
+    assert stored_status(booking_id) == "pending"
+
+
+@pytest.mark.parametrize("bad_id", ["abc", "0", "2147483648"])
+def test_confirm_with_an_invalid_id_is_422(
+    client: TestClient, host_auth_headers: dict[str, str], bad_id: str
+) -> None:
+    response = client.patch(
+        f"/api/bookings/{bad_id}", json={"status": "confirmed"}, headers=host_auth_headers
+    )
+
+    assert response.status_code == 422
+    assert set(response.json()["fieldErrors"]) == {"booking_id"}
+
+
+@pytest.mark.parametrize(
+    ("changes", "confirmed", "message"),
+    [
+        ({"deskCount": 2}, [("10:00", "12:00"), ("11:00", "12:00")], "No desks left at 11:00"),
+        (
+            {"category": "meeting-room", "deskCount": None},
+            [("10:00", "12:00")],
+            "This space is already booked at 11:00",
+        ),
+    ],
+)
+def test_confirm_into_a_full_hour_is_409_slot_full_with_the_first_full_hour(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    changes: dict[str, Any],
+    confirmed: list[tuple[str, str]],
+    message: str,
+) -> None:
+    space_id = new_space(client, host_auth_headers, **changes)
+    # Booked while the slot is free (POST only advises), confirmed after the others took it.
+    later = book(client, other_auth_headers, space_id, startTime="11:00", endTime="13:00")
+    for start, end in confirmed:
+        booked = book(client, other_auth_headers, space_id, startTime=start, endTime=end)
+        confirm(client, host_auth_headers, booked.json()["id"])
+
+    response = change(client, host_auth_headers, later.json()["id"], "confirmed")
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": message, "code": "slot_full"}
+    assert stored_status(later.json()["id"]) == "pending"
+
+
+def test_confirm_counts_hour_by_hour(
+    client: TestClient, host_auth_headers: dict[str, str], other_auth_headers: dict[str, str]
+) -> None:
+    """docs/entities.md: 2 desks, confirmed 09-10 and 11-12; a new 09-12 is allowed."""
+    space_id = new_space(client, host_auth_headers, deskCount=2)
+    for start, end in (("09:00", "10:00"), ("11:00", "12:00")):
+        booked = book(client, other_auth_headers, space_id, startTime=start, endTime=end)
+        confirm(client, host_auth_headers, booked.json()["id"])
+    wide = book(client, other_auth_headers, space_id, startTime="09:00", endTime="12:00")
+
+    response = change(client, host_auth_headers, wide.json()["id"], "confirmed")
+
+    assert response.status_code == 200, response.text
+    # Now 09:00 and 11:00 are full, 10:00 still has a desk.
+    full = book(client, other_auth_headers, space_id, startTime="10:00", endTime="12:00")
+    assert full.json() == {"detail": "No desks left at 11:00", "code": "slot_full"}
+    assert (
+        book(client, other_auth_headers, space_id, startTime="10:00", endTime="11:00").status_code
+        == 201
+    )
+
+
+def test_confirm_after_the_slot_ended_is_422(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    booking_id: int,
+    set_now: Callable[[datetime], None],
+) -> None:
+    """An expired booking cannot be confirmed."""
+    set_now(datetime(2026, 11, 4, 11, 0, tzinfo=UTC))  # Wednesday 12:00 in Podgorica, the end
+
+    response = change(client, host_auth_headers, booking_id, "confirmed")
+
+    assert response.status_code == 422
+    assert response.json() == invalid_status_change("Only a pending booking can be confirmed")
+    assert stored_status(booking_id) == "pending"
+
+
+def test_confirm_after_the_space_became_a_draft_is_200_today(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    space_id: int,
+    booking_id: int,
+) -> None:
+    """The current behaviour, not a decision of the contract.
+
+    docs/entities.md filters bookings by who takes part, not by whether the space is listed, and
+    says nothing about confirming on a draft; the question is in docs/follow-ups.md.
+    """
+    response = client.patch(
+        f"/api/spaces/{space_id}", json={"status": "draft"}, headers=host_auth_headers
+    )
+    assert response.status_code == 200, response.text
+
+    confirmed = change(client, host_auth_headers, booking_id, "confirmed")
+
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["status"] == "confirmed"
+    seen = client.get(f"/api/bookings/{booking_id}", headers=other_auth_headers)
+    assert seen.json()["status"] == "confirmed"
+
+
 # --- DELETE -------------------------------------------------------------------------------------
 
 
@@ -977,13 +1159,14 @@ def test_delete_by_someone_else_is_403(
 @pytest.mark.parametrize("state", ["confirmed", "cancelled", "expired"])
 def test_delete_when_not_pending_is_422(
     client: TestClient,
+    host_auth_headers: dict[str, str],
     other_auth_headers: dict[str, str],
     booking_id: int,
     set_now: Callable[[datetime], None],
     state: str,
 ) -> None:
     if state == "confirmed":
-        confirm_in_db(booking_id)
+        confirm(client, host_auth_headers, booking_id)
     elif state == "cancelled":
         assert change(client, other_auth_headers, booking_id, "cancelled").status_code == 200
     else:
@@ -1110,3 +1293,28 @@ def test_delete_of_a_booking_deleted_or_changed_meanwhile(
     assert response.status_code == status_code
     assert response.json() == body
     assert stored_status(booking_id) == left
+
+
+def test_confirm_of_a_booking_deleted_after_the_lock_is_404(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The row goes between the read and the compare-and-set: the re-read finds no row.
+
+    On SQLite the space lock already holds the database's write lock, so a second connection
+    cannot delete here; the DELETE runs in the request's own session, as in `test_favorites.py`.
+    """
+    set_status = BookingRepository.set_status
+
+    def deleted_then_set_status(self: BookingRepository, *args: Any, **kwargs: Any) -> bool:
+        self._session_factory().execute(delete(Booking).where(Booking.id == booking_id))
+        return set_status(self, *args, **kwargs)
+
+    monkeypatch.setattr(BookingRepository, "set_status", deleted_then_set_status)
+
+    response = change(client, host_auth_headers, booking_id, "confirmed")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}

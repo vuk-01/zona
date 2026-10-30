@@ -334,11 +334,18 @@ found through the booking inside the same statement, so nothing is read before i
 def lock_for_booking(self, booking_id: int) -> int | None:
     db = self._session_factory()
     # A no-op UPDATE is a write on both engines (ADR-003): a row lock on Postgres, the write lock on SQLite.
+    # The values do not change, so there is nothing to synchronize in the session.
     space_id = select(Booking.space_id).where(Booking.id == booking_id).scalar_subquery()
     return db.execute(
-        update(Space).where(Space.id == space_id).values(id=Space.id).returning(Space.id)
+        update(Space)
+        .where(Space.id == space_id)
+        .values(id=Space.id)
+        .returning(Space.id)
+        .execution_options(synchronize_session=False)
     ).scalar_one_or_none()
 ```
+
+The service calls it before anything else in the request's transaction; `None` means the booking is gone (`404`).
 
 Then the service reads the booking, checks the role and the transition, counts the confirmed bookings per hour
 (without this one) and writes with a compare-and-set, which also guards cancel, decline and delete (no lock there):
@@ -353,9 +360,17 @@ def set_status(self, booking_id: int, expected: BookingStatus, new: BookingStatu
         .where(Booking.id == booking_id, Booking.status == expected)
         .values(status=new)
         .returning(Booking.id)
+        .execution_options(synchronize_session="fetch")
     ).scalar_one_or_none()
     return changed_id is not None
 ```
+
+`synchronize_session="fetch"` is part of the pattern. The default, `"auto"`, tries `"evaluate"` first: SQLAlchemy
+evaluates the `WHERE` in Python against the booking already loaded in the session and, when the loaded object still
+has `expected`, sets `new` on it, even when the database changed no row because a parallel request got there first.
+The service would then answer with a status that is not stored. `"fetch"` updates in the session only the rows
+`RETURNING` names. The same goes for a compare-and-set `delete()` (`delete_pending`): with `"evaluate"` the loaded
+object leaves the session although the row is still there.
 
 On `False` the service reads the status again with a `select()` (`get_status`), not `db.get`, because the first
 read is in the identity map: no row → `404 booking_not_found`, another status → `422 invalid_status_change`. It never

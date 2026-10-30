@@ -16,6 +16,7 @@ from app.bookings.exceptions.booking import (
     NotBookingHostException,
     NotBookingParticipantException,
     NotOwnBookingsException,
+    SlotFullException,
 )
 from app.bookings.schemas.booking import (
     BookingGuestSchema,
@@ -280,7 +281,7 @@ def test_get_without_token_is_401(client: TestClient, booking_service: Mock, pat
 # --- PATCH and DELETE -----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("change", ["declined", "cancelled"])
+@pytest.mark.parametrize("change", ["confirmed", "declined", "cancelled"])
 def test_patch_passes_the_id_change_and_user(
     client: TestClient, booking_service: Mock, change: str
 ) -> None:
@@ -318,6 +319,7 @@ def test_patch_with_an_invalid_body_is_422(
         (NotBookingParticipantException, 403, "not_booking_participant"),
         (NotBookingHostException, 403, "not_booking_host"),
         (BookingNotFoundException, 404, "booking_not_found"),
+        (SlotFullException, 409, "slot_full"),
         (InvalidStatusChangeException, 422, "invalid_status_change"),
     ],
 )
@@ -330,10 +332,24 @@ def test_patch_maps_the_service_errors(
 ) -> None:
     booking_service.update.side_effect = error
 
-    response = client.patch("/api/bookings/3", json={"status": "declined"}, headers=AUTH)
+    response = client.patch("/api/bookings/3", json={"status": "confirmed"}, headers=AUTH)
 
     assert response.status_code == status_code
     assert response.json()["code"] == code
+
+
+def test_patch_with_slot_full_has_the_message_of_the_first_full_hour(
+    client: TestClient, booking_service: Mock
+) -> None:
+    booking_service.update.side_effect = SlotFullException.at("11:00", has_desks=False)
+
+    response = client.patch("/api/bookings/3", json={"status": "confirmed"}, headers=AUTH)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "This space is already booked at 11:00",
+        "code": "slot_full",
+    }
 
 
 def test_delete_is_204_without_a_body(client: TestClient, booking_service: Mock) -> None:

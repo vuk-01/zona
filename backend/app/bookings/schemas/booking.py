@@ -39,8 +39,9 @@ class BookingCreateRequestSchema(CamelCaseModel):
 
 
 class BookingStatusChange(StrEnum):
-    """What `PATCH` may set. `confirmed` comes with the space lock (ADR-023)."""
+    """What `PATCH` may set; `confirmed` runs under the space lock (ADR-023)."""
 
+    CONFIRMED = "confirmed"
     DECLINED = "declined"
     CANCELLED = "cancelled"
 
