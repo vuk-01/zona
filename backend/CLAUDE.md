@@ -12,7 +12,7 @@ All code, identifiers, comments, commit messages and docs are in English; you ma
 |------|-----------|
 | A whole feature, before anything else | `/brief` → `docs/specs/<feature>.md`, then `docs/entities.md` |
 | New entity (model + schemas + repository + service + api + tests) | `/new-entity`; `app/listings/` is the reference; `.claude/skills/backend-patterns` |
-| Model or migration | `.claude/rules/backend-db.md` · ADR-003, ADR-004, ADR-007, ADR-008 in `.claude/decisions.md` |
+| Model or migration | `.claude/rules/backend-db.md` · ADR-003, ADR-004, ADR-007, ADR-008, ADR-019 in `.claude/decisions.md` |
 | Endpoint or schema | `.claude/rules/backend-api.md` · ADR-005, ADR-006, ADR-010, ADR-014, ADR-016 |
 | Service, repository, query, ownership | `.claude/rules/backend-db.md`, `.claude/rules/anti-patterns.md` · ADR-006, ADR-009, ADR-012, ADR-015 |
 | Auth, tokens, settings | `app/auth/services/auth.py`, `app/deps.py`, `app/config/settings.py` · `.claude/rules/safety.md` |
@@ -53,7 +53,7 @@ Dependency direction: utils/database/config -> domain -> app, never the other wa
 - Every write endpoint takes `current_user: Annotated[CurrentUser, Depends(get_current_user)]`; the owner is always `current_user.id`, never an id from the body (ADR-006)
 - Errors are domain exceptions (`NotFoundException`, `ForbiddenException`, `ConflictException`, ...) with a `code`; the client receives `{"detail", "code", "fieldErrors"?}` (ADR-005)
 - Models use `Mapped[]` + `mapped_column`, `TIMESTAMP(timezone=True)` with `server_default=func.now()` (never `DateTime`), `ForeignKey(..., ondelete=...)`, relationships by string name with `TYPE_CHECKING` imports (ADR-008, ADR-009)
-- What must hold for every row (unique, non-negative, allowed values) is a database constraint, not only a Pydantic check (ADR-007)
+- What must hold for every row (unique, non-negative, allowed values) is a database constraint, not only a Pydantic check (ADR-007, ADR-019)
 - Queries are `select()` on the models; no SQL strings, no `text()` (ADR-012)
 - A schema change is a migration: `poetry run makemigrations "<what>"`, read the file, `poetry run migrate`; a committed migration is never edited; no `create_all` in app code (ADR-004)
 - Settings come from `app.config.settings` through the container, never `os.environ` in a domain, never hard-coded secrets

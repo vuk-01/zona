@@ -34,8 +34,8 @@ new table to `clean_tables`. Add a module-level `VALID_BODY = {...}` dict with o
 | `GET` list | `Page` is serialized camelCase; query params reach the service | empty at start; order (newest first); `search`; `page`/`size` |
 | `GET /{id}` | service exception → `404` with `{"detail", "code"}` | happy path returns the created record |
 | `POST` | no token `401`; invalid token `401`; `422` with the exact `fieldErrors` keys; `current_user.id` passed to the service, `ownerId` in the body ignored | `201` and body (`createdAt` ends with `Z`, defaults applied) |
-| `PATCH /{id}` | service `403` exception → `403` with its `code` | owner `200` and only the sent field changed; other user `403`; unknown id `404` |
-| `DELETE /{id}` | `204` with empty body, service called once | owner `204`, then `GET` is `404`; other user `403` |
+| `PATCH /{id}` | service `403` exception → `403` with its `code` | owner `200` and only the sent field changed; other user `403`; unknown id `404`; `null` for a required field `422`; row deleted mid-request (over a second connection) `404` |
+| `DELETE /{id}` | `204` with empty body, service called once | owner `204`, then `GET` is `404`; other user `403`; row deleted mid-request (over a second connection) `404` |
 
 ## 4. Templates
 ```python

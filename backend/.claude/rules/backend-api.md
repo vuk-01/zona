@@ -16,7 +16,7 @@ paths:
 - Every write endpoint (`POST`, `PATCH`, `DELETE`) takes `current_user: Annotated[CurrentUser, Depends(get_current_user)]` from `app.deps` unless `docs/entities.md` says it is public (ADR-006)
 - The record id comes from the path (`/{listing_id}`), the owner from `current_user.id`; request schemas have no `id` or `ownerId` field (ADR-006)
 - Validation limits in `schemas/<name>.py` (`min_length`, `max_length`, `ge`, `StrEnum`) match `docs/entities.md` exactly (ADR-002)
-- `PATCH` uses a `...UpdateRequestSchema` where every field is optional and the service applies `model_dump(exclude_unset=True)`
+- `PATCH` uses a `...UpdateRequestSchema` where every field is optional and the service applies `model_dump(exclude_unset=True)`; `null` is allowed only for nullable columns, a `_not_null` field validator answers `422` for the others
 - List endpoints take `pagination_params: Annotated[PaginationParams, Depends(get_pagination_params)]` and return `Page[...ResponseSchema]` (`total`, `items`, `pages`) (ADR-016)
 - `app/<domain>/routes.py` collects the domain's api routers under one `APIRouter(tags=[...])`; it is registered in `app/routes.py` on `api_router`; the path in `docs/entities.md` is the full path including `/api`
 - Every endpoint has `summary=` (and `description=` when the summary is not enough); they are what `/docs` shows the frontend team

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import StaleDataError
+
+from app.auth.exceptions.auth import InvalidTokenException
 from app.auth.schemas.auth import CurrentUser
 from app.listings.exceptions.listing import ListingNotFoundException, NotListingOwnerException
 from app.listings.models.listing import Listing
@@ -11,6 +15,7 @@ from app.listings.schemas.listing import (
     ListingResponseSchema,
     ListingUpdateRequestSchema,
 )
+from app.users.repositories.user import IUserRepository
 from app.utils.di import inject
 from app.utils.pagination import Page, PaginationParams
 
@@ -35,8 +40,11 @@ class IListingService(Protocol):
 
 @inject(alias=IListingService)
 class ListingService(IListingService):
-    def __init__(self, listing_repository: IListingRepository) -> None:
+    def __init__(
+        self, listing_repository: IListingRepository, user_repository: IUserRepository
+    ) -> None:
         self._listing_repository = listing_repository
+        self._user_repository = user_repository
 
     def list(self, search: str, pagination_params: PaginationParams) -> Page[ListingResponseSchema]:
         listings = self._listing_repository.get_all(
@@ -56,7 +64,15 @@ class ListingService(IListingService):
     ) -> ListingResponseSchema:
         # The owner is always the signed-in user, never an id from the request body (ADR-006).
         listing = Listing(**data.model_dump(), owner_id=current_user.id)
-        return ListingResponseSchema.model_validate(self._listing_repository.add(listing))
+        try:
+            listing = self._listing_repository.add(listing)
+        except IntegrityError as e:
+            # Every CHECK and NOT NULL has a Pydantic twin; what is left is the owner_id foreign key,
+            # refused when the owner's account was deleted during the request. Their token is then invalid.
+            if self._user_repository.get_by_id(current_user.id) is None:
+                raise InvalidTokenException from e
+            raise  # the owner exists: a rule Pydantic lets through, a bug, not a client error
+        return ListingResponseSchema.model_validate(listing)
 
     def update(
         self, listing_id: int, data: ListingUpdateRequestSchema, current_user: CurrentUser
@@ -65,12 +81,19 @@ class ListingService(IListingService):
         self._ensure_owner(listing, current_user)
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(listing, field, value)
+        try:
+            listing = self._listing_repository.save(listing)
+        except StaleDataError as e:
+            # The row vanished after it was read (deleted by its owner or with the owner's account).
+            raise ListingNotFoundException from e
         return ListingResponseSchema.model_validate(listing)
 
     def delete(self, listing_id: int, current_user: CurrentUser) -> None:
         listing = self._get_or_raise(listing_id)
         self._ensure_owner(listing, current_user)
-        self._listing_repository.delete(listing)
+        if not self._listing_repository.delete(listing.id):
+            # Deleted by a parallel request after it was read.
+            raise ListingNotFoundException
 
     def _get_or_raise(self, listing_id: int) -> Listing:
         listing = self._listing_repository.get_by_id(listing_id)

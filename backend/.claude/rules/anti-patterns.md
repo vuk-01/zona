@@ -39,11 +39,35 @@ def add(self, listing: Listing) -> Listing:
 # RIGHT
 def add(self, listing: Listing) -> Listing:
     db = self._session_factory()
-    db.add(listing)
-    db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
+    # A SAVEPOINT: when the database refuses the row, only the savepoint rolls back and the
+    # session stays usable, so the service can still look up the owner.
+    with db.begin_nested():
+        db.add(listing)
+        db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
     return listing
 ```
 **Why:** `DBAPIRouter` wraps every endpoint in one transaction; a commit inside the repository breaks the rollback on error. (ADR-009, ADR-015)
+
+### `db.delete(model)` on a row that may be gone
+```python
+# WRONG
+def delete(self, listing: Listing) -> None:
+    db = self._session_factory()
+    db.delete(listing)
+    db.flush()
+
+# RIGHT  (app/listings/repositories/listing.py)
+def delete(self, listing_id: int) -> bool:
+    """False when the row was already gone (deleted by a parallel request)."""
+    db = self._session_factory()
+    # A DELETE statement, not db.delete(listing): without a version column the ORM only warns
+    # when the row is already gone, so the returned id is the only way to tell.
+    deleted_id = db.execute(
+        delete(Listing).where(Listing.id == listing_id).returning(Listing.id)
+    ).scalar_one_or_none()
+    return deleted_id is not None
+```
+**Why:** on a row a parallel request deleted, `db.delete()` emits only an `SAWarning` and the endpoint answers `204`; the service turns `False` into `404`. The same goes for `PATCH`: flush in `save()` and turn `StaleDataError` into `404`. (ADR-005)
 
 ### Owner from the body
 ```python

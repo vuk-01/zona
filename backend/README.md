@@ -93,7 +93,7 @@ poetry add <package>                              # add a dependency (updates py
 | --- | --- |
 | `CLAUDE.md` | Stack, domain-package structure, rules, "done when", how the agent is kept honest |
 | `.claude/rules/` | `backend-api`, `backend-db`, `backend-tests`, `anti-patterns` (WRONG/RIGHT pairs copied from the reference domain) load for matching files; `safety.md` always loads. Rules cite the ADR they come from |
-| `.claude/decisions.md` | ADR-001…018: why the repo works this way (contract, migrations, error shape, owner from token, constraints, UTC, one transaction per endpoint, camelCase, tests, no SQL strings, Poetry, domain packages, DI, pagination, strict typing, monorepo) |
+| `.claude/decisions.md` | ADR-001…019: why the repo works this way (contract, migrations, error shape, owner from token, constraints, UTC, one transaction per endpoint, camelCase, tests, no SQL strings, Poetry, domain packages, DI, pagination, strict typing, monorepo, which `IntegrityError` is caught) |
 | `.claude/frequent-mistakes.md` | Living log: one line per repeated mistake, read by every reviewer agent |
 | `.claude/commands/` | `/brief` (interview → `docs/specs/<feature>.md`), `/new-entity`, `/api-check`, `/review-changes` (parallel reviewers → one verdict) |
 | `.claude/skills/backend-patterns/` | Endpoint, service, repository, model, auth, error and migration patterns that load when working on the API |
