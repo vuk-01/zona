@@ -89,8 +89,8 @@ A space a host rents out by the hour. Code: backend `backend/app/spaces/`; front
 | status         | `listed` \| `draft`                                              | yes                         | only `listed` spaces are visible to other people                                                                                                                                                |
 | host           | `{id, name}`                                                     | yes                         | read-only; the signed-in user who created it, taken from the token, never from the body                                                                                                         |
 | createdAt      | date                                                             | yes                         | assigned by the backend                                                                                                                                                                         |
-| availableDesks | integer ≥ 0 or `null`                                            | yes                         | read-only, computed on every read: `deskCount` minus confirmed bookings covering the current hour; `null` for non-desk spaces and while the space is closed                                     |
-| bookingCounts  | `{active, pending}`                                              | only in the host's own list | read-only; returned only when `hostId` is the signed-in user's own id, left out of the response otherwise                                                                                       |
+| availableDesks | integer ≥ 0 or `null`                                            | yes                         | read-only, computed on every read: `deskCount` minus confirmed bookings covering the current hour (Podgorica time), never below 0 (a `PATCH` that lowers `deskCount` does not check bookings yet); `null` for non-desk spaces and while the space is closed                                     |
+| bookingCounts  | `{active, pending}`                                              | only in the host's own list | read-only; returned only when `hostId` is the signed-in user's own id, left out of the response otherwise; `active` counts the active bookings (see Booking), `pending` the active ones that are `pending` |
 
 **Booking unit (derived from `category`, not stored):** a `desk` space is booked one desk per booking (the guest does not pick which desk) and costs `pricePerHour × hours`. `meeting-room`, `office` and `event-hall` are booked as a whole: one booking takes the entire space and costs `pricePerHour × hours`.
 
@@ -106,7 +106,7 @@ A space a host rents out by the hour. Code: backend `backend/app/spaces/`; front
 | `PATCH /api/spaces/:id`                                                                               | owner                      | any subset of the fields above                                                 | `200` space, `401`, `403 not_space_owner` ("Only the host can change this space"), `404` (also for someone else's draft), `422` (the space after the change is checked as a whole) |
 | `DELETE /api/spaces/:id`                                                                              | owner                      |                                                                                | `204`, `401`, `403 not_space_owner`, `404` (also for someone else's draft), `409 space_has_active_bookings` ("This space has 2 active bookings"), `422` for an invalid id                                                                           |
 
-**Built so far (backend):** bookings exist, but spaces do not count them yet. Until they do, `availableDesks` is `deskCount` while the space is open, `bookingCounts` is `{active: 0, pending: 0}`, and `DELETE` never answers `409`.
+**Built so far (backend):** `availableDesks` and `bookingCounts` count bookings; `DELETE` does not check them yet and never answers `409`.
 
 A space deleted while its `PATCH` or `DELETE` runs answers `404 space_not_found`.
 
@@ -133,7 +133,7 @@ A guest books a space for one date and a time slot in whole hours. Code: backend
 
 **Local time:** `date`, `startTime` and `endTime` are wall-clock time in Podgorica. On the day the clocks go forward (2027-03-28) the hour 02:00–03:00 does not exist, and a slot that contains it answers `422 invalid_slot` (01:00–02:00 is fine, 01:00–03:00 and 02:00–03:00 are not). On the day the clocks go back (2026-10-25) 02:00 means the first of the two.
 
-**Active** bookings are the upcoming `pending` and `confirmed` ones; only they count in `bookingCounts` and block deleting the space.
+**Active** bookings are the upcoming `pending` and `confirmed` ones: the status as returned is `pending` or `confirmed`, so a booking whose slot is under way is still active and one whose slot has ended (`finished`, `expired`) is not. Only they count in `bookingCounts` and block deleting the space.
 
 **Overlap rule:** a slot is the half-open interval `[startTime, endTime)`, so 10:00–12:00 and 12:00–14:00 do not overlap. Only `confirmed` bookings take up room.
 

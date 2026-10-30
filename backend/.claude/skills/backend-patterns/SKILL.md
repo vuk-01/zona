@@ -5,7 +5,7 @@ description: Patterns for FastAPI endpoints, services, repositories, SQLAlchemy 
 
 # Backend patterns
 
-Every snippet below is copied from `app/listings/`, the reference domain, except §10 and §11, which come from
+Every snippet below is copied from `app/listings/`, the reference domain, except §10 to §12, which come from
 `app/bookings/` and `app/spaces/`. Copy the shape, rename the entity. All paths are relative to the repo root. A domain has no `__init__.py`; file names are the singular entity.
 
 ```
@@ -439,7 +439,58 @@ In Python the same rule reads `ends_at` back naive on SQLite and aware on Postgr
 service adds `tzinfo=UTC` to a naive value before it compares. Tests fix the time with `FixedClock`
 (`tests/utils.py`).
 
-## 12. File uploads: metadata before bytes
+## 12. Fields computed from another domain's rows: one query per page (ADR-027)
+
+`availableDesks` and `bookingCounts` are not stored; they count `bookings`. The bookings repository counts for the
+whole page in one grouped query each, and the space service calls it once, never per space:
+
+```python
+# app/spaces/services/space.py
+def _to_responses(
+    self, spaces: Sequence[Space], with_booking_counts: bool = False
+) -> Sequence[SpaceResponseSchema]:
+    now = self._clock.now()
+    local_now = now.astimezone(LOCAL_TIMEZONE)
+    # Only desk spaces open right now have free desks; the others are `null` without a query.
+    taken = self._booking_repository.confirmed_at(
+        space_ids=[space.id for space in spaces if _desk_count_now(space, local_now)],
+        day=local_now.date(),
+        hour=local_now.hour,
+    )
+    if not with_booking_counts:
+        return [_response(space, local_now, taken) for space in spaces]
+    counts = self._booking_repository.booking_counts(
+        space_ids=[space.id for space in spaces], now=now
+    )
+    return [
+        _response(space, local_now, taken, counts.get(space.id, (0, 0))) for space in spaces
+    ]
+```
+
+```python
+# app/bookings/repositories/booking.py
+returned = _returned_status(now)  # the one SQL definition of the status as returned (ADR-022)
+rows = db.execute(
+    select(
+        Booking.space_id,
+        func.count(),
+        func.sum(case((returned == BookingReturnedStatus.PENDING, 1), else_=0)),
+    )
+    .where(
+        Booking.space_id.in_(space_ids),
+        returned.in_((BookingReturnedStatus.PENDING, BookingReturnedStatus.CONFIRMED)),
+    )
+    .group_by(Booking.space_id)
+)
+```
+
+`get`, `POST` and `PATCH` use the same `_to_responses` with one space (`_to_response`), so every route computes the
+fields the same way. The count reaches the space service through `IBookingRepository` (ADR-020); the repository
+returns a `dict` keyed by space id and an empty one for no ids, without a query. `availableDesks` is
+`max(desk_count - taken.get(space.id, 0), 0)`: a `PATCH` can still lower `deskCount` below the confirmed bookings
+of the hour.
+
+## 13. File uploads: metadata before bytes
 
 The database never stores file contents. An upload endpoint saves the file outside the database (a folder
 such as `data/uploads/`, or object storage) and the row keeps only the path or URL (`image_url`),
