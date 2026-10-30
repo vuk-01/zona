@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Protocol
-from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
@@ -28,12 +27,10 @@ from app.spaces.schemas.space import (
     SpaceUpdateRequestSchema,
 )
 from app.users.repositories.user import IUserRepository
-from app.utils.clock import IClock
+from app.utils.clock import LOCAL_TIMEZONE, IClock
 from app.utils.di import inject
 from app.utils.pagination import Page, PaginationParams
 
-# Opening hours and booking slots are in the local time of the city the app serves.
-LOCAL_TIMEZONE = ZoneInfo("Europe/Podgorica")
 _WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
