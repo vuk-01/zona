@@ -9,6 +9,7 @@ from app.auth.services.auth import IAuthService
 from app.database.session_factory import ISessionFactory
 from app.listings.services.listing import IListingService
 from app.spaces.services.space import ISpaceService
+from app.users.services.user import IUserService
 from app.utils.di import add_to_di_container, get_from_di_container, remove_from_di_container
 from tests.unit.utils import MockSessionFactory
 from tests.utils import create_current_user
@@ -47,3 +48,11 @@ def space_service() -> Generator[Mock]:
     add_to_di_container(ISpaceService, mock_service)
     yield mock_service
     remove_from_di_container(ISpaceService)
+
+
+@pytest.fixture
+def user_service() -> Generator[Mock]:
+    mock_service = create_autospec(IUserService, instance=True)
+    add_to_di_container(IUserService, mock_service)
+    yield mock_service
+    remove_from_di_container(IUserService)

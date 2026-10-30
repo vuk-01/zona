@@ -5,7 +5,6 @@ from typing import Annotated, Self
 
 from pydantic import (
     AfterValidator,
-    AliasChoices,
     Field,
     StringConstraints,
     ValidationInfo,
@@ -140,8 +139,7 @@ class SpaceListFilters:
 
 class SpaceHostSchema(CamelCaseResponseModel):
     id: int
-    # Read from `User.display_name` until the users feature renames it to `name`.
-    name: str = Field(validation_alias=AliasChoices("name", "display_name"))
+    name: str
 
 
 class BookingCountsSchema(CamelCaseResponseModel):

@@ -2,9 +2,9 @@
 
 Python 3.13 · FastAPI · SQLAlchemy 2 (typed `Mapped[]`) · Pydantic 2 · Alembic · PyJWT + bcrypt · kink (DI) ·
 pytest · ruff + black + mypy (strict) · Poetry. SQLite by default, Postgres via `DATABASE_URL`.
-Entities and the API contract are in @docs/entities.md (the frontend lives in its own repository and carries a copy
-of the same file; a contract change is made in both). All code, identifiers, comments, commit messages and docs are
-in English; you may talk to me in any language.
+Entities and the API contract are in @docs/entities.md (this is a monorepo: the contract has two copies,
+`docs/entities.md` at the repo root and `backend/docs/entities.md`, which change in the same commit and stay identical).
+All code, identifiers, comments, commit messages and docs are in English; you may talk to me in any language.
 
 ## Read before writing code
 

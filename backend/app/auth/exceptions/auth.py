@@ -6,7 +6,7 @@ from app.utils.exceptions import ConflictException, UnauthenticatedException
 class InvalidCredentialsException(UnauthenticatedException):
     def __init__(self) -> None:
         # One message for a wrong email and a wrong password: the API must not reveal which emails exist.
-        super().__init__(message="Invalid email or password", code="invalid_credentials")
+        super().__init__(message="Wrong email or password", code="invalid_credentials")
 
 
 class InvalidTokenException(UnauthenticatedException):

@@ -159,6 +159,8 @@ markers = [
   "integration: Integration tests (real database)",
 ]
 filterwarnings = [
+  # An SAWarning is a real bug, e.g. a DELETE that matched no rows answers 204 instead of 404
+  "error::sqlalchemy.exc.SAWarning",
   # Pydantic warns about Field() metadata under alias generators; known issue
   # https://github.com/pydantic/pydantic/issues/12362
   "ignore:The .* attribute.*was provided to the `Field\\(\\)` function:pydantic.warnings.UnsupportedFieldAttributeWarning",

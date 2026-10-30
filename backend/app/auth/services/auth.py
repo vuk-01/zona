@@ -21,7 +21,7 @@ from app.auth.schemas.auth import (
     TokenPayload,
 )
 from app.config.settings import Settings
-from app.users.models.user import User
+from app.users.models.user import User, UserMode
 from app.users.schemas.user import UserResponseSchema
 from app.utils.di import inject
 
@@ -44,7 +44,7 @@ class AuthService(IAuthService):
         user = User(
             email=data.email.lower(),
             password_hash=hash_password(data.password),
-            display_name=data.display_name,
+            name=data.name,
         )
         try:
             user = self._auth_repository.add_user(user)
@@ -57,20 +57,36 @@ class AuthService(IAuthService):
         user = self._auth_repository.get_user_by_email(data.email.lower())
         if user is None or not verify_password(data.password, user.password_hash):
             raise InvalidCredentialsException
+        # The stored mode is kept: the user comes back in the mode they used last.
         return self._authentication_response(user)
 
     def get_current_user(self, token: str) -> CurrentUser:
         payload = self._decode_token(token)
         user = self._auth_repository.get_user_by_id(int(payload.sub))
-        if user is None:
+        if user is None or payload.iat < self._created_at_seconds(user):
+            # On SQLite a deleted user's id can go to the next registration; a token issued before
+            # this account existed belongs to the deleted one and must not sign in as the new one.
             raise InvalidTokenException
         return CurrentUser(
             id=user.id,
             email=user.email,
-            display_name=user.display_name,
+            name=user.name,
+            avatar_url=user.avatar_url,
+            city=user.city,
+            bio=user.bio,
             is_host=user.is_host,
+            mode=UserMode(user.mode),
             created_at=user.created_at,
         )
+
+    @staticmethod
+    def _created_at_seconds(user: User) -> int:
+        # SQLite returns a naive UTC datetime; without tzinfo, timestamp() would read it as local time.
+        created_at = user.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        # iat has whole seconds, so a token issued right after register must not lose to microseconds.
+        return int(created_at.timestamp())
 
     def _authentication_response(self, user: User) -> AuthenticationResponseSchema:
         return AuthenticationResponseSchema(

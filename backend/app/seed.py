@@ -122,7 +122,7 @@ DEMO_SPACES = [
 
 
 def _seed_spaces(current_user: CurrentUser) -> None:
-    # No route makes a host yet (users feature), so the demo user is made one directly.
+    # Hosting is turned on directly, so the demo user still starts in guest mode like everyone else.
     user = get_from_di_container(IAuthRepository).get_user_by_id(current_user.id)
     if user is not None and not user.is_host:
         user.is_host = True
@@ -153,9 +153,7 @@ def seed() -> None:
         logger.info("Demo user already exists: %s", DEMO_EMAIL)
     except Exception:
         auth = auth_service.register(
-            RegisterRequestSchema(
-                email=DEMO_EMAIL, password=DEMO_PASSWORD, display_name="Demo User"
-            )
+            RegisterRequestSchema(email=DEMO_EMAIL, password=DEMO_PASSWORD, name="Demo User")
         )
         logger.info("Created demo user %s / %s", DEMO_EMAIL, DEMO_PASSWORD)
 
