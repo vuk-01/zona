@@ -116,6 +116,48 @@ still uses the mock. When the frontend is connected:
   `entities.md`, or answer `422 invalid_status_change` for a confirm after the start, with a test, in
   both copies of `entities.md` in the same PR.
 
+## Bookings PR 1, second review (left out of `feat/bookings` on purpose)
+
+The second review (2026-10-30) was APPROVED with 2 MEDIUM and 7 LOW. Only the SQLite id reuse was
+fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
+
+- **The mock does not follow the contract yet, although "Frontend: connect bookings to the backend"
+  above says it does.** `frontend/src/features/bookings/api/bookings-api.ts` returns the booking
+  unchanged for a `PATCH` to the status it already has (contract: `422 invalid_status_change`,
+  "Confirmed bookings cannot be confirmed again"), and `create` checks only the date, not a start
+  earlier today (contract: `422 booking_in_past`, "Pick a time that has not started yet"). The mock
+  also sets `createdAt` to a date only (`.slice(0, 10)`) and uses its own messages ("Pick a whole hour,
+  for example 10:00", "The end time must be after the start time", "`<Label>` bookings cannot be
+  changed"). Either fix the mock or reword that paragraph as an open to-do (ADR-018, ADR-002).
+- **`PATCH` and `DELETE` error-mapping tests assert only `code`.** `test_patch_maps_the_service_errors`
+  and `test_delete_maps_the_service_errors` in `backend/tests/unit/test_bookings_api.py` should assert
+  the full `{"detail", "code"}` body, as the `POST` test does; the integration tests for
+  `not_booking_participant` on `PATCH`/`DELETE` and the `DELETE` `404` in `test_bookings.py` too. This
+  breaks the `*_maps_the_service_errors` entry in `.claude/frequent-mistakes.md` that this PR added:
+  sharpen that entry so it names the full body (ADR-011, ADR-005).
+- **`"2026-11-04\n"` gets Pydantic's message, not "Use the format YYYY-MM-DD".** `_ISO_DATE.match` in
+  `backend/app/bookings/schemas/booking.py` uses `$`, which also matches before a trailing newline:
+  use `fullmatch` and add the case to the unit test. `entities.md` should also say that a well-formed
+  but impossible date (`2026-02-30`) is `422 validation_error` with Pydantic's message (ADR-002).
+- **A cancel that loses to a confirm after the slot ended says "confirmed meanwhile".**
+  `_raise_lost_race` in `backend/app/bookings/services/booking.py` builds the message from the stored
+  status; the contract asks for the status as returned (`finished`). Pass it through
+  `_returned_status(…, now)` (ADR-002).
+- **`entities.md` does not list every `invalid_status_change` message.** Name "Only a pending or
+  confirmed booking can be cancelled" and the "`<Status>` bookings cannot be `<status>` again" pattern
+  in both copies (ADR-002).
+- **`entities.md` does not say the order for a date of today:** the slot rules come before
+  `booking_in_past` (`now` 10:00, a slot 07:00–09:00 at a space opening at 08:00 answers
+  `invalid_slot`). Add the sentence to both copies (ADR-002).
+- **No test for the "Built so far" behaviour of `/availability` and `/popular-times`** (`401` without
+  or with a bad token, `422 validation_error` with a valid one). Add a parametrized test for both
+  paths; it goes away with the sentence in bookings PR 2 (ADR-011).
+- **Stale line number.** The first item of "From bookings PR 1" above says "line 164 in both copies";
+  quote the "Built so far" sentence instead of a line number.
+- **`not_booking_participant` says "see" on `PATCH` and `DELETE`.** "Only the guest or the host can see
+  this booking" is written for `GET`. Optional wording change in the code and both copies of
+  `entities.md` (ADR-005).
+
 ## From the favorites review (left out of `feat/favorites` on purpose)
 
 - **Index for "newest saved first".** `GET /api/favorites` and `GET /api/spaces?favoriteOf=` find a
