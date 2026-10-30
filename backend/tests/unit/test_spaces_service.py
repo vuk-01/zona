@@ -5,11 +5,12 @@ from __future__ import annotations
 from unittest.mock import Mock, create_autospec
 
 import pytest
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.spaces.exceptions.space import SpaceNotFoundException
 from app.spaces.models.space import Space
 from app.spaces.repositories.space import ISpaceRepository
-from app.spaces.schemas.space import SpaceCreateRequestSchema
+from app.spaces.schemas.space import SpaceCreateRequestSchema, SpaceUpdateRequestSchema
 from app.spaces.services.space import SpaceService
 from app.utils.clock import IClock
 from tests.utils import create_current_user, space_body
@@ -37,3 +38,16 @@ def test_delete_of_a_space_deleted_meanwhile_is_not_found(
 
     with pytest.raises(SpaceNotFoundException):
         service.delete(space_id=7, current_user=create_current_user(1, is_host=True))
+
+
+def test_update_of_a_space_deleted_meanwhile_is_not_found(
+    service: SpaceService, space_repository: Mock
+) -> None:
+    space_repository.save.side_effect = StaleDataError("UPDATE matched 0 rows")
+
+    with pytest.raises(SpaceNotFoundException):
+        service.update(
+            space_id=7,
+            data=SpaceUpdateRequestSchema(name="Hub Morača"),
+            current_user=create_current_user(1, is_host=True),
+        )

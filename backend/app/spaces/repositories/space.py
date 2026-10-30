@@ -57,8 +57,8 @@ class SpaceRepository(ISpaceRepository):
 
     def save(self, space: Space) -> Space:
         db = self._session_factory()
-        # Flush now, so a constraint violation raises here, where the service can name it,
-        # and not later inside the session handler's commit as a bare 500 (ADR-007).
+        # Flush now, so a constraint violation or a vanished row (StaleDataError) raises here,
+        # where the service can name it, and not later inside the session handler's commit as a 500.
         db.flush()
         return space
 

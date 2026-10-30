@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.auth.schemas.auth import CurrentUser
 from app.spaces.exceptions.space import (
@@ -108,6 +109,9 @@ class SpaceService(ISpaceService):
             setattr(space, field, value)
         try:
             space = self._space_repository.save(space)
+        except StaleDataError as e:
+            # The row vanished after it was read (deleted by its host or with the host's account).
+            raise SpaceNotFoundException from e
         except IntegrityError as e:
             raise SpaceConflictException from e
         return self._to_response(space, self._local_now())
