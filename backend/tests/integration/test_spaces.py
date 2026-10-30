@@ -14,6 +14,7 @@ from app.spaces.repositories.space import SpaceRepository
 from app.users.models.user import User
 from app.utils.clock import IClock
 from app.utils.di import add_to_di_container, get_from_di_container, remove_from_di_container
+from tests.integration.conftest import user_id
 from tests.utils import FixedClock, space_body
 
 # Wednesday 2026-10-28; Podgorica is on CET (UTC+1) after the clocks went back on 25 October.
@@ -523,3 +524,28 @@ def test_a_space_deleted_meanwhile_is_404(
     assert response.json() == {"detail": "Space not found", "code": "space_not_found"}
     # The failed transaction was rolled back, so the next request on the same thread works.
     assert client.get("/api/spaces").status_code == 200
+
+
+def test_create_by_a_host_deleted_meanwhile_is_401(
+    client: TestClient, host_auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host_id = user_id(client, host_auth_headers)
+    add = SpaceRepository.add
+
+    # The host's account is deleted over a second connection after the token was checked,
+    # right before the INSERT, as a parallel DELETE /api/users/{id} would.
+    def delete_host_then_add(self: SpaceRepository, space: Space) -> Space:
+        with get_from_di_container(ISessionFactory).engine.begin() as connection:
+            connection.execute(delete(User).where(User.id == host_id))
+        return add(self, space)
+
+    monkeypatch.setattr(SpaceRepository, "add", delete_host_then_add)
+
+    response = client.post("/api/spaces", json=space_body(), headers=host_auth_headers)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid or expired token", "code": "invalid_token"}
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    # Nothing was created, and the next request on the same thread works.
+    listed = client.get("/api/spaces")
+    assert (listed.status_code, listed.json()["total"]) == (200, 0)

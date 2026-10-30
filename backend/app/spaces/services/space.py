@@ -8,12 +8,12 @@ from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
 
+from app.auth.exceptions.auth import InvalidTokenException
 from app.auth.schemas.auth import CurrentUser
 from app.spaces.exceptions.space import (
     InvalidSpaceException,
     NotAHostException,
     NotSpaceOwnerException,
-    SpaceConflictException,
     SpaceNotFoundException,
 )
 from app.spaces.models.space import OpeningHours, Space, SpaceCategory, SpaceStatus
@@ -26,6 +26,7 @@ from app.spaces.schemas.space import (
     SpaceStoredSchema,
     SpaceUpdateRequestSchema,
 )
+from app.users.repositories.user import IUserRepository
 from app.utils.clock import IClock
 from app.utils.di import inject
 from app.utils.pagination import Page, PaginationParams
@@ -58,8 +59,11 @@ class ISpaceService(Protocol):
 
 @inject(alias=ISpaceService)
 class SpaceService(ISpaceService):
-    def __init__(self, space_repository: ISpaceRepository, clock: IClock) -> None:
+    def __init__(
+        self, space_repository: ISpaceRepository, user_repository: IUserRepository, clock: IClock
+    ) -> None:
         self._space_repository = space_repository
+        self._user_repository = user_repository
         self._clock = clock
 
     def list(
@@ -96,8 +100,11 @@ class SpaceService(ISpaceService):
         try:
             space = self._space_repository.add(space)
         except IntegrityError as e:
-            # Every CHECK has a Pydantic twin, so only a race gets here (the host was deleted).
-            raise SpaceConflictException from e
+            # Every CHECK has a Pydantic twin; what is left is the host_id foreign key, refused when
+            # the host's account was deleted during the request. Their token is then invalid.
+            if self._user_repository.get_by_id(current_user.id) is None:
+                raise InvalidTokenException from e
+            raise  # the host exists: a rule Pydantic lets through, a bug, not a client error
         return self._to_response(space, self._local_now())
 
     def update(
@@ -112,8 +119,6 @@ class SpaceService(ISpaceService):
         except StaleDataError as e:
             # The row vanished after it was read (deleted by its host or with the host's account).
             raise SpaceNotFoundException from e
-        except IntegrityError as e:
-            raise SpaceConflictException from e
         return self._to_response(space, self._local_now())
 
     def delete(self, space_id: int, current_user: CurrentUser) -> None:

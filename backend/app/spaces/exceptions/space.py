@@ -1,20 +1,10 @@
 from __future__ import annotations
 
 from app.utils.exceptions import (
-    ConflictException,
     ForbiddenException,
     NotFoundException,
     UnprocessableEntityException,
 )
-
-
-class SpaceConflictException(ConflictException):
-    """The database refused the write (e.g. the host was deleted while the request ran)."""
-
-    def __init__(self) -> None:
-        super().__init__(
-            message="The space could not be saved, please try again", code="space_conflict"
-        )
 
 
 class SpaceNotFoundException(NotFoundException):

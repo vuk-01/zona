@@ -16,7 +16,6 @@ from app.deps import (
 from app.spaces.exceptions.space import (
     NotAHostException,
     NotSpaceOwnerException,
-    SpaceConflictException,
     SpaceNotFoundException,
 )
 from app.spaces.models.space import SpaceCategory, SpaceStatus
@@ -108,9 +107,7 @@ def get_space(
     path="",
     status_code=status.HTTP_201_CREATED,
     summary="Create space (hosts only)",
-    responses=error_responses(
-        *CURRENT_USER_ERRORS, NotAHostException(), SpaceConflictException(), _INVALID_BODY
-    ),
+    responses=error_responses(*CURRENT_USER_ERRORS, NotAHostException(), _INVALID_BODY),
 )
 def create_space(
     data: SpaceCreateRequestSchema,
@@ -128,7 +125,6 @@ def create_space(
         *CURRENT_USER_ERRORS,
         NotSpaceOwnerException(),
         SpaceNotFoundException(),
-        SpaceConflictException(),
         _INVALID_BODY,
     ),
 )

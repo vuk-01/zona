@@ -5,13 +5,16 @@ from __future__ import annotations
 from unittest.mock import Mock, create_autospec
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
 
+from app.auth.exceptions.auth import InvalidTokenException
 from app.spaces.exceptions.space import SpaceNotFoundException
 from app.spaces.models.space import Space
 from app.spaces.repositories.space import ISpaceRepository
 from app.spaces.schemas.space import SpaceCreateRequestSchema, SpaceUpdateRequestSchema
 from app.spaces.services.space import SpaceService
+from app.users.repositories.user import IUserRepository
 from app.utils.clock import IClock
 from tests.utils import create_current_user, space_body
 
@@ -27,8 +30,44 @@ def space_repository() -> Mock:
 
 
 @pytest.fixture
-def service(space_repository: Mock) -> SpaceService:
-    return SpaceService(space_repository=space_repository, clock=create_autospec(IClock))
+def user_repository() -> Mock:
+    repository: Mock = create_autospec(IUserRepository, instance=True)
+    return repository
+
+
+@pytest.fixture
+def service(space_repository: Mock, user_repository: Mock) -> SpaceService:
+    return SpaceService(
+        space_repository=space_repository,
+        user_repository=user_repository,
+        clock=create_autospec(IClock),
+    )
+
+
+def test_create_for_a_host_deleted_meanwhile_is_invalid_token(
+    service: SpaceService, space_repository: Mock, user_repository: Mock
+) -> None:
+    space_repository.add.side_effect = IntegrityError("INSERT", {}, Exception("FOREIGN KEY"))
+    user_repository.get_by_id.return_value = None
+
+    with pytest.raises(InvalidTokenException):
+        service.create(
+            data=SpaceCreateRequestSchema.model_validate(space_body()),
+            current_user=create_current_user(1, is_host=True),
+        )
+
+
+def test_create_refused_while_the_host_exists_is_not_hidden(
+    service: SpaceService, space_repository: Mock, user_repository: Mock
+) -> None:
+    space_repository.add.side_effect = IntegrityError("INSERT", {}, Exception("CHECK"))
+    user_repository.get_by_id.return_value = Mock()
+
+    with pytest.raises(IntegrityError):
+        service.create(
+            data=SpaceCreateRequestSchema.model_validate(space_body()),
+            current_user=create_current_user(1, is_host=True),
+        )
 
 
 def test_delete_of_a_space_deleted_meanwhile_is_not_found(
