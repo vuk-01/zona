@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from sqlalchemy.orm.exc import StaleDataError
+
 from app.auth.schemas.auth import CurrentUser
 from app.listings.exceptions.listing import ListingNotFoundException, NotListingOwnerException
 from app.listings.models.listing import Listing
@@ -65,12 +67,19 @@ class ListingService(IListingService):
         self._ensure_owner(listing, current_user)
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(listing, field, value)
+        try:
+            listing = self._listing_repository.save(listing)
+        except StaleDataError as e:
+            # The row vanished after it was read (deleted by its owner or with the owner's account).
+            raise ListingNotFoundException from e
         return ListingResponseSchema.model_validate(listing)
 
     def delete(self, listing_id: int, current_user: CurrentUser) -> None:
         listing = self._get_or_raise(listing_id)
         self._ensure_owner(listing, current_user)
-        self._listing_repository.delete(listing)
+        if not self._listing_repository.delete(listing.id):
+            # Deleted by a parallel request after it was read.
+            raise ListingNotFoundException
 
     def _get_or_raise(self, listing_id: int) -> Listing:
         listing = self._listing_repository.get_by_id(listing_id)

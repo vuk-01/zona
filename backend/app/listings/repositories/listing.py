@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.database.session_factory import ISessionFactory
 from app.listings.models.listing import Listing
@@ -17,7 +17,9 @@ class IListingRepository(Protocol):
 
     def add(self, listing: Listing) -> Listing: ...
 
-    def delete(self, listing: Listing) -> None: ...
+    def save(self, listing: Listing) -> Listing: ...
+
+    def delete(self, listing_id: int) -> bool: ...
 
 
 @inject(alias=IListingRepository)
@@ -42,7 +44,19 @@ class ListingRepository(IListingRepository):
         db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
         return listing
 
-    def delete(self, listing: Listing) -> None:
+    def save(self, listing: Listing) -> Listing:
         db = self._session_factory()
-        db.delete(listing)
+        # Flush now, so a vanished row (StaleDataError) raises here, where the service can name it,
+        # and not later inside the session handler's commit as a 500.
         db.flush()
+        return listing
+
+    def delete(self, listing_id: int) -> bool:
+        """False when the row was already gone (deleted by a parallel request)."""
+        db = self._session_factory()
+        # A DELETE statement, not db.delete(listing): without a version column the ORM only warns
+        # when the row is already gone, so the returned id is the only way to tell.
+        deleted_id = db.execute(
+            delete(Listing).where(Listing.id == listing_id).returning(Listing.id)
+        ).scalar_one_or_none()
+        return deleted_id is not None

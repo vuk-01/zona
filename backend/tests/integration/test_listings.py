@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
+
+from app.database.session_factory import ISessionFactory
+from app.listings.models.listing import Listing
+from app.listings.repositories.listing import ListingRepository
+from app.utils.di import get_from_di_container
 
 
 def test_create_and_get(client: TestClient, auth_headers: dict[str, str]) -> None:
@@ -106,3 +113,42 @@ def test_negative_price_is_rejected_by_the_database_too(
     )
     assert response.status_code == 422
     assert "price" in response.json()["fieldErrors"]
+
+
+# --- listing deleted while the request runs -----------------------------------------------------
+
+
+def vanish_after_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The next read of a listing deletes its row over a second connection, as a parallel request would."""
+    read = ListingRepository.get_by_id
+
+    def read_then_vanish(self: ListingRepository, listing_id: int) -> Listing | None:
+        listing = read(self, listing_id)
+        with get_from_di_container(ISessionFactory).engine.begin() as connection:
+            connection.execute(delete(Listing).where(Listing.id == listing_id))
+        return listing
+
+    monkeypatch.setattr(ListingRepository, "get_by_id", read_then_vanish)
+
+
+@pytest.mark.parametrize(
+    ("method", "body"), [("PATCH", {"price": 30}), ("DELETE", None)], ids=["patch", "delete"]
+)
+def test_a_listing_deleted_meanwhile_is_404(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    listing_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    body: dict[str, int] | None,
+) -> None:
+    vanish_after_read(monkeypatch)
+
+    response = client.request(
+        method, f"/api/listings/{listing_id}", json=body, headers=auth_headers
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Listing not found", "code": "listing_not_found"}
+    # The failed transaction was rolled back, so the next request on the same thread works.
+    assert client.get("/api/listings").status_code == 200
