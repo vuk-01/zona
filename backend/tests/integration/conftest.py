@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
+from app.bookings.models.booking import Booking
 from app.config.settings import DBSettings, Settings
 from app.database.base import Base
 from app.database.session_factory import ISessionFactory, SessionFactory
@@ -66,6 +67,7 @@ def clean_tables() -> Generator[None]:
     yield
     session_factory = get_from_di_container(ISessionFactory)
     with session_factory() as session:
+        session.execute(delete(Booking))
         session.execute(delete(Favorite))
         session.execute(delete(Listing))
         session.execute(delete(Space))
