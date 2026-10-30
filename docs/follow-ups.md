@@ -50,3 +50,12 @@ into an error, but only for what a test actually triggers; spaces and listings h
 - **An invalid id answers `fieldErrors` with a snake_case key** (`user_id`, `space_id`), while the
   rest of the API is camelCase (`avatarUrl`, `pricePerHour`). The path parameter name reaches the
   error as it is; the unit tests for an invalid id assert `{"user_id"}` today.
+
+## Backend: migrations in offline mode (`alembic upgrade --sql`)
+
+- On SQLite, `alembic upgrade head --sql` fails: batch mode needs a live database to reflect the
+  table it rebuilds, so it stops already at `62a19e5cebde` (in `main`). On Postgres offline mode
+  works (all four migrations, checked on `backend-users`).
+- The guard planned for `8dbecd30b036` (`if bind is None: return`) would not help: in offline mode
+  `op.get_bind()` returns a `MockConnection`, not `None`. If the guard is ever needed, the right
+  check is `context.is_offline_mode()`.
