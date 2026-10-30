@@ -6,6 +6,7 @@ cite these numbers, so the rule and the reason stay linked. Add a new ADR when y
 team would otherwise re-discuss; never renumber an old one, mark it "superseded by ADR-0XX" instead.
 
 ### ADR-001 · The backend is its own repository; the contract travels with every change
+**Superseded by ADR-018.**
 **Context:** a feature almost always touches the backend, the frontend and `docs/entities.md` in between, but the two sides live in separate repositories.
 **Decision:** this repository holds only the backend; `docs/entities.md` is the shared contract and a copy of it lives in the frontend repo. A change to the contract is made in both repositories in the same round of pull requests, and the backend PR names the frontend change it requires.
 **Consequence:** nothing is "merged on one side only" by accident: `contract-keeper` reports "Contract changed: yes" and the frontend repo gets the same edit before the feature is called done.
@@ -90,3 +91,8 @@ team would otherwise re-discuss; never renumber an old one, mark it "superseded 
 **Context:** an untyped backend lets the agent return a model where a schema was expected, pass a string where an enum was agreed, or forget a `-> None`; the author's production backends run the same strict configuration, so a project that passes here passes there.
 **Decision:** `pyproject.toml` enables mypy strict options (`disallow_untyped_defs`, `warn_return_any`, pydantic plugin, ...) for `app/` and `tests/`, the ruff rule groups from production (E, F, B, I, UP, RUF, TID, FAST, TRY, DTZ, PT, SIM, ARG, N, ...), black at 100 columns, and `from __future__ import annotations` as a required import in every file; `poetry run lint` and `poetry run typecheck` must pass before "done", and `verify-changes` runs them when the agent stops.
 **Consequence:** `sqlalchemy.DateTime` and `kink.inject` are banned imports (use `TIMESTAMP` and `app.utils.di.inject`); a `# type: ignore` needs a code and a reason.
+
+### ADR-018 · One monorepo; the contract has two identical copies
+**Context:** the backend started as its own repository (ADR-001) and now lives in this monorepo next to `frontend/`, so one pull request can change the backend, the frontend and the contract together.
+**Decision:** the contract is `docs/entities.md` at the repo root, with an identical copy at `backend/docs/entities.md` (the one `backend/CLAUDE.md` loads); both copies change in the same commit and stay identical. A contract change updates the frontend under `frontend/src/` (`features/<name>/api/<name>-api.ts`, `types.ts`, the forms in `features/<name>/components/`) in the same pull request, or adds what is left to `docs/follow-ups.md` and names that follow-up in the pull request description.
+**Consequence:** `contract-keeper` edits both copies, confirms they are identical and ends with "Contract changed: yes/no"; two copies that differ, or a contract change with neither the frontend change nor a follow-up, is a review finding. A feature is done only when the frontend has caught up, follow-up included.
