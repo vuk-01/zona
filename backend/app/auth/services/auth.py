@@ -63,7 +63,9 @@ class AuthService(IAuthService):
     def get_current_user(self, token: str) -> CurrentUser:
         payload = self._decode_token(token)
         user = self._auth_repository.get_user_by_id(int(payload.sub))
-        if user is None:
+        if user is None or payload.iat < self._created_at_seconds(user):
+            # On SQLite a deleted user's id can go to the next registration; a token issued before
+            # this account existed belongs to the deleted one and must not sign in as the new one.
             raise InvalidTokenException
         return CurrentUser(
             id=user.id,
@@ -76,6 +78,15 @@ class AuthService(IAuthService):
             mode=UserMode(user.mode),
             created_at=user.created_at,
         )
+
+    @staticmethod
+    def _created_at_seconds(user: User) -> int:
+        # SQLite returns a naive UTC datetime; without tzinfo, timestamp() would read it as local time.
+        created_at = user.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        # iat has whole seconds, so a token issued right after register must not lose to microseconds.
+        return int(created_at.timestamp())
 
     def _authentication_response(self, user: User) -> AuthenticationResponseSchema:
         return AuthenticationResponseSchema(
