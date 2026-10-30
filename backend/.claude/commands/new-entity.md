@@ -14,7 +14,7 @@ If `docs/specs/<name>.md` exists (written by `/brief`), it is the agreed spec: f
    - `models/<entity>.py`: the table (`Mapped[]`, `TIMESTAMP(timezone=True)`, `CheckConstraint`, `ForeignKey(ondelete=...)`), enums as `StrEnum`
    - `schemas/<entity>.py`: `<Entity>CreateRequestSchema`, `<Entity>UpdateRequestSchema` (all optional), `<Entity>ResponseSchema` (on `CamelCaseResponseModel`)
    - `exceptions/<entity>.py`: `<Entity>NotFoundException(NotFoundException)`, `Not<Entity>OwnerException(ForbiddenException)`, each with `message` and `code`
-   - `repositories/<entity>.py`: `I<Entity>Repository(Protocol)` + `@inject(alias=I<Entity>Repository)` class taking `ISessionFactory`; `select()` queries, `paginate` for lists, `flush()` never `commit()`
+   - `repositories/<entity>.py`: `I<Entity>Repository(Protocol)` + `@inject(alias=I<Entity>Repository)` class taking `ISessionFactory`; `select()` queries, `paginate` for lists, `flush()` never `commit()`; `add` in a SAVEPOINT, `save` flushes, `delete` with `.returning(id)` (copy them from `app/listings/repositories/listing.py`)
    - `services/<entity>.py`: `I<Entity>Service(Protocol)` + `@inject(alias=I<Entity>Service)` class taking the repository; ownership checks, domain exceptions, returns response schemas
    - `api/<entity>.py`: `router = DBAPIRouter(prefix="/<name>")`, one endpoint per route, services via `Depends(get_di_entity(...))`, writes with `Depends(get_current_user)`
    - `routes.py`: `APIRouter(tags=["<Name>"])` that includes the api router

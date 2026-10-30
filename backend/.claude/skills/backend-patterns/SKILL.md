@@ -53,13 +53,21 @@ class Listing(Base):
 ```python
 class ListingCreateRequestSchema(CamelCaseModel):
     title: str = Field(min_length=3, max_length=80)
-    price: float = Field(ge=0)
+    price: float = Field(ge=0, le=_MAX_PRICE)       # _MAX_PRICE: what Numeric(10, 2) holds
     category: ListingCategory                       # the StrEnum from the model
     image_url: str | None = Field(default=None, max_length=500)
 
 
 class ListingUpdateRequestSchema(CamelCaseModel):   # PATCH: every field optional
     title: str | None = Field(default=None, min_length=3, max_length=80)
+
+    # Runs only for fields the client sent. The columns are NOT NULL, so `null` is 422, not a 500.
+    @field_validator("title", "description", "price", "category", "city")
+    @classmethod
+    def _not_null(cls, value: object) -> object:
+        if value is None:
+            raise PydanticCustomError("not_null", "Must not be null")
+        return value
 
 
 class ListingResponseSchema(CamelCaseResponseModel):
@@ -95,7 +103,8 @@ class IListingRepository(Protocol):
     def get_all(self, search: str, pagination_params: PaginationParams) -> Page[Listing]: ...
     def get_by_id(self, listing_id: int) -> Listing | None: ...
     def add(self, listing: Listing) -> Listing: ...
-    def delete(self, listing: Listing) -> None: ...
+    def save(self, listing: Listing) -> Listing: ...
+    def delete(self, listing_id: int) -> bool: ...
 
 
 @inject(alias=IListingRepository)
@@ -112,12 +121,34 @@ class ListingRepository(IListingRepository):
 
     def add(self, listing: Listing) -> Listing:
         db = self._session_factory()
-        db.add(listing)
-        db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
+        # A SAVEPOINT: when the database refuses the row, only the savepoint rolls back and the
+        # session stays usable, so the service can still look up the owner.
+        with db.begin_nested():
+            db.add(listing)
+            db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
         return listing
+
+    def save(self, listing: Listing) -> Listing:
+        db = self._session_factory()
+        # Flush now, so a vanished row (StaleDataError) raises here, where the service can name it,
+        # and not later inside the session handler's commit as a 500.
+        db.flush()
+        return listing
+
+    def delete(self, listing_id: int) -> bool:
+        """False when the row was already gone (deleted by a parallel request)."""
+        db = self._session_factory()
+        # A DELETE statement, not db.delete(listing): without a version column the ORM only warns
+        # when the row is already gone, so the returned id is the only way to tell.
+        deleted_id = db.execute(
+            delete(Listing).where(Listing.id == listing_id).returning(Listing.id)
+        ).scalar_one_or_none()
+        return deleted_id is not None
 ```
 
 Never `db.commit()` here: `DBAPIRouter` commits when the endpoint returns and rolls back when it raises.
+Never `db.delete(model)` either: on a row a parallel request already deleted it only warns, and the
+endpoint answers `204` instead of `404`.
 
 ## 5. Service (`services/listing.py`): the rules, including ownership; returns schemas
 
@@ -129,20 +160,41 @@ class IListingService(Protocol):
 
 @inject(alias=IListingService)
 class ListingService(IListingService):
-    def __init__(self, listing_repository: IListingRepository) -> None:
+    def __init__(self, listing_repository: IListingRepository, user_repository: IUserRepository) -> None:
         self._listing_repository = listing_repository
+        self._user_repository = user_repository   # another domain, through its Protocol (ADR-014)
 
     def create(self, data: ListingCreateRequestSchema, current_user: CurrentUser) -> ListingResponseSchema:
         # The owner is always the signed-in user, never an id from the request body (ADR-006).
         listing = Listing(**data.model_dump(), owner_id=current_user.id)
-        return ListingResponseSchema.model_validate(self._listing_repository.add(listing))
+        try:
+            listing = self._listing_repository.add(listing)
+        except IntegrityError as e:
+            # Every CHECK and NOT NULL has a Pydantic twin; what is left is the owner_id foreign key,
+            # refused when the owner's account was deleted during the request. Their token is then invalid.
+            if self._user_repository.get_by_id(current_user.id) is None:
+                raise InvalidTokenException from e
+            raise  # the owner exists: a rule Pydantic lets through, a bug, not a client error
+        return ListingResponseSchema.model_validate(listing)
 
     def update(self, listing_id: int, data: ListingUpdateRequestSchema, current_user: CurrentUser) -> ListingResponseSchema:
         listing = self._get_or_raise(listing_id)
         self._ensure_owner(listing, current_user)
         for field, value in data.model_dump(exclude_unset=True).items():
             setattr(listing, field, value)
+        try:
+            listing = self._listing_repository.save(listing)
+        except StaleDataError as e:
+            # The row vanished after it was read (deleted by its owner or with the owner's account).
+            raise ListingNotFoundException from e
         return ListingResponseSchema.model_validate(listing)
+
+    def delete(self, listing_id: int, current_user: CurrentUser) -> None:
+        listing = self._get_or_raise(listing_id)
+        self._ensure_owner(listing, current_user)
+        if not self._listing_repository.delete(listing.id):
+            # Deleted by a parallel request after it was read.
+            raise ListingNotFoundException
 
     def _get_or_raise(self, listing_id: int) -> Listing:
         listing = self._listing_repository.get_by_id(listing_id)
@@ -201,6 +253,26 @@ except IntegrityError as e:
     # The UNIQUE constraint on users.email decides, not an `if` before the insert (ADR-007).
     raise EmailAlreadyRegisteredException from e      # ConflictException with field_errors={"email": ...}
 ```
+
+Catch `IntegrityError` only for a rule the input cannot check, and answer by the rule that refused (ADR-019):
+
+- a UNIQUE column → `409` with `fieldErrors` (above);
+- a foreign key to the signed-in user on `POST` (`owner_id`, `host_id`) → `401 invalid_token` (`create` in §5);
+- a foreign key to another row named in the request (`spaceId` on a favorite or a booking) → `404` for that entity:
+
+```python
+except IntegrityError as e:
+    if self._user_repository.get_by_id(current_user.id) is None:   # the signed-in user first
+        raise InvalidTokenException from e
+    if self._space_repository.get_by_id(data.space_id) is None:     # then the row from the request
+        raise SpaceNotFoundException from e
+    raise  # both exist: a rule Pydantic lets through, a bug
+```
+
+For a foreign key, `add` runs inside `db.begin_nested()` so the session stays usable for the lookup, and the
+service reaches the other domain through its Protocol (`IUserRepository`, `ISpaceRepository`). Every `CHECK`
+and `NOT NULL` gets a Pydantic twin instead; never a catch-all `409` "please try again". A row deleted while
+its `PATCH` or `DELETE` runs is a `404`: `StaleDataError` from `save()`, or `False` from `delete()`.
 
 ## 8. Tests: unit (service mocked) and integration (real database)
 
