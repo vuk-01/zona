@@ -19,6 +19,8 @@ class ISpaceRepository(Protocol):
 
     def get_by_id(self, space_id: int) -> Space | None: ...
 
+    def exists(self, space_id: int) -> bool: ...
+
     def add(self, space: Space) -> Space: ...
 
     def save(self, space: Space) -> Space: ...
@@ -48,6 +50,12 @@ class SpaceRepository(ISpaceRepository):
     def get_by_id(self, space_id: int) -> Space | None:
         db = self._session_factory()
         return db.get(Space, space_id, options=[joinedload(Space.host)])
+
+    def exists(self, space_id: int) -> bool:
+        db = self._session_factory()
+        # Always a query to the database. db.get() may answer from the session's identity map when
+        # the space is loaded and not expired, and this check is about rows other requests changed.
+        return db.scalar(select(Space.id).where(Space.id == space_id)) is not None
 
     def add(self, space: Space) -> Space:
         db = self._session_factory()
