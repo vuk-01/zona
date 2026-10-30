@@ -110,14 +110,17 @@ class BookingService(IBookingService):
     ) -> BookingResponseSchema:
         change = BookingStatus(data.status)
         if change == BookingStatus.CONFIRMED:
-            # Someone else's confirm is 403 before the lock, so it never holds the space (on
-            # SQLite the whole database). The guest, the space and its host never change, so
-            # the check cannot go stale before the lock (ADR-024).
+            # Only the host may confirm, and anyone else is 403 before the lock, so they never
+            # hold the space (on SQLite the whole database). The guest, the space and its host
+            # never change, so the check cannot go stale before the lock (ADR-024).
             participants = self._booking_repository.get_participants(booking_id)
             if participants is None:
                 raise BookingNotFoundException
-            if current_user.id not in participants:
+            guest_id, host_id = participants
+            if current_user.id not in (guest_id, host_id):
                 raise NotBookingParticipantException
+            if current_user.id != host_id:
+                raise NotBookingHostException
             # Confirming takes room: the space lock comes before the booking is read, so the read
             # and the count below see every confirm that committed first (ADR-023).
             if self._space_repository.lock_for_booking(booking_id) is None:

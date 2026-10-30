@@ -5,8 +5,8 @@ real `SpaceRepository.lock_for_booking` is wrapped: thread A takes the lock and 
 transaction open until the test releases it; thread B sets `b_calling` right before calling the
 real lock and `b_returned` right after it. While A holds the lock, B must not return within
 `BLOCKED_FOR`: it is waiting in the database (SQLite's busy handler on the write lock, a row lock
-on Postgres). The control test replaces the lock with a plain read and must overbook. Someone
-else's confirm is refused before the lock (ADR-024): it answers while another confirm holds it.
+on Postgres). The control test replaces the lock with a plain read and must overbook. A confirm by
+anyone but the host is refused before the lock (ADR-024): it answers while another holds it.
 
 The same file runs on SQLite (default) and on Postgres through `DATABASE_URL`:
 
@@ -15,7 +15,7 @@ The same file runs on SQLite (default) and on Postgres through `DATABASE_URL`:
     DATABASE_URL=postgresql+psycopg://app:app@localhost:5432/app_test \
         poetry run pytest tests/integration
 
-SQLite: 4 passed, 15 runs in a row. Postgres: not verified yet (2026-10-30, Docker was not running).
+SQLite: 5 passed, 15 runs in a row. Postgres: not verified yet (2026-10-30, Docker was not running).
 """
 
 from __future__ import annotations
@@ -207,14 +207,22 @@ def test_parallel_confirms_wait_for_the_lock_and_never_overbook(
     assert confirmed_in_db(space_id) == outcome.count(200)
 
 
-def test_confirm_by_someone_else_is_403_while_the_space_is_locked_and_never_waits(
+@pytest.mark.parametrize(
+    ("who", "code"),
+    [("someone else", "not_booking_participant"), ("the guest", "not_booking_host")],
+)
+def test_confirm_by_anyone_but_the_host_is_403_while_the_space_is_locked_and_never_waits(
     client: TestClient,
     host_auth_headers: dict[str, str],
     other_auth_headers: dict[str, str],
     gated: GatedSpaceRepository,
+    who: str,
+    code: str,
 ) -> None:
-    """A user who takes no part is refused before the lock (ADR-024): never in the database's queue."""
-    stranger_headers = register(client, "jovana@example.com")
+    """Only the host may confirm; anyone else is refused before the lock (ADR-024)."""
+    stranger_headers = (
+        register(client, "jovana@example.com") if who == "someone else" else other_auth_headers
+    )
     space_id = new_space(client, host_auth_headers)
     first, second = pending_bookings(client, other_auth_headers, space_id, 2)
     a_holds, release_a = hold_after_lock(gated, first)
@@ -237,8 +245,8 @@ def test_confirm_by_someone_else_is_403_while_the_space_is_locked_and_never_wait
         assert a.result(TIMEOUT) == 200
 
     assert response.status_code == 403
-    assert response.json()["code"] == "not_booking_participant"
-    assert not stranger_calling.is_set(), "someone else's confirm reached the space lock"
+    assert response.json()["code"] == code
+    assert not stranger_calling.is_set(), f"a confirm by {who} reached the space lock"
     assert confirmed_in_db(space_id) == 1
 
 

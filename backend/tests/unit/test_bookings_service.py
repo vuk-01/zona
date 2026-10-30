@@ -452,6 +452,20 @@ def test_confirm_by_someone_else_is_403_without_the_lock(
     booking_repository.get_by_id.assert_not_called()
 
 
+def test_confirm_by_the_guest_is_not_booking_host_without_the_lock(
+    service: BookingService, booking_repository: Mock, space_repository: Mock
+) -> None:
+    # The booking the read after the lock would find: the order decides, not a missing row.
+    booking_repository.get_by_id.return_value = stored_booking()
+
+    with pytest.raises(NotBookingHostException):
+        service.update(3, change_to("confirmed"), GUEST)
+
+    booking_repository.get_participants.assert_called_once_with(3)
+    space_repository.lock_for_booking.assert_not_called()
+    booking_repository.get_by_id.assert_not_called()
+
+
 def test_confirm_of_an_unknown_booking_is_404_without_the_lock(
     service: BookingService, booking_repository: Mock, space_repository: Mock
 ) -> None:

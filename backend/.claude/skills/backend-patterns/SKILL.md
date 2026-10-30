@@ -354,15 +354,18 @@ def lock_for_booking(self, booking_id: int) -> int | None:
 
 Only a write that takes room takes the lock: `BookingService.update` calls it when the change is `confirmed`,
 before it reads the booking; `None` means the booking is gone (`404 booking_not_found`). Right before the lock it
-checks who takes part, so someone else's confirm is `403` without holding the space (ADR-024):
+checks who may confirm, so anyone but the host is `403` without holding the space (ADR-024):
 
 ```python
 # app/bookings/services/booking.py
 participants = self._booking_repository.get_participants(booking_id)
 if participants is None:
     raise BookingNotFoundException
-if current_user.id not in participants:
+guest_id, host_id = participants
+if current_user.id not in (guest_id, host_id):
     raise NotBookingParticipantException
+if current_user.id != host_id:
+    raise NotBookingHostException
 ```
 
 `get_participants` selects `Booking.guest_id, Space.host_id` as columns, never the `Booking` entity: an entity read
