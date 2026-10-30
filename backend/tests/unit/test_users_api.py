@@ -10,11 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.auth.exceptions.auth import InvalidTokenException
-from app.users.exceptions.user import (
-    NotAccountOwnerException,
-    UserConflictException,
-    UserNotFoundException,
-)
+from app.users.exceptions.user import NotAccountOwnerException, UserNotFoundException
 from app.users.models.user import UserMode
 from app.users.schemas.user import PublicUserResponseSchema, UserResponseSchema
 from app.utils.pagination import Page
@@ -200,7 +196,6 @@ def test_patch_with_invalid_field_is_422(
     [
         (NotAccountOwnerException(), 403, "not_account_owner"),
         (UserNotFoundException(), 404, "user_not_found"),
-        (UserConflictException(), 409, "user_conflict"),
     ],
 )
 def test_patch_maps_service_errors(

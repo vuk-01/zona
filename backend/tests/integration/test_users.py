@@ -4,7 +4,12 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import delete
 
+from app.database.session_factory import ISessionFactory
+from app.users.models.user import User
+from app.users.repositories.user import UserRepository
+from app.utils.di import get_from_di_container
 from tests.integration.conftest import register, user_id
 from tests.utils import space_body
 
@@ -141,6 +146,22 @@ def test_patch_empty_body_changes_nothing(client: TestClient, auth_headers: dict
     assert patch_self(client, auth_headers) == before
 
 
+def test_patch_ignores_email_id_and_other_unknown_keys(
+    client: TestClient, auth_headers: dict[str, str], other_auth_headers: dict[str, str]
+) -> None:
+    before = client.get("/api/auth/me", headers=auth_headers).json()
+    # Email and id are the only UNIQUE columns; PATCH cannot reach them, so it cannot hit a UNIQUE.
+    after = patch_self(
+        client,
+        auth_headers,
+        email="marko@example.com",
+        id=user_id(client, other_auth_headers),
+        isAdmin=True,
+    )
+
+    assert after == before
+
+
 def test_switching_to_host_turns_hosting_on_and_back_to_guest_keeps_it(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:
@@ -254,3 +275,40 @@ def test_delete_unknown_user_is_404(client: TestClient, auth_headers: dict[str, 
 
     assert response.status_code == 404
     assert response.json()["code"] == "user_not_found"
+
+
+# --- account deleted while the request runs -----------------------------------------------------
+
+
+def vanish_after_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The next read of a user deletes its row over a second connection, as a parallel request would."""
+    read = UserRepository.get_by_id
+
+    def read_then_vanish(self: UserRepository, user_id: int) -> User | None:
+        user = read(self, user_id)
+        with get_from_di_container(ISessionFactory).engine.begin() as connection:
+            connection.execute(delete(User).where(User.id == user_id))
+        return user
+
+    monkeypatch.setattr(UserRepository, "get_by_id", read_then_vanish)
+
+
+@pytest.mark.parametrize(
+    ("method", "body"), [("PATCH", {"name": "Ana B"}), ("DELETE", None)], ids=["patch", "delete"]
+)
+def test_an_account_deleted_meanwhile_is_404(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    body: dict[str, str] | None,
+) -> None:
+    ana_id = user_id(client, auth_headers)
+    vanish_after_read(monkeypatch)
+
+    response = client.request(method, f"/api/users/{ana_id}", json=body, headers=auth_headers)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "User not found", "code": "user_not_found"}
+    # The failed transaction was rolled back, so the next request on the same thread works.
+    assert client.get("/api/users").status_code == 200

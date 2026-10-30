@@ -50,7 +50,7 @@ The password (8–72 characters) is sent only on register and login; it is store
 
 **Guest and host mode:** one account, two modes, no role choice at register. `PATCH /api/users/:id {mode: "host"}` sets `mode: host` and `isHost: true`; `{mode: "guest"}` sets `mode: guest` and keeps `isHost`. The mode is remembered across logins: login returns the mode the user chose last. The mode never changes what the user owns: a host in guest mode keeps their spaces.
 
-**Profile edits:** `PATCH` changes only the fields that are sent; `{}` answers `200` with the user unchanged. `null` is allowed only for `avatarUrl`; `null` for `name`, `city`, `bio` or `mode` answers `422`. `409 user_conflict` ("The account could not be saved, please try again") means the database refused a write the input checks had let through, in practice only a race such as the account being deleted during the request; the client may retry.
+**Profile edits:** `PATCH` changes only the fields that are sent; `{}` answers `200` with the user unchanged. `null` is allowed only for `avatarUrl`; `null` for `name`, `city`, `bio` or `mode` answers `422`. An account deleted while its `PATCH` or `DELETE` runs answers `404 user_not_found`.
 
 **Logout:** there is no backend route; the frontend deletes the token.
 
@@ -65,7 +65,7 @@ The password (8–72 characters) is sent only on register and login; it is store
 | `GET /api/auth/me`                           | yes  |                                                    | `200` user, `401`                                                                             |
 | `GET /api/users?search=&isHost=&page=&size=` | no   |                                                    | `200 {total, items, pages}` of `PublicUser`, newest first; `search` (at most 80 characters) matches the name, case-insensitive (on SQLite only ASCII letters fold); `isHost` is `true` or `false`; `401 invalid_token`; `422` |
 | `GET /api/users/:id`                         | no   |                                                    | `200` `PublicUser`, `401 invalid_token`, `404 user_not_found` ("User not found"), `422` for an invalid id |
-| `PATCH /api/users/:id`                       | self | any subset of `{name, avatarUrl, city, bio, mode}` | `200` user, `401`, `403 not_account_owner` ("Only the account owner can change this account"), `404`, `409 user_conflict` (rare, see above), `422` |
+| `PATCH /api/users/:id`                       | self | any subset of `{name, avatarUrl, city, bio, mode}` | `200` user, `401`, `403 not_account_owner` ("Only the account owner can change this account"), `404`, `422` |
 | `DELETE /api/users/:id`                      | self |                                                    | `204`, `401`, `403 not_account_owner`, `404`; afterwards the token answers `401 invalid_token` |
 
 ## Space

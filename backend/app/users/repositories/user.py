@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.database.session_factory import ISessionFactory
 from app.users.models.user import User
@@ -20,7 +20,7 @@ class IUserRepository(Protocol):
 
     def save(self, user: User) -> User: ...
 
-    def delete(self, user: User) -> None: ...
+    def delete(self, user_id: int) -> bool: ...
 
 
 @inject(alias=IUserRepository)
@@ -44,13 +44,18 @@ class UserRepository(IUserRepository):
 
     def save(self, user: User) -> User:
         db = self._session_factory()
-        # Flush now, so a constraint violation raises here, where the service can name it,
-        # and not later inside the session handler's commit as a bare 500 (ADR-007).
+        # Flush now, so a vanished row (StaleDataError) raises here, where the service can name it,
+        # and not later inside the session handler's commit as a bare 500.
         db.flush()
         return user
 
-    def delete(self, user: User) -> None:
+    def delete(self, user_id: int) -> bool:
+        """False when the row was already gone (deleted by a parallel request)."""
         db = self._session_factory()
-        # Spaces and listings go with the user through ON DELETE CASCADE (passive_deletes).
-        db.delete(user)
-        db.flush()
+        # A DELETE statement, not db.delete(user): without a version column the ORM only warns
+        # when the row is already gone, so the returned id is the only way to tell.
+        # Spaces and listings go with the user through ON DELETE CASCADE.
+        deleted_id = db.execute(
+            delete(User).where(User.id == user_id).returning(User.id)
+        ).scalar_one_or_none()
+        return deleted_id is not None

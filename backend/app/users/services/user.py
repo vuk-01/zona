@@ -2,14 +2,10 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.auth.schemas.auth import CurrentUser
-from app.users.exceptions.user import (
-    NotAccountOwnerException,
-    UserConflictException,
-    UserNotFoundException,
-)
+from app.users.exceptions.user import NotAccountOwnerException, UserNotFoundException
 from app.users.models.user import User, UserMode
 from app.users.repositories.user import IUserRepository
 from app.users.schemas.user import (
@@ -66,14 +62,16 @@ class UserService(IUserService):
             setattr(user, field, value)
         try:
             user = self._user_repository.save(user)
-        except IntegrityError as e:
-            # Every CHECK has a Pydantic twin, so only a race gets here (the account was deleted).
-            raise UserConflictException from e
+        except StaleDataError as e:
+            # The row vanished after it was read (the account was deleted during the request).
+            raise UserNotFoundException from e
         return UserResponseSchema.model_validate(user)
 
     def delete(self, user_id: int, current_user: CurrentUser) -> None:
         user = self._get_owned_or_raise(user_id, current_user)
-        self._user_repository.delete(user)
+        if not self._user_repository.delete(user.id):
+            # Deleted by a parallel request after it was read.
+            raise UserNotFoundException
 
     def _get_or_raise(self, user_id: int) -> User:
         user = self._user_repository.get_by_id(user_id)

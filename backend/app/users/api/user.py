@@ -13,11 +13,7 @@ from app.deps import (
     get_di_entity,
     get_optional_user,
 )
-from app.users.exceptions.user import (
-    NotAccountOwnerException,
-    UserConflictException,
-    UserNotFoundException,
-)
+from app.users.exceptions.user import NotAccountOwnerException, UserNotFoundException
 from app.users.schemas.user import (
     PublicUserResponseSchema,
     UserListFilters,
@@ -89,7 +85,6 @@ def get_user(
         *CURRENT_USER_ERRORS,
         NotAccountOwnerException(),
         UserNotFoundException(),
-        UserConflictException(),
         _INVALID_BODY,
     ),
 )

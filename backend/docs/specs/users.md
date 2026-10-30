@@ -54,9 +54,8 @@ Filters: `search` ≤ 80 chars, `ilike` on name; `isHost` boolean. PATCH: `mode:
 | 401 | wrong email or password | Wrong email or password | `invalid_credentials` |
 | 401 | no token on `/me`, PATCH, DELETE / invalid or expired token anywhere | Authentication required / Invalid or expired token | `not_authenticated` / `invalid_token` |
 | 403 | PATCH / DELETE of another user | Only the account owner can change this account | `not_account_owner` |
-| 404 | unknown user id | User not found | `user_not_found` |
+| 404 | unknown user id, or the account deleted while a PATCH / DELETE ran | User not found | `user_not_found` |
 | 409 | register with a taken email | Email is already registered (+ `fieldErrors.email`) | `email_already_registered` |
-| 409 | PATCH hits an `IntegrityError` the input checks let through (race) | The account could not be saved, please try again | `user_conflict` |
 | 422 | invalid field, bad `isHost`/`search`, bad id, `null` name/city/bio/mode | Validation failed | `validation_error` + `fieldErrors` |
 
 ## Done when
@@ -67,5 +66,5 @@ Filters: `search` ≤ 80 chars, `ilike` on name; `isHost` boolean. PATCH: `mode:
 - [ ] SQLite rebuild cannot delete spaces: on SQLite the batch rebuild drops the old `users` table, which with `foreign_keys=ON` cascades to `spaces` and `listings`. The `alembic/env.py` engine has no FK listener (only `SessionFactory` adds one), and the PRAGMA is a no-op inside a transaction, so the migration's `upgrade()` reads `PRAGMA foreign_keys` on SQLite and raises before touching the table if it is `1`. Postgres alters in place, no rebuild
 - [ ] On a copy of the seeded DB: counts of `users`, `spaces`, `listings` before and after `migrate` are equal, every `name` equals the old `display_name`, and `PRAGMA foreign_key_check` is empty
 - [ ] `display_name`/`displayName` gone from code, tests and seed; `app/users/routes.py` registered in `app/routes.py`
-- [ ] `docs/entities.md` (repo root **and** `backend/docs/`): remove "Every login sets `mode: guest`", say the mode is remembered across logins, login row "with the stored mode", city ≤ 80, `user_conflict`, drop the "no route sets `isHost` yet" note
+- [ ] `docs/entities.md` (repo root **and** `backend/docs/`): remove "Every login sets `mode: guest`", say the mode is remembered across logins, login row "with the stored mode", city ≤ 80, drop the "no route sets `isHost` yet" note
 - [ ] `poetry run lint && poetry run typecheck && poetry run test` green; `/review-changes` APPROVED
