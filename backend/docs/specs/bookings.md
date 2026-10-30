@@ -12,7 +12,8 @@ Delivery (the contract describes all of it from PR 1 on):
 | 3 | `GET /api/bookings/popular-times` |
 
 Out of scope: frontend wiring (`docs/follow-ups.md`); `PATCH /api/spaces` against existing confirmed bookings
-(follow-up, reuses `ISpaceRepository.lock`); a booking window limit; removing `app/listings/`.
+(follow-up, reuses `ISpaceRepository.lock(space_id)`, which `DELETE /api/spaces` takes in PR 2; confirm takes
+`ISpaceRepository.lock_for_booking(booking_id)` instead); a booking window limit; removing `app/listings/`.
 
 ## Entities & fields
 **Booking** (`bookings`, `app/bookings/`)
@@ -31,6 +32,8 @@ Out of scope: frontend wiring (`docs/follow-ups.md`); `PATCH /api/spaces` agains
 | created_at | TIMESTAMP(tz), `server_default=now()` | yes | | backend |
 
 Index `(space_id, date)` for the overlap query. JSON `space {id, name, address, hostId}` is joined (ADR-020).
+Bookings are filtered by participation (`guest_id` or `Space.host_id` is the user), never by `space_visible_to`:
+a guest keeps seeing and cancelling a booking after the host turns the space into a draft.
 Returned status: `confirmed` and `ends_at <= now` → `finished`; `pending` and `ends_at <= now` → `expired`.
 Relations: Space 1–N Booking, User 1–N Booking (guest), `passive_deletes`; deleting either deletes the bookings.
 
@@ -48,10 +51,16 @@ Relations: Space 1–N Booking, User 1–N Booking (guest), `passive_deletes`; d
 
 POST checks, in order: space visible (`ISpaceService.get`) → not own → slot (whole hours, start < end, inside the
 weekday's opening hours, every hour exists that day) → start strictly after now → overlap (advisory) → INSERT in a
-SAVEPOINT; IntegrityError (ADR-019): guest gone → `401 invalid_token`, space gone → `404`, else re-raise.
-Confirm: `ISpaceRepository.lock_for_booking(id)` as the first statement → read → roles → transition → count confirmed
+SAVEPOINT; IntegrityError (ADR-019): `not IUserRepository.exists(guest)` → `401 invalid_token`, then
+`not ISpaceRepository.exists(space)` → `404`, else re-raise. `exists()`, not `get_by_id()`: `ISpaceService.get`
+already put the space in the identity map, and `db.get` would answer from it.
+Confirm: `ISpaceRepository.lock_for_booking(booking_id)` as the first statement (it finds the space through a
+subquery on `bookings`, so nothing is read before the lock) → read → roles → transition → count confirmed
 per hour (without itself) → compare-and-set on status. A slot is refused only when an hour in `[start, end)` does not
-exist (DST). Cancel/decline/delete: compare-and-set, no lock. Same status again → `422` (not idempotent, ADR-021 does not apply).
+exist (DST). Cancel/decline/delete: compare-and-set, no lock. A compare-and-set that changes no row reads the status
+again with a `select()` (not `db.get`: the first read is in the identity map): no row → `404 booking_not_found`,
+another status → `422 invalid_status_change`; it never assumes the row is still there. Same status again → `422`
+(not idempotent, ADR-021 does not apply).
 Popular times: last 8 weeks (fewer if the space is younger), confirmed bookings only, per weekday and hour 08–21:
 taken units / units (`deskCount` or 1) averaged over that weekday's dates, 0–100 rounded; `null` for a closed day.
 
@@ -81,7 +90,7 @@ taken units / units (`deskCount` or 1) averaged over that weekday's dates, 0–1
 
 ## Done when
 - [ ] Unit `test_bookings_api.py` (routing, 401, 422 shapes, 201/204, `/availability` not caught by `/{id}`), `test_bookings_service.py` (transitions table, roles, FK → 401/404)
-- [ ] Integration `test_bookings.py`: every route happy path + 401/403/404/422; same status → `422 invalid_status_change`; expired cannot be confirmed; `booking_in_past` at exactly start; DST with a fixed `IClock`: 2026-10-25 `ends_at`/finished, 2027-03-28 `01–02` → 201, `01–03` and `02–03` → `422 invalid_slot`; lock leaves the space row unchanged; mid-request (second connection): space deleted on POST → 404, guest deleted → 401, booking deleted on PATCH/DELETE → 404
+- [ ] Integration `test_bookings.py`: every route happy path + 401/403/404/422; same status → `422 invalid_status_change`; expired cannot be confirmed; `booking_in_past` at exactly start; DST with a fixed `IClock`: 2026-10-25 `ends_at`/finished, 2027-03-28 `01–02` → 201, `01–03` and `02–03` → `422 invalid_slot`; lock leaves the space row unchanged; mid-request (second connection): space deleted on POST → 404, guest deleted → 401, booking deleted on PATCH/DELETE → 404 (on confirm the space lock already holds SQLite's write lock: delete in the request's own session, as `test_favorites.py` does); a parallel status change between the read and the compare-and-set → `422 invalid_status_change`
 - [ ] `test_bookings_concurrency.py`: parallel confirms `[200, 409]` (whole space) and `[200, 200, 409]` (2 desks); control test without the lock overbooks; run on SQLite and Postgres
 - [ ] PR 2: `availableDesks` never below 0 after deskCount is lowered; `bookingCounts` on own list only; `DELETE` 409 with the count; availability matches confirm
 - [ ] Local DB backed up (`data/app-prije-bookings.db`) before `migrate`; migration read; `alembic check` clean
