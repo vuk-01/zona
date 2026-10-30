@@ -54,6 +54,7 @@ from app.utils.pagination import Page, PaginationParams
 BOOKING_DAYS_AHEAD = 365
 # Popular times: a space younger than this has no popular times yet, and the average covers at
 # most the last 8 weeks (docs/entities.md).
+# At least 8 days: a shorter minimum can leave a weekday with no dates, and its average divides by 0.
 POPULAR_MIN_AGE = timedelta(days=14)
 POPULAR_WINDOW_DAYS = 56
 

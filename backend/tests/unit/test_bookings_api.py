@@ -575,15 +575,24 @@ def test_popular_times_with_an_invalid_token_is_401(
     booking_service.popular_times.assert_not_called()
 
 
-def test_popular_times_for_an_unknown_space_or_someone_elses_draft_is_404(
-    client: TestClient, booking_service: Mock
+# One exception today (an unknown space or someone else's draft); the next one goes in this list.
+@pytest.mark.parametrize(
+    ("error", "status_code", "body"),
+    [(SpaceNotFoundException(), 404, {"detail": "Space not found", "code": "space_not_found"})],
+)
+def test_popular_times_maps_the_service_errors(
+    client: TestClient,
+    booking_service: Mock,
+    error: Exception,
+    status_code: int,
+    body: dict[str, Any],
 ) -> None:
-    booking_service.popular_times.side_effect = SpaceNotFoundException()
+    booking_service.popular_times.side_effect = error
 
     response = client.get("/api/bookings/popular-times?spaceId=7")
 
-    assert response.status_code == 404
-    assert response.json() == {"detail": "Space not found", "code": "space_not_found"}
+    assert response.status_code == status_code
+    assert response.json() == body
 
 
 @pytest.mark.parametrize("query", ["", "?spaceId=abc", "?spaceId=0", "?spaceId=2147483648"])

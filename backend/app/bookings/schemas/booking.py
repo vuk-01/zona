@@ -114,7 +114,7 @@ POPULAR_FIRST_HOUR = 8
 POPULAR_HOURS = 14
 
 
-class PopularDaysSchema(CamelCaseModel):
+class PopularDaysSchema(CamelCaseResponseModel):
     """0-100 per hour from `firstHour`; `null` for a day the space is closed."""
 
     mon: list[int] | None
@@ -126,6 +126,6 @@ class PopularDaysSchema(CamelCaseModel):
     sun: list[int] | None
 
 
-class PopularTimesResponseSchema(CamelCaseModel):
+class PopularTimesResponseSchema(CamelCaseResponseModel):
     first_hour: int = POPULAR_FIRST_HOUR
     days: PopularDaysSchema
