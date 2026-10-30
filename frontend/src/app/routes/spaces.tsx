@@ -22,7 +22,7 @@ export function Spaces() {
 
   return (
     <section className="flex flex-col gap-6 md:gap-8">
-      <HeroPanel align="start" aside={<CategorySpotlight category={category} stats={stats} />}>
+      <HeroPanel aside={<CategorySpotlight category={category} stats={stats} />}>
         <PageTitle>Explore spaces</PageTitle>
         <div className="flex flex-col gap-4">
           <SpaceSearch
