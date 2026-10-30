@@ -22,13 +22,23 @@ type AppLayoutProps = {
   navAccount: NavAccount
   // Counts next to nav items, by path (the host's pending reservations)
   badges?: NavBadges
+  // Set by src/app/app-shell.tsx for a visitor: Favorites, Bookings and Profile in the side menu and the
+  // tab bar open the login dialog over the page, which goes to that page once they are signed in
+  onProtectedNav?: (to: string) => void
 }
 
 // Mobile: top bar (wordmark, theme toggle + account) on the sky background, content in a white sheet,
 // the tab bar at the bottom. Desktop (md+): the navy side menu with the navigation and, at its bottom,
 // the account; the theme toggle top right above the content. Toasts (the result of an action that keeps
 // the user on the page, e.g. approving a reservation) come in bottom right, above the tab bar on phones.
-export function AppLayout({ mode, isLoading, account, navAccount, badges = {} }: AppLayoutProps) {
+export function AppLayout({
+  mode,
+  isLoading,
+  account,
+  navAccount,
+  badges = {},
+  onProtectedNav,
+}: AppLayoutProps) {
   const isHosting = !isLoading && mode === 'host'
 
   return (
@@ -40,6 +50,7 @@ export function AppLayout({ mode, isLoading, account, navAccount, badges = {} }:
         isHosting={isHosting}
         account={navAccount}
         badges={badges}
+        onProtectedNav={onProtectedNav}
       />
       <div className="flex min-h-dvh flex-col md:pl-72">
         <header className="flex items-center justify-between gap-4 px-4 py-4 md:justify-end md:px-8 md:pt-6 md:pb-0">
@@ -55,7 +66,12 @@ export function AppLayout({ mode, isLoading, account, navAccount, badges = {} }:
           <Outlet />
         </main>
       </div>
-      <BottomNav items={navItems[mode]} isLoading={isLoading} badges={badges} />
+      <BottomNav
+        items={navItems[mode]}
+        isLoading={isLoading}
+        badges={badges}
+        onProtectedNav={onProtectedNav}
+      />
       <Toaster />
     </div>
   )

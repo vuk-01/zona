@@ -8,7 +8,7 @@ import {
   type LucideIcon,
   Search,
 } from 'lucide-react'
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 
 import type { UserMode } from '@/lib/user'
 
@@ -18,6 +18,8 @@ export type NavItem = {
   icon: LucideIcon
   // Only active on the exact path (Home would otherwise match every page)
   end?: boolean
+  // The page needs a signed-in user (RequireAuth in src/app/router.tsx)
+  requiresAuth?: boolean
 }
 
 // A count next to an item (the host's pending reservations). `label` says what is counted, for screen
@@ -38,11 +40,16 @@ export type NavSection = {
 
 const home: NavItem = { to: '/', label: 'Home', icon: House, end: true }
 const explore: NavItem = { to: '/spaces', label: 'Explore', icon: Search }
-const favorites: NavItem = { to: '/favorites', label: 'Favorites', icon: Heart }
-const bookings: NavItem = { to: '/bookings', label: 'Bookings', icon: CalendarDays }
-const mySpaces: NavItem = { to: '/host/spaces', label: 'My spaces', icon: Building2 }
-const reservations: NavItem = { to: '/host/reservations', label: 'Reservations', icon: CalendarCheck }
-const profile: NavItem = { to: '/profile', label: 'Profile', icon: CircleUser }
+const favorites: NavItem = { to: '/favorites', label: 'Favorites', icon: Heart, requiresAuth: true }
+const bookings: NavItem = { to: '/bookings', label: 'Bookings', icon: CalendarDays, requiresAuth: true }
+const mySpaces: NavItem = { to: '/host/spaces', label: 'My spaces', icon: Building2, requiresAuth: true }
+const reservations: NavItem = {
+  to: '/host/reservations',
+  label: 'Reservations',
+  icon: CalendarCheck,
+  requiresAuth: true,
+}
+const profile: NavItem = { to: '/profile', label: 'Profile', icon: CircleUser, requiresAuth: true }
 
 // Guest/host mode changes these items, never the colors (see DESIGN.md). The side menu shows them in
 // sections; the tab bar on phones shows the same items in one row (navItems).
@@ -62,11 +69,25 @@ export const navItems: Record<UserMode, NavItem[]> = {
   host: navSections.host.flatMap((section) => section.items),
 }
 
+// For a visitor (onProtectedNav is set), a click on an item that needs a signed-in user opens the login
+// dialog over the page instead of following the link; undefined otherwise. A click that opens a new tab or
+// window (a modifier key or another button, like React Router's own check) still follows the link, and
+// RequireAuth sends that tab to /login.
+export function protectedNavClick(item: NavItem, onProtectedNav: ((to: string) => void) | undefined) {
+  if (!item.requiresAuth || !onProtectedNav) return undefined
+  return (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    onProtectedNav(item.to)
+  }
+}
+
 // The account at the bottom of the side menu. src/app/app-shell.tsx fills it from the auth and users
 // features, since layout imports no features.
 export type NavAccount =
   | { status: 'loading' }
-  | { status: 'visitor'; loginHref: string }
+  // "Log in" opens the login dialog over the current page
+  | { status: 'visitor'; onLogin: () => void }
   | {
       status: 'signed-in'
       name: string

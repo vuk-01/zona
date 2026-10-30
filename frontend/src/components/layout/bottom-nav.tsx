@@ -5,7 +5,7 @@ import { NavLink, useLocation } from 'react-router'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveIndicator } from '@/lib/use-active-indicator'
 
-import { type NavBadges, type NavItem, navItems } from './nav-items'
+import { type NavBadges, type NavItem, navItems, protectedNavClick } from './nav-items'
 
 const tabVariants = cva(
   'flex h-16 flex-col items-center justify-center gap-1 text-xs outline-none transition-colors duration-200 focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-inset',
@@ -34,13 +34,15 @@ type BottomNavProps = {
   // While the signed-in user loads, the mode is unknown: show placeholders, not the guest items
   isLoading: boolean
   badges: NavBadges
+  // Set for a visitor: tabs that need a signed-in user open the login dialog instead of their page
+  onProtectedNav?: (to: string) => void
 }
 
 // Phones only: a full-width navy tab bar at the bottom (DESIGN.md "Layout") with every item as icon and
 // label. The active tab has a blue icon, a semibold label and a short blue line on top, which slides to
 // the tab that opens. It keeps clear of the phone's home indicator (safe area); a border line outlines it.
 // A count (the pending reservations) sits on the top right of its icon as a small blue pill.
-export function BottomNav({ items, isLoading, badges }: BottomNavProps) {
+export function BottomNav({ items, isLoading, badges, onProtectedNav }: BottomNavProps) {
   const { pathname } = useLocation()
   const [list, setList] = useState<HTMLDivElement | null>(null)
   const active = useActiveIndicator(list, '[aria-current="page"]', pathname)
@@ -68,11 +70,19 @@ export function BottomNav({ items, isLoading, badges }: BottomNavProps) {
             />
           )}
           <ul className="grid auto-cols-fr grid-flow-col">
-            {items.map(({ to, label, icon: Icon, end }) => {
+            {items.map((item) => {
+              const { to, label, icon: Icon, end } = item
               const badge = badges[to]
+              const onClick = protectedNavClick(item, onProtectedNav)
               return (
                 <li key={to}>
-                  <NavLink to={to} end={end} className={({ isActive }) => tabVariants({ active: isActive })}>
+                  <NavLink
+                    to={to}
+                    end={end}
+                    onClick={onClick}
+                    aria-haspopup={onClick ? 'dialog' : undefined}
+                    className={({ isActive }) => tabVariants({ active: isActive })}
+                  >
                     {({ isActive }) => (
                       <>
                         <span className="relative">

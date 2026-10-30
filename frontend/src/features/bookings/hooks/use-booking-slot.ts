@@ -16,8 +16,8 @@ export const formatHour = (hour: number) => `${String(hour).padStart(2, '0')}:00
 const range = (from: number, to: number) =>
   Array.from({ length: Math.max(to - from + 1, 0) }, (_, i) => from + i)
 
-// The slot being picked on a space page, kept in the URL (?date=&from=&to=) so it survives the trip
-// through /login. Invalid or missing values fall back to the first bookable hour.
+// The slot being picked on a space page, kept in the URL (?date=&from=&to=) so it can be shared and
+// survives a reload or a trip through /login. Invalid or missing values fall back to the first bookable hour.
 export function useBookingSlot(space: BookableSpace) {
   const [params, setParams] = useSearchParams()
 

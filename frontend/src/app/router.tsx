@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router'
 
 import { AppShell } from '@/app/app-shell'
 import { AuthShell } from '@/app/auth-shell'
+import { LoginDialogProvider } from '@/app/login-dialog'
 import { Bookings } from '@/app/routes/bookings'
 import { Favorites } from '@/app/routes/favorites'
 import { Home } from '@/app/routes/home'
@@ -26,7 +27,12 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    element: <AppShell />,
+    // The login dialog opens over these pages (the account's "Log in", Book, the heart)
+    element: (
+      <LoginDialogProvider>
+        <AppShell />
+      </LoginDialogProvider>
+    ),
     children: [
       // Guest mode: browsing is open to everyone, favorites and bookings need a signed-in user
       { path: '/', element: <Home /> },

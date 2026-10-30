@@ -5,7 +5,7 @@ import { NavLink, useLocation } from 'react-router'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useActiveIndicator } from '@/lib/use-active-indicator'
 
-import { type NavAccount, type NavBadges, type NavSection, navItems } from './nav-items'
+import { type NavAccount, type NavBadges, type NavSection, navItems, protectedNavClick } from './nav-items'
 import { SidebarAccount } from './sidebar-account'
 import { Wordmark } from './wordmark'
 
@@ -39,6 +39,8 @@ type SidebarProps = {
   isHosting: boolean
   account: NavAccount
   badges: NavBadges
+  // Set for a visitor: items that need a signed-in user open the login dialog instead of their page
+  onProtectedNav?: (to: string) => void
 }
 
 // Desktop only (md+): the fixed navy side menu (DESIGN.md "Layout"). The wordmark on top, the items in
@@ -48,7 +50,15 @@ type SidebarProps = {
 // right. Wordmark, section titles and icons all start at 32 px. In dark mode the navy sits between the
 // page and the cards, with a border toward the content. A count (the pending reservations) sits at the
 // right end of its item as a blue pill.
-export function Sidebar({ sections, isLoading, homePath, isHosting, account, badges }: SidebarProps) {
+export function Sidebar({
+  sections,
+  isLoading,
+  homePath,
+  isHosting,
+  account,
+  badges,
+  onProtectedNav,
+}: SidebarProps) {
   const { pathname } = useLocation()
   const id = useId()
   const [list, setList] = useState<HTMLDivElement | null>(null)
@@ -89,13 +99,17 @@ export function Sidebar({ sections, isLoading, homePath, isHosting, account, bad
                   {section.title}
                 </p>
                 <ul aria-labelledby={`${id}-${index}`} className="grid gap-1">
-                  {section.items.map(({ to, label, icon: Icon, end }) => {
+                  {section.items.map((item) => {
+                    const { to, label, icon: Icon, end } = item
                     const badge = badges[to]
+                    const onClick = protectedNavClick(item, onProtectedNav)
                     return (
                       <li key={to}>
                         <NavLink
                           to={to}
                           end={end}
+                          onClick={onClick}
+                          aria-haspopup={onClick ? 'dialog' : undefined}
                           className={({ isActive }) => itemVariants({ active: isActive })}
                         >
                           {({ isActive }) => (

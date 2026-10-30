@@ -1,16 +1,20 @@
 import { Loader2, LogOut } from 'lucide-react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 import { useCurrentUser, useLogout } from '../api/use-auth'
 
+type AccountMenuProps = {
+  // Opens the login dialog over the current page (src/app/login-dialog.tsx)
+  onLogin: () => void
+}
+
 // Account slot in the top bar on phones (md+ has the account at the bottom of the side menu): "Log in"
 // for visitors, the user's name and "Log out" when signed in. Logging out goes home; flushSync commits
 // that before the user is cleared.
-export function AccountMenu() {
-  const location = useLocation()
+export function AccountMenu({ onLogin }: AccountMenuProps) {
   const { data: user, isPending } = useCurrentUser()
   const navigate = useNavigate()
   const logout = useLogout(() => navigate('/', { flushSync: true }))
@@ -19,13 +23,13 @@ export function AccountMenu() {
 
   // A visitor (or a failed session check) can still browse; they just see "Log in".
   if (!user) {
-    const redirect = encodeURIComponent(location.pathname + location.search)
     return (
       <Button
-        asChild
+        aria-haspopup="dialog"
         className="h-11 rounded-full px-6 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background md:h-9"
+        onClick={onLogin}
       >
-        <Link to={`/login?redirect=${redirect}`}>Log in</Link>
+        Log in
       </Button>
     )
   }

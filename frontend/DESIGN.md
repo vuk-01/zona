@@ -46,18 +46,24 @@ hosts list their own spaces for rent.
 | host  | `/host/spaces/:id/edit` | Edit space              | signed in, in host mode |
 | host  | `/host/reservations`    | Reservations            | signed in, in host mode |
 
-- Signed out on a protected page: go to `/login?redirect=<page>`, and back there after logging in.
+- Signed out on a protected page (opened by its address, e.g. typing `/bookings`): go to
+  `/login?redirect=<page>`, and back there after logging in. `/login` and `/signup` are for these
+  redirects and direct links; inside the app, "Log in" and a visitor's click on Favorites, Bookings or
+  Profile in the navigation open the login dialog instead (see "Login dialog").
 - In guest mode on a host page: go to `/`, the guest home. Switching from host to guest on a host page
   lands there too, so the redirect and the switch never send the user to two different places.
 
 ## Sign-in rules
 
 - Browsing, searching and viewing spaces work **without** signing in.
-- Booking a space, saving a favorite and listing a space **require** signing in. The user is sent to
-  `/login?redirect=…` and comes back to the same page afterwards (a visitor's click on a heart does this
-  too; the space is not saved by that click).
+- Booking a space, saving a favorite and listing a space **require** signing in. A visitor's "Log in to
+  book" or click on a heart opens the login dialog over the page; once they have logged in or created an
+  account, the action goes on (the picked slot is booked, the space is saved). Closing the dialog drops
+  the action.
 - Login: email and password. Sign-up: name, email and password.
-- Google login and "Forgot password" come later with the real backend; they are not shown at all now.
+- Google login comes later with the real backend and is not shown now. The login dialog shows "Remember
+  me" and "Forgot password?", but neither does anything yet: the box is not sent, and the link only says
+  (a toast) that resetting a password comes with the real backend.
 
 ## Tone
 
@@ -82,8 +88,8 @@ Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palett
 | `accent`                                 | hover backgrounds only (shadcn uses it this way), pale blue                                                   |
 | `highlight`                              | pink: **only** for discounts ("−30%") and the "Popular" badge                                                 |
 | `success`                                | green: availability ("23 desks available", "Open now")                                                        |
-| `warning`                                | amber: **only** the "Pending" booking badge (waiting for the host); 5:1 on `card`, 7.9:1 in dark               |
-| `favorite`                               | red: **only** the favorite heart (its outline on hover, filled once saved); 4.8:1 on `card`, 5.1:1 in dark      |
+| `warning`                                | amber: **only** the "Pending" booking badge (waiting for the host); 5:1 on `card`, 7.9:1 in dark              |
+| `favorite`                               | red: **only** the favorite heart (its outline on hover, filled once saved); 4.8:1 on `card`, 5.1:1 in dark    |
 | `destructive` / `destructive-foreground` | errors, cancel booking, delete / text on a `destructive` button (white light, navy dark)                      |
 | `border` / `input`                       | dividers and card borders / input borders (stronger, 3:1 against `card`)                                      |
 | `sidebar-*`                              | navy navigation: tab bar on phones, side menu on desktop; `sidebar-primary` = the active item's icon and line |
@@ -345,6 +351,47 @@ replace them.
   in one by one and then float, and the dashed ring turns, slowly. With reduced motion nothing moves.
 - A signed-in user who opens `/login` or `/signup` is sent on to `?redirect=` or home.
 
+## Login dialog
+
+"Log in" in the app (the account in the top bar and at the bottom of the side menu), "Log in to book",
+a visitor's heart and a visitor's click on Favorites, Bookings or Profile in the side menu or the tab bar
+open a dialog over the current page instead of going to `/login`
+(`features/auth/components/auth-dialog.tsx`, opened through `src/app/login-dialog.tsx`).
+
+- Look (after `docs/ref/docs/ref/login-reference.png`): a navy (`sidebar`) header with the wordmark
+  ("Zona", `text-2xl`) and "Find your zone" over the hero panel's flat shapes (a `sidebar-accent` circle,
+  a dashed `sidebar-primary` ring, dots). The sky (`background`) card with the form rises over it with a
+  large rounded top (`rounded-t-xl`). One heading, centered: "Welcome back" / "Create account"
+  (`text-2xl`), and one line under it.
+- The same forms as the auth pages, with the dialog's fields (`features/auth/components/stacked-auth-field.tsx`):
+  the label above a `card` pill with a thin `input` border; in the pill the icon, a thin line and the
+  input; a password gets an eye button that shows it ("Show password", `aria-pressed`). Hints and errors
+  under the pill. Log in has "Remember me" and "Forgot password?" above the button (see "Sign-in rules")
+  and "Don't have an account? Sign up" at the bottom; sign-up ends with "Already have an account? Log in".
+- "Sign up" / "Log in" under the button switch the dialog between the two without closing it; focus moves
+  to the first field of the other form.
+- After logging in or signing up the dialog closes and the user stays on the same page, signed in; the
+  action that opened it goes on. Focus goes back to the button that opened it while that is still there.
+- From the navigation: the item does not open its page (no navigation, the active item stays), and
+  after logging in or signing up the user goes to the page they clicked, once the dialog has closed; its
+  title takes focus, like after any navigation. Closing the dialog changes
+  nothing, not even the URL. A click that opens a new tab (Ctrl/Cmd, middle button) still follows the
+  link, and that tab goes to `/login`.
+- Closes on the X (top right, round ghost icon button, `size-11 md:size-9`), a click on the `overlay`
+  and Esc. Every opening starts at Log in with empty fields.
+- Phones: a bottom sheet as tall as its content (at most the screen less 1rem, then it scrolls on its
+  own and the page behind stays put). md+: a `max-w-md` dialog in the middle of the screen (`rounded-xl`,
+  thin border, `shadow-soft`).
+- Motion:
+  - Phones: a calm slide. The sheet comes up from below the screen in 250ms (ease-out) while the
+    `overlay` fades in, and goes back down in 200ms (ease-in) while it fades out.
+  - md+: fades in and zooms from 95% in 200ms (ease-out), and back on close (ease-in); the overlay fades
+    along.
+  - Log in ↔ sign up: the sheet's height animates to the new form's and the new content fades in, a little
+    upward.
+  - With reduced motion: no slide, zoom or height animation, only a 150ms fade of the dialog and the
+    overlay (see "Motion").
+
 ## Profile (`/profile`, from profilePageUI)
 
 - The hero panel holds the page title and the header: `UserAvatar` (`lg`), name, role ("Guest" /
@@ -379,7 +426,8 @@ replace them.
 
 Subtle and quick, always with a reason: it shows what can be clicked and what just changed. Every
 movement is behind `motion-safe:` (or `prefers-reduced-motion: no-preference` in `index.css`); with
-reduced motion nothing moves, zooms or fades, and color and shadow changes stay.
+reduced motion nothing moves, zooms or fades, and color and shadow changes stay. The one exception is a
+dialog: it keeps a short 150ms fade, so it does not pop in and out (`ui/dialog.tsx`, "Login dialog").
 
 - **Clickable cards** (space card, booking card, host space card, New on Zona): on hover the card lifts 4px with
   `shadow-lift` and a `primary/60` border, the photo zooms to 1.05 over 700ms and the name turns

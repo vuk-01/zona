@@ -1,6 +1,6 @@
 import { CircleAlert, CircleCheck, Loader2 } from 'lucide-react'
 import { useEffect, useRef, type FormEvent } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 
 import { TimeSelect } from '@/components/form/time-select'
 import { Button } from '@/components/ui/button'
@@ -33,15 +33,15 @@ const hourOption = (hour: number) => ({ value: String(hour), label: formatHour(h
 
 type BookingFormProps = {
   space: BookableSpace
-  // The signed-in user; null for a visitor (Book then goes to login), undefined while it loads
+  // The signed-in user; null for a visitor (Book then opens the login dialog), undefined while it loads
   user: BookingGuest | null | undefined
+  // Opens the login dialog over this page; `continueWith` runs with the user once they are signed in
+  onLogin: (continueWith: (guest: BookingGuest) => void) => void
 }
 
 // Date + whole-hour slot inside the opening hours, live availability, the total and "Book".
 // On phones "Book" sits in a bar fixed above the bottom navigation.
-export function BookingForm({ space, user }: BookingFormProps) {
-  const navigate = useNavigate()
-  const location = useLocation()
+export function BookingForm({ space, user, onLogin }: BookingFormProps) {
   const slot = useBookingSlot(space)
   const availability = useSlotAvailability(slot.slot, space)
   const createBooking = useCreateBooking()
@@ -52,7 +52,7 @@ export function BookingForm({ space, user }: BookingFormProps) {
   const total = space.pricePerHour * slot.hours
   const isFree = availability.data?.available === true
   const canBook = slot.slot !== null && isFree && !isOwnSpace && !createBooking.isPending
-  // A visitor can press it while the slot is free; it goes to login first
+  // A visitor can press it while the slot is free; it opens the login dialog first
 
   // The Book button goes away (success) or a message appears (error): move focus there
   useEffect(() => {
@@ -63,8 +63,12 @@ export function BookingForm({ space, user }: BookingFormProps) {
     event.preventDefault()
     if (!slot.slot) return
     if (user === null) {
-      // The slot is in the URL, so the guest comes back to the same choice after logging in
-      navigate(`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`)
+      // The dialog opens over this page, so the picked slot stays. Once signed in the booking goes on,
+      // unless the space turns out to be theirs (the form then says so).
+      const picked = slot.slot
+      onLogin((guest) => {
+        if (space.host.id !== guest.id) createBooking.mutate({ input: picked, space, guest })
+      })
       return
     }
     if (!user || !canBook) return

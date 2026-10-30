@@ -1,5 +1,6 @@
-import { useLocation, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 
+import { useLoginDialog } from '@/app/login-dialog'
 import { AppLayout } from '@/components/layout/app-layout'
 import type { NavAccount } from '@/components/layout/nav-items'
 import { UserAvatar } from '@/components/user-avatar'
@@ -10,11 +11,12 @@ import { useBookings } from '@/features/bookings/api/use-bookings'
 // Wires the signed-in user into the layout: the mode (visitors use guest navigation; while the session
 // check loads, the layout shows placeholders so a host does not see the guest items flash), the account
 // menu for the top bar on phones, the account at the bottom of the side menu (md+) and, in host mode, the
-// number of pending reservations next to Reservations. The guest/host switch lives in Profile
-// (src/app/routes/profile.tsx).
+// number of pending reservations next to Reservations. For a visitor, "Log in" in both and the items that
+// need a signed-in user (Favorites, Bookings, Profile) open the login dialog; after logging in the latter
+// go on to their page. The guest/host switch lives in Profile (src/app/routes/profile.tsx).
 export function AppShell() {
   const { data: user, isPending } = useCurrentUser()
-  const location = useLocation()
+  const openLogin = useLoginDialog()
   const navigate = useNavigate()
   // Logging out goes home; flushSync commits that before the user is cleared (see useLogout)
   const logout = useLogout(() => navigate('/', { flushSync: true }))
@@ -33,20 +35,18 @@ export function AppShell() {
           onLogout: () => logout.mutate(),
           isLoggingOut: logout.isPending,
         }
-      : {
-          status: 'visitor',
-          loginHref: `/login?redirect=${encodeURIComponent(location.pathname + location.search)}`,
-        }
+      : { status: 'visitor', onLogin: () => openLogin() }
 
   return (
     <AppLayout
       mode={user?.mode ?? 'guest'}
       isLoading={isPending}
-      account={<AccountMenu />}
+      account={<AccountMenu onLogin={() => openLogin()} />}
       navAccount={navAccount}
       badges={
         isHosting && pending ? { '/host/reservations': { count: pending.length, label: 'pending' } } : {}
       }
+      onProtectedNav={!isPending && !user ? (to) => openLogin({ redirect: to }) : undefined}
     />
   )
 }

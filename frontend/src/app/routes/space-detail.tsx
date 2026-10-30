@@ -2,6 +2,7 @@ import { MapPinOff } from 'lucide-react'
 import { Link, useParams } from 'react-router'
 
 import { FavoriteHeart } from '@/app/favorite-heart'
+import { useLoginDialog } from '@/app/login-dialog'
 import { EmptyState, emptyStateAction } from '@/components/feedback/empty-state'
 import { PageTitle } from '@/components/layout/page-title'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,7 @@ export function SpaceDetail() {
   // "/spaces/abc" gives NaN, which the API answers with 404 like any unknown id
   const { data: space, isLoading, error, refetch, isRefetching } = useSpace(Number(id))
   const { data: user, isPending: userPending } = useCurrentUser()
+  const openLogin = useLoginDialog()
 
   if (isLoading || (space && space.status === 'draft' && userPending)) return <SpaceDetailSkeleton />
 
@@ -75,7 +77,11 @@ export function SpaceDetail() {
       </div>
 
       <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
-        <BookingForm space={space} user={userPending ? undefined : (user ?? null)} />
+        <BookingForm
+          space={space}
+          user={userPending ? undefined : (user ?? null)}
+          onLogin={(continueWith) => openLogin({ continueWith })}
+        />
       </aside>
 
       <div className="flex min-w-0 flex-col gap-8">
