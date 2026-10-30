@@ -70,11 +70,37 @@ def test_save_someone_elses_draft_is_404_and_own_draft_is_201(
     assert save(client, host_auth_headers, draft_id).status_code == 201
 
 
-def test_save_without_token_is_401(client: TestClient, space_id: int) -> None:
-    response = client.post("/api/favorites", json={"spaceId": space_id})
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("get", "/api/favorites"), ("post", "/api/favorites"), ("delete", "/api/favorites/{id}")],
+)
+def test_without_token_is_401_with_the_error_shape_and_header(
+    client: TestClient, space_id: int, method: str, path: str
+) -> None:
+    kwargs: dict[str, Any] = {"json": {"spaceId": space_id}} if method == "post" else {}
+
+    response = getattr(client, method)(path.format(id=space_id), **kwargs)
 
     assert response.status_code == 401
-    assert response.json()["code"] == "not_authenticated"
+    assert response.json() == {"detail": "Authentication required", "code": "not_authenticated"}
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    assert favorites_in_db() == 0
+
+
+@pytest.mark.parametrize("method", ["get", "post", "delete"])
+def test_with_an_invalid_token_is_401_invalid_token(
+    client: TestClient, space_id: int, method: str
+) -> None:
+    path = "/api/favorites" if method != "delete" else f"/api/favorites/{space_id}"
+    kwargs: dict[str, Any] = {"json": {"spaceId": space_id}} if method == "post" else {}
+
+    response = getattr(client, method)(
+        path, headers={"Authorization": "Bearer not-a-token"}, **kwargs
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid or expired token", "code": "invalid_token"}
+    assert response.headers["WWW-Authenticate"] == "Bearer"
 
 
 @pytest.mark.parametrize("body", [{}, {"spaceId": 0}, {"spaceId": "abc"}])
@@ -149,8 +175,18 @@ def test_list_leaves_out_a_saved_space_that_became_someone_elses_draft(
     assert favorites_in_db() == 3  # hidden, not deleted: listing the space again brings it back
 
 
-def test_list_without_token_is_401(client: TestClient) -> None:
-    assert client.get("/api/favorites").status_code == 401
+@pytest.mark.parametrize(
+    ("query", "field"), [("page=0", "page"), ("size=0", "size"), ("size=501", "size")]
+)
+def test_list_with_invalid_pagination_is_422(
+    client: TestClient, auth_headers: dict[str, str], query: str, field: str
+) -> None:
+    response = client.get(f"/api/favorites?{query}", headers=auth_headers)
+
+    assert response.status_code == 422
+    body = response.json()
+    assert (body["detail"], body["code"]) == ("Validation failed", "validation_error")
+    assert set(body["fieldErrors"]) == {field}
 
 
 # --- DELETE -------------------------------------------------------------------------------------
@@ -172,10 +208,6 @@ def test_remove_is_204_also_when_not_saved_and_leaves_other_users_alone(
     assert again.status_code == 204
     assert client.get("/api/favorites", headers=other_auth_headers).json()["total"] == 0
     assert client.get("/api/favorites", headers=host_auth_headers).json()["total"] == 1
-
-
-def test_remove_without_token_is_401(client: TestClient, space_id: int) -> None:
-    assert client.delete(f"/api/favorites/{space_id}").status_code == 401
 
 
 def test_remove_with_invalid_id_is_422(client: TestClient, auth_headers: dict[str, str]) -> None:
@@ -209,8 +241,11 @@ def test_deleting_the_space_or_the_user_deletes_their_favorites(
 
 
 @pytest.mark.parametrize(
-    ("what", "status_code", "code"),
-    [("space", 404, "space_not_found"), ("user", 401, "invalid_token")],
+    ("what", "status_code", "error"),
+    [
+        ("space", 404, {"detail": "Space not found", "code": "space_not_found"}),
+        ("user", 401, {"detail": "Invalid or expired token", "code": "invalid_token"}),
+    ],
 )
 def test_save_after_the_space_or_user_was_deleted_meanwhile(
     client: TestClient,
@@ -219,7 +254,7 @@ def test_save_after_the_space_or_user_was_deleted_meanwhile(
     monkeypatch: pytest.MonkeyPatch,
     what: str,
     status_code: int,
-    code: str,
+    error: dict[str, str],
 ) -> None:
     marko_id = user_id(client, other_auth_headers)
     gone = (
@@ -238,7 +273,9 @@ def test_save_after_the_space_or_user_was_deleted_meanwhile(
     response = save(client, other_auth_headers, space_id)
 
     assert response.status_code == status_code
-    assert response.json()["code"] == code
+    assert response.json() == error
+    if status_code == 401:
+        assert response.headers["WWW-Authenticate"] == "Bearer"
     assert favorites_in_db() == 0
     # The failed transaction was rolled back, so the next request on the same thread works.
     assert client.get("/api/spaces").status_code == 200

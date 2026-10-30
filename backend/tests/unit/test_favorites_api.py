@@ -9,6 +9,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 
+from app.auth.exceptions.auth import InvalidTokenException
 from app.favorites.schemas.favorite import FavoriteResponseSchema, FavoriteSaved
 from app.spaces.exceptions.space import SpaceNotFoundException
 from app.utils.pagination import Page
@@ -61,6 +62,7 @@ def test_without_token_is_401(
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required", "code": "not_authenticated"}
+    assert response.headers["WWW-Authenticate"] == "Bearer"
     assert not favorite_service.method_calls
 
 
@@ -109,6 +111,18 @@ def test_create_for_a_space_the_user_cannot_view_is_404(
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Space not found", "code": "space_not_found"}
+
+
+def test_create_for_an_account_deleted_meanwhile_is_401_invalid_token(
+    client: TestClient, favorite_service: Mock
+) -> None:
+    favorite_service.create.side_effect = InvalidTokenException()
+
+    response = client.post("/api/favorites", json={"spaceId": 7}, headers=AUTH)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid or expired token", "code": "invalid_token"}
+    assert response.headers["WWW-Authenticate"] == "Bearer"
 
 
 def test_delete_returns_204_without_body(client: TestClient, favorite_service: Mock) -> None:
