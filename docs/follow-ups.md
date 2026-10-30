@@ -46,6 +46,53 @@ The backend has `GET/POST/DELETE /api/favorites` and `GET /api/spaces?favoriteOf
   backend; a `403 not_own_favorites` or `401` means the page asked with the wrong id or no token.
 - `frontend/src/lib/favorite.ts` and the rows in `frontend/src/lib/mock-db.ts` go with the mock.
 
+## Frontend: connect bookings to the backend
+
+The backend has `GET/POST/PATCH/DELETE /api/bookings` (branch `feat/bookings`, PR 1); the frontend
+still uses the mock. When the frontend is connected:
+
+- `frontend/src/features/bookings/api/bookings-api.ts`: a real `fetch` for every route; `list` reads
+  `items` from the paginated answer.
+- Until then the mock follows the contract: a `PATCH` to the status the booking already has answers
+  `422 invalid_status_change` (not idempotent), and `create` answers `422 booking_in_past` for a start
+  that is not strictly after now.
+- The status buttons (`components/reservation-actions.tsx`, `components/booking-card.tsx`) are disabled
+  while their mutation is pending, so a double click does not send the same change twice.
+- Local time is Europe/Podgorica, not the browser's zone: `statusNow` in `frontend/src/lib/booking.ts`,
+  `localToday` in `bookings-api.ts` (`Intl.DateTimeFormat` without `timeZone` today) and
+  `hooks/use-booking-slot.ts`.
+- `422 invalid_slot` and `422 booking_in_past` map to `InvalidBookingError`, with `fieldErrors` on
+  the field at fault.
+
+## From bookings PR 1 (left out of `feat/bookings` on purpose)
+
+- **`PATCH /api/spaces` against confirmed bookings.** A lower `deskCount`, a change of category or
+  new opening hours can leave confirmed bookings that no longer fit. The check takes
+  `ISpaceRepository.lock(space_id)` as its first statement, the lock `DELETE /api/spaces` takes in
+  bookings PR 2 (ADR-023). Until then PR 2 computes `availableDesks` as `max(…, 0)`, so a lowered
+  `deskCount` never shows a negative number.
+- **Confirm after the space became a draft.** The contract does not say what happens; today the host
+  can still confirm (`200`, pinned by `test_confirm_after_the_space_became_a_draft_is_200_today` in
+  `backend/tests/integration/test_bookings.py`). Decide, then change the contract and that test together.
+- **`delete()` on the default `synchronize_session`.** `backend/app/users/repositories/user.py`,
+  `app/spaces/repositories/space.py`, `app/listings/repositories/listing.py` and
+  `app/favorites/repositories/favorite.py` leave it on `"auto"`. No wrong answer was found: their
+  `WHERE` is on the id only, not a compare-and-set. The fix would be `"fetch"`, for consistency with
+  the bookings repository and `.claude/frequent-mistakes.md` (ADR-023).
+- **The `format` hook ignores `extend-exclude` and deletes new imports.** `backend/.claude/hooks/format.mjs`
+  passes the edited file to `ruff check --fix` and `black` by name, and both apply `extend-exclude`
+  (`alembic/versions` in `pyproject.toml`) only to files they find themselves, unless `--force-exclude`
+  is given. `--fix` also removes an import (F401) added in an edit before its first use, so the entry
+  about it in `.claude/frequent-mistakes.md` keeps coming back: the cause is the hook, not the agent.
+  Fix: `--force-exclude` for both commands and `--extend-unfixable F401` for ruff, then remove that
+  frequent-mistakes entry.
+- **`backend/app/database/__init__.py`** goes against `backend/CLAUDE.md` and ADR-014 (no
+  `__init__.py` below `app/` except `app/__init__.py`). It only re-exports `Base`, for
+  `alembic/env.py`; import `Base` from `app.database.base` there and delete the file.
+- **Postgres run of the concurrency tests.** `backend/tests/integration/test_bookings_concurrency.py`
+  passed on SQLite only; the Postgres command is in its docstring (not run on 2026-10-30, Docker was
+  not running). Update the docstring with the result.
+
 ## From the favorites review (left out of `feat/favorites` on purpose)
 
 - **Index for "newest saved first".** `GET /api/favorites` and `GET /api/spaces?favoriteOf=` find a
