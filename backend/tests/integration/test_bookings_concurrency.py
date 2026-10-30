@@ -7,7 +7,14 @@ real lock and `b_returned` right after it. While A holds the lock, B must not re
 `BLOCKED_FOR`: it is waiting in the database (SQLite's busy handler on the write lock, a row lock
 on Postgres). The control test replaces the lock with a plain read and must overbook.
 
-The same file runs on SQLite (default) and on Postgres through `DATABASE_URL`.
+The same file runs on SQLite (default) and on Postgres through `DATABASE_URL`:
+
+    docker compose up -d db
+    docker compose exec db createdb -U app app_test     # the `app` database stays untouched
+    DATABASE_URL=postgresql+psycopg://app:app@localhost:5432/app_test \
+        poetry run pytest tests/integration
+
+SQLite: 3 passed, 15 runs in a row. Postgres: not verified yet (2026-10-30, Docker was not running).
 """
 
 from __future__ import annotations
