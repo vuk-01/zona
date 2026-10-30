@@ -43,10 +43,9 @@ def test_create_space_documents_its_errors_with_real_codes(client: TestClient) -
     def codes(status_code: str) -> set[str]:
         return set(responses[status_code]["content"]["application/json"]["examples"])
 
-    assert set(responses) == {"201", "401", "403", "409", "422"}
+    assert set(responses) == {"201", "401", "403", "422"}
     assert codes("401") == {"not_authenticated", "invalid_token"}
     assert codes("403") == {"not_a_host"}
-    assert codes("409") == {"space_conflict"}
     assert responses["422"]["content"]["application/json"]["examples"]["validation_error"][
         "value"
     ] == {

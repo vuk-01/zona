@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from app.database.session_factory import ISessionFactory
@@ -23,7 +23,7 @@ class ISpaceRepository(Protocol):
 
     def save(self, space: Space) -> Space: ...
 
-    def delete(self, space: Space) -> None: ...
+    def delete(self, space_id: int) -> bool: ...
 
 
 @inject(alias=ISpaceRepository)
@@ -51,21 +51,29 @@ class SpaceRepository(ISpaceRepository):
 
     def add(self, space: Space) -> Space:
         db = self._session_factory()
-        db.add(space)
-        db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
+        # A SAVEPOINT: when the database refuses the row, only the savepoint rolls back and the
+        # session stays usable, so the service can still look up the host.
+        with db.begin_nested():
+            db.add(space)
+            db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
         return space
 
     def save(self, space: Space) -> Space:
         db = self._session_factory()
-        # Flush now, so a constraint violation raises here, where the service can name it,
-        # and not later inside the session handler's commit as a bare 500 (ADR-007).
+        # Flush now, so a constraint violation or a vanished row (StaleDataError) raises here,
+        # where the service can name it, and not later inside the session handler's commit as a 500.
         db.flush()
         return space
 
-    def delete(self, space: Space) -> None:
+    def delete(self, space_id: int) -> bool:
+        """False when the row was already gone (deleted by a parallel request)."""
         db = self._session_factory()
-        db.delete(space)
-        db.flush()
+        # A DELETE statement, not db.delete(space): without a version column the ORM only warns
+        # when the row is already gone, so the returned id is the only way to tell.
+        deleted_id = db.execute(
+            delete(Space).where(Space.id == space_id).returning(Space.id)
+        ).scalar_one_or_none()
+        return deleted_id is not None
 
 
 def _visible_to(query: Select[Space], viewer_id: int | None) -> Select[Space]:

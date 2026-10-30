@@ -9,9 +9,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from app.database.session_factory import ISessionFactory
+from app.spaces.models.space import Space
+from app.spaces.repositories.space import SpaceRepository
 from app.users.models.user import User
 from app.utils.clock import IClock
 from app.utils.di import add_to_di_container, get_from_di_container, remove_from_di_container
+from tests.integration.conftest import user_id
 from tests.utils import FixedClock, space_body
 
 # Wednesday 2026-10-28; Podgorica is on CET (UTC+1) after the clocks went back on 25 October.
@@ -480,3 +483,69 @@ def test_deleting_the_host_deletes_their_spaces(client: TestClient, space_id: in
         session.commit()
 
     assert client.get(f"/api/spaces/{space_id}").status_code == 404
+
+
+# --- space deleted while the request runs -------------------------------------------------------
+
+
+def vanish_after_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The next read of a space deletes its row over a second connection, as a parallel request would."""
+    read = SpaceRepository.get_by_id
+
+    def read_then_vanish(self: SpaceRepository, space_id: int) -> Space | None:
+        space = read(self, space_id)
+        with get_from_di_container(ISessionFactory).engine.begin() as connection:
+            connection.execute(delete(Space).where(Space.id == space_id))
+        return space
+
+    monkeypatch.setattr(SpaceRepository, "get_by_id", read_then_vanish)
+
+
+@pytest.mark.parametrize(
+    ("method", "body"),
+    [("PATCH", {"name": "Hub Morača"}), ("DELETE", None)],
+    ids=["patch", "delete"],
+)
+def test_a_space_deleted_meanwhile_is_404(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    space_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    body: dict[str, str] | None,
+) -> None:
+    vanish_after_read(monkeypatch)
+
+    response = client.request(
+        method, f"/api/spaces/{space_id}", json=body, headers=host_auth_headers
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Space not found", "code": "space_not_found"}
+    # The failed transaction was rolled back, so the next request on the same thread works.
+    assert client.get("/api/spaces").status_code == 200
+
+
+def test_create_by_a_host_deleted_meanwhile_is_401(
+    client: TestClient, host_auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host_id = user_id(client, host_auth_headers)
+    add = SpaceRepository.add
+
+    # The host's account is deleted over a second connection after the token was checked,
+    # right before the INSERT, as a parallel DELETE /api/users/{id} would.
+    def delete_host_then_add(self: SpaceRepository, space: Space) -> Space:
+        with get_from_di_container(ISessionFactory).engine.begin() as connection:
+            connection.execute(delete(User).where(User.id == host_id))
+        return add(self, space)
+
+    monkeypatch.setattr(SpaceRepository, "add", delete_host_then_add)
+
+    response = client.post("/api/spaces", json=space_body(), headers=host_auth_headers)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid or expired token", "code": "invalid_token"}
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+    # Nothing was created, and the next request on the same thread works.
+    listed = client.get("/api/spaces")
+    assert (listed.status_code, listed.json()["total"]) == (200, 0)

@@ -14,7 +14,6 @@ from app.spaces.exceptions.space import (
     InvalidSpaceException,
     NotAHostException,
     NotSpaceOwnerException,
-    SpaceConflictException,
     SpaceNotFoundException,
 )
 from app.spaces.models.space import SpaceCategory, SpaceStatus
@@ -411,21 +410,3 @@ def test_write_with_invalid_id_is_422(
     assert response.json()["code"] == "validation_error"
     space_service.update.assert_not_called()
     space_service.delete.assert_not_called()
-
-
-@pytest.mark.parametrize("method", ["post", "patch"])
-def test_write_the_database_refused_is_409(
-    client: TestClient, space_service: Mock, method: str
-) -> None:
-    space_service.create.side_effect = SpaceConflictException()
-    space_service.update.side_effect = SpaceConflictException()
-    url = "/api/spaces" if method == "post" else "/api/spaces/7"
-    body = space_body() if method == "post" else {"pricePerHour": 1}
-
-    response = getattr(client, method)(url, json=body, headers=AUTH)
-
-    assert response.status_code == 409
-    assert response.json() == {
-        "detail": "The space could not be saved, please try again",
-        "code": "space_conflict",
-    }
