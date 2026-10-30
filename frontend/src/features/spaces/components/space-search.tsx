@@ -3,17 +3,37 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+
+import { SearchSuggestions, type SearchValue } from './search-suggestions'
 
 // Outline buttons lift on hover (Button); this one also turns blue, and stays tinted while the filters
 // are open
 const filterButtonClass =
   'relative size-12 shrink-0 rounded-full bg-card shadow-none hover:border-primary hover:bg-card hover:text-primary focus-visible:ring-ring aria-expanded:border-primary aria-expanded:bg-secondary aria-expanded:text-secondary-foreground'
 
+const EMPTY: SearchValue = { text: '', city: null }
+
+// One search at a time: a city picked from the list (?city=), or free text that matches a space's name
+// or city (?q=)
+export type SpaceSearchQuery = { city?: string; q?: string }
+
+const toQuery = ({ text, city }: SearchValue): SpaceSearchQuery =>
+  city ? { city } : text.trim() ? { q: text.trim() } : {}
+
+// /spaces?city=Podgorica, /spaces?q=hub, or all of Explore
+function exploreHref({ city, q }: SpaceSearchQuery) {
+  const params = new URLSearchParams()
+  if (city) params.set('city', city)
+  if (q) params.set('q', q)
+  const query = params.toString()
+  return query ? `/spaces?${query}` : '/spaces'
+}
+
 type SpaceSearchProps = {
-  defaultValue?: string
+  // Explore: the search in the URL, so the field shows it
+  defaultValue?: SearchValue
   // Explore: search in place (keeping the other filters). Without it, searching opens Explore.
-  onSearch?: (value: string) => void
+  onSearch?: (query: SpaceSearchQuery) => void
   // Explore: the filter button opens and closes the filters panel with this id.
   filtersId?: string
   filtersOpen?: boolean
@@ -22,10 +42,10 @@ type SpaceSearchProps = {
   hasActiveFilters?: boolean
 }
 
-// Search pill (matches name or city) + round filter button. The pill outlines blue on hover and turns
-// white with a blue icon while typing.
+// Search pill with city suggestions, the round filter button and Search. Picking a city searches it at
+// once (?city=); Search (or Enter with no city marked) searches the typed text (?q=).
 export function SpaceSearch({
-  defaultValue = '',
+  defaultValue = EMPTY,
   onSearch,
   filtersId,
   filtersOpen = false,
@@ -34,45 +54,34 @@ export function SpaceSearch({
 }: SpaceSearchProps) {
   const navigate = useNavigate()
   const [value, setValue] = useState(defaultValue)
-  // Follow the URL when it changes from outside (e.g. "Clear filters"), without remounting the input.
+  // Follow the URL when it changes from outside (a removed filter, "Clear filters"), without remounting
+  // the field.
   const [syncedValue, setSyncedValue] = useState(defaultValue)
-  if (defaultValue !== syncedValue) {
+  if (defaultValue.text !== syncedValue.text || defaultValue.city !== syncedValue.city) {
     setSyncedValue(defaultValue)
     setValue(defaultValue)
   }
 
-  const search = (term: string) => {
-    if (onSearch) onSearch(term.trim())
-    else navigate(term.trim() ? `/spaces?${new URLSearchParams({ search: term.trim() })}` : '/spaces')
+  const run = (query: SpaceSearchQuery) => {
+    if (onSearch) onSearch(query)
+    else navigate(exploreHref(query))
   }
 
   return (
     <form
       role="search"
-      className="flex w-full max-w-2xl items-center gap-3"
+      className="flex w-full max-w-2xl items-center gap-2 md:gap-3"
       onSubmit={(event) => {
         event.preventDefault()
-        search(value)
+        run(toQuery(value))
       }}
     >
-      <div className="group relative flex-1">
-        <Search
-          className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary"
-          aria-hidden="true"
-        />
-        <Input
-          type="search"
-          aria-label="Search by name or city"
-          placeholder="Search by name or city"
-          value={value}
-          onChange={(event) => {
-            setValue(event.target.value)
-            // The field's clear (×) button empties it without submitting
-            if (onSearch && event.target.value === '') onSearch('')
-          }}
-          className="h-12 rounded-full bg-muted pr-4 pl-12 transition-[color,background-color,border-color,box-shadow] duration-200 hover:border-primary focus-visible:bg-card focus-visible:ring-ring"
-        />
-      </div>
+      <SearchSuggestions
+        value={value}
+        onValueChange={setValue}
+        onPick={(city) => run({ city })}
+        className="min-w-0 flex-1"
+      />
       {onToggleFilters ? (
         <Button
           type="button"
@@ -96,6 +105,14 @@ export function SpaceSearch({
           </Link>
         </Button>
       )}
+      {/* Round on phones, where the field needs the room; "Search" in words from md */}
+      <Button
+        type="submit"
+        className="size-12 shrink-0 rounded-full focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card md:w-auto md:has-[>svg]:px-6"
+      >
+        <Search className="size-5" aria-hidden="true" />
+        <span className="sr-only md:not-sr-only">Search</span>
+      </Button>
     </form>
   )
 }
