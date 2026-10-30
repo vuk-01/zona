@@ -263,9 +263,9 @@ Catch `IntegrityError` only for a rule the input cannot check, and answer by the
 
 ```python
 except IntegrityError as e:
-    if self._user_repository.get_by_id(current_user.id) is None:   # the signed-in user first
+    if not self._user_repository.exists(current_user.id):   # the signed-in user first
         raise InvalidTokenException from e
-    if self._space_repository.get_by_id(data.space_id) is None:     # then the row from the request
+    if not self._space_repository.exists(data.space_id):     # then the row from the request
         raise SpaceNotFoundException from e
     raise  # both exist: a rule Pydantic lets through, a bug
 ```
@@ -275,6 +275,22 @@ service reaches the other domain through its Protocol (`IUserRepository`, `ISpac
 and `NOT NULL` gets a Pydantic twin instead; never a catch-all `409` "please try again". A row deleted while
 its `PATCH` or `DELETE` runs is a `404`: `StaleDataError` from `save()`, or `False` from `delete()`; an idempotent
 `DELETE` answers `204` either way (ADR-021).
+
+The lookups use `exists()`, a `select()` of the id, not `get_by_id()`: `db.get` may answer from the session's
+identity map, and the question is about a row another request changed.
+
+An idempotent `POST` answers `201` or `200`, and the status code stays out of the service: the service returns a
+small result with the schema and whether it created the row (`FavoriteSaved(favorite, created)` in
+`app/favorites/schemas/favorite.py`), and the endpoint picks the status. This is the one `if` an endpoint may have
+(`app/favorites/api/favorite.py`, the route declared with `status_code=status.HTTP_201_CREATED`):
+
+```python
+saved = favorite_service.create(data=data, current_user=current_user)
+if not saved.created:
+    # The status code is HTTP's business, so it is set here, not in the service (ADR-021).
+    response.status_code = status.HTTP_200_OK
+return saved.favorite
+```
 
 ## 8. Tests: unit (service mocked) and integration (real database)
 
