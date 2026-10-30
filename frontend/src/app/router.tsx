@@ -4,6 +4,7 @@ import { AppShell } from '@/app/app-shell'
 import { AuthShell } from '@/app/auth-shell'
 import { LoginDialogProvider } from '@/app/login-dialog'
 import { Bookings } from '@/app/routes/bookings'
+import { DevSearch } from '@/app/routes/dev-search'
 import { Favorites } from '@/app/routes/favorites'
 import { Home } from '@/app/routes/home'
 import { HostReservations } from '@/app/routes/host-reservations'
@@ -96,6 +97,8 @@ export const router = createBrowserRouter([
           </RequireAuth>
         ),
       },
+      // Temporary: the city search on its own, until it is on Home and Explore
+      { path: '/dev/search', element: <DevSearch /> },
       { path: '*', element: <NotFound /> },
     ],
   },
