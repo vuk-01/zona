@@ -5,7 +5,7 @@ paths:
 
 # Data
 
-- Entity types live in `src/features/<name>/types.ts`, and every type change also goes into `docs/entities.md` at the repo root
+- Entity types live in `src/features/<name>/types.ts`, and every type change also goes into both copies of the contract, `docs/entities.md` at the repo root and `backend/docs/entities.md`, kept identical
 - `src/features/<name>/api/<name>-api.ts` exposes `list`, `get`, `create`, `update`, `remove`, matching the future REST API
 - The mock uses `delay` and `NotFoundError` from `@/lib/mock-db`; a feature's mock data stays in its own `api/` folder
 - Mock data looks real (real titles, cities, prices), no "Lorem ipsum"
