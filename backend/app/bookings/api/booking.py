@@ -44,8 +44,12 @@ _INVALID_FILTER = ValidationFailedException({"size": "Input should be greater th
 _INVALID_ID = ValidationFailedException(
     {"booking_id": "Input should be a valid integer, unable to parse string as an integer"}
 )
-_INVALID_STATUS = ValidationFailedException(
-    {"status": "Input should be 'confirmed', 'declined' or 'cancelled'"}
+# PATCH can fail on the path and the body in one answer; one example, because /docs keys them by code.
+_INVALID_ID_OR_STATUS = ValidationFailedException(
+    {
+        "booking_id": "Input should be a valid integer, unable to parse string as an integer",
+        "status": "Input should be 'confirmed', 'declined' or 'cancelled'",
+    }
 )
 _INVALID_BODY = ValidationFailedException(
     {"startTime": "String should match pattern '^([01][0-9]|2[0-3]):[0-5][0-9]$'"}
@@ -154,7 +158,7 @@ def create_booking(
         BookingNotFoundException(),
         SlotFullException(),
         InvalidStatusChangeException(),
-        _INVALID_STATUS,
+        _INVALID_ID_OR_STATUS,
     ),
 )
 def update_booking(
