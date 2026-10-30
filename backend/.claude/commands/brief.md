@@ -41,5 +41,6 @@ Keep it under 80 lines. Show it to me and ask for confirmation; change it until 
 
 ## 4. Hand over
 When confirmed, say which command comes next: `/new-entity <name>: <description>` to build it,
-`/review-changes` before the commit, and remind me that the frontend repo needs the same `docs/entities.md` change (ADR-001).
+`/review-changes` before the commit, and remind me that the contract change goes into both copies of `docs/entities.md`
+and that the frontend under `frontend/src/` changes in the same pull request or goes into `docs/follow-ups.md` (ADR-018).
 Do not start building inside this command.

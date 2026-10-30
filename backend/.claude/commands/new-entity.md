@@ -23,6 +23,6 @@ If `docs/specs/<name>.md` exists (written by `/brief`), it is the agreed spec: f
 6. Write the tests (the `/test-endpoint` skill has the template):
    - `tests/unit/test_<name>_api.py`: a `<entity>_service` mock fixture in `tests/unit/conftest.py`, then per route: status code, validation `422` with `fieldErrors`, `401` without a token, what was passed to the service
    - `tests/integration/test_<name>.py`: happy path per route through the API, `403` with `other_auth_headers`, `404`, a `<entity>_id` fixture in `tests/integration/conftest.py` (built through `POST`) and the new table in `clean_tables`
-7. Update docs/entities.md: field table, relations, access rules and the route table with status codes and error codes
-8. Tell the user which frontend file (`src/features/<name>/api/<name>-api.ts` in the frontend repo) now needs real `fetch` calls, and that `list()` must read the `items` field of the paginated response; the frontend repo also gets the same docs/entities.md change (ADR-001)
-9. Run `poetry run lint --fix && poetry run typecheck && poetry run test && poetry run alembic check` in the repo root and fix what fails; `alembic check` must say that no new upgrade operations were detected
+7. Update both copies of docs/entities.md (`docs/entities.md` at the repo root and `backend/docs/entities.md`, kept identical): field table, relations, access rules and the route table with status codes and error codes (ADR-018)
+8. Tell the user which frontend file (`frontend/src/features/<name>/api/<name>-api.ts`) now needs real `fetch` calls, and that `list()` must read the `items` field of the paginated response; that change goes in the same pull request or into `docs/follow-ups.md` (ADR-018)
+9. Run `poetry run lint --fix && poetry run typecheck && poetry run test && poetry run alembic check` in `backend/` and fix what fails; `alembic check` must say that no new upgrade operations were detected
