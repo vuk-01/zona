@@ -47,6 +47,10 @@ class IBookingRepository(Protocol):
 
     def delete_pending(self, booking: Booking) -> bool: ...
 
+    def confirmed_per_date_and_hour(
+        self, space_id: int, first_day: date, last_day: date
+    ) -> dict[tuple[date, int], int]: ...
+
 
 @inject(alias=IBookingRepository)
 class BookingRepository(IBookingRepository):
@@ -219,6 +223,26 @@ class BookingRepository(IBookingRepository):
             .execution_options(synchronize_session="fetch")
         ).scalar_one_or_none()
         return deleted_id is not None
+
+    def confirmed_per_date_and_hour(
+        self, space_id: int, first_day: date, last_day: date
+    ) -> dict[tuple[date, int], int]:
+        """Confirmed bookings of one space per local date and hour, `first_day` to `last_day` inclusive.
+
+        `{(date(2026, 10, 5), 10): 2}` = two at 10:00-11:00 that day; the same count as
+        `confirmed_per_hour`, over a range of dates.
+        """
+        db = self._session_factory()
+        query = select(Booking.date, Booking.start_hour, Booking.end_hour).where(
+            Booking.space_id == space_id,
+            Booking.date >= first_day,
+            Booking.date <= last_day,
+            Booking.status == BookingStatus.CONFIRMED,
+        )
+        taken: Counter[tuple[date, int]] = Counter()
+        for day, start_hour, end_hour in db.execute(query):
+            taken.update((day, hour) for hour in range(start_hour, end_hour))
+        return dict(taken)
 
 
 def _same_booking(booking: Booking) -> tuple[ColumnElement[bool], ...]:

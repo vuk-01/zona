@@ -74,10 +74,10 @@ still uses the mock. When the frontend is connected:
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
 - **Bookings PR 2: remove the temporary sentence in `entities.md`.** The Booking "Built so far" note
-  (line 164 in both copies) says that `/api/bookings/availability` and `/popular-times` match
-  `GET /api/bookings/:id` and fail as an invalid id. When PR 2 registers both routes before
-  `/{booking_id}` in `backend/app/bookings/api/booking.py`, delete that sentence from both copies in
-  the same PR.
+  in both copies says that `/api/bookings/availability` matches `GET /api/bookings/:id` and fails as an
+  invalid id (bookings PR 3 built `/popular-times` and took it out of that sentence). When PR 2
+  registers `/availability` before `/{booking_id}` in `backend/app/bookings/api/booking.py`, delete the
+  sentence from both copies in the same PR.
 - **`PATCH /api/spaces` against confirmed bookings.** A lower `deskCount`, a change of category or
   new opening hours can leave confirmed bookings that no longer fit. The check takes
   `ISpaceRepository.lock(space_id)` as its first statement, the lock `DELETE /api/spaces` takes since
@@ -160,11 +160,9 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
 - **`entities.md` does not say the order for a date of today:** the slot rules come before
   `booking_in_past` (`now` 10:00, a slot 07:00–09:00 at a space opening at 08:00 answers
   `invalid_slot`). Add the sentence to both copies (ADR-002).
-- **No test for the "Built so far" behaviour of `/availability` and `/popular-times`** (`401` without
-  or with a bad token, `422 validation_error` with a valid one). Add a parametrized test for both
-  paths; it goes away with the sentence in bookings PR 2 (ADR-011).
-- **Stale line number.** The first item of "From bookings PR 1" above says "line 164 in both copies";
-  quote the "Built so far" sentence instead of a line number.
+- **No test for the "Built so far" behaviour of `/availability`** (`401` without or with a bad token,
+  `422 validation_error` with a valid one; `/popular-times` is built since bookings PR 3). Add a test
+  for that path; it goes away with the sentence in bookings PR 2 (ADR-011).
 - **`not_booking_participant` says "see" on `PATCH` and `DELETE`.** "Only the guest or the host can see
   this booking" is written for `GET`. Optional wording change in the code and both copies of
   `entities.md` (ADR-005).
@@ -209,6 +207,23 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
   When the frontend is connected: take the count from `bookingCounts.active` of the host's list
   (`delete-space-dialog.tsx` already falls back to it), or agree on a field in the contract; do not
   parse `detail` (ADR-018, ADR-005).
+
+## From bookings PR 3 (left out of `feat/bookings-popular-times` on purpose)
+
+- **Popular time picks "today" and "now" in the browser's time zone.** `PopularTimes` in
+  `frontend/src/features/bookings/components/popular-times.tsx` opens on `new Date().getDay()` and
+  highlights `new Date().getHours()`; the backend's days and hours are Podgorica time. A visitor in
+  another time zone sees the wrong day or hour selected. Take both from the Podgorica clock, as the
+  booking form should too.
+- **Product decision: popular times can be differenced on a small N.** The window grows by one known
+  date a day from day 14 up to 56 days, and for a whole space (`units = 1`) a value moves in steps
+  of 12.5 % or more. Anyone who asks every day can subtract yesterday's answer from today's and get
+  the confirmed hours of the newest date, for any listed space, without a token. No guest, booking
+  id or price leaks, and the contract allows it ("only counts"), but the per-date occupancy of a
+  meeting room, office or event hall can be rebuilt. Options: a larger minimum (`null` until every
+  weekday has at least 4 dates, `POPULAR_MIN_AGE` 28 days), or rounding the values (to 10 %), or
+  both. Whatever is decided goes into both copies of `entities.md` and the spec; an ADR if it is a
+  privacy rule for every aggregate (ADR-006).
 
 ## From the favorites review (left out of `feat/favorites` on purpose)
 
