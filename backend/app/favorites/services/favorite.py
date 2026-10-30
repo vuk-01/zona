@@ -69,7 +69,7 @@ class FavoriteService(IFavoriteService):
             favorite = self._favorite_repository.add(favorite)
         except IntegrityError as e:
             # No SELECT for the pair before the INSERT (ADR-007): the refusal says which rule held.
-            if self._user_repository.get_by_id(current_user.id) is None:
+            if not self._user_repository.exists(current_user.id):
                 raise InvalidTokenException from e  # the account was deleted meanwhile (ADR-019)
             if not self._space_repository.exists(data.space_id):
                 raise SpaceNotFoundException from e  # the space was deleted meanwhile (ADR-019)

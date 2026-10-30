@@ -54,7 +54,7 @@ def test_create_for_a_host_deleted_meanwhile_is_invalid_token(
     service: SpaceService, space_repository: Mock, user_repository: Mock
 ) -> None:
     space_repository.add.side_effect = IntegrityError("INSERT", {}, Exception("FOREIGN KEY"))
-    user_repository.get_by_id.return_value = None
+    user_repository.exists.return_value = False
 
     with pytest.raises(InvalidTokenException):
         service.create(
@@ -67,7 +67,7 @@ def test_create_refused_while_the_host_exists_is_not_hidden(
     service: SpaceService, space_repository: Mock, user_repository: Mock
 ) -> None:
     space_repository.add.side_effect = IntegrityError("INSERT", {}, Exception("CHECK"))
-    user_repository.get_by_id.return_value = Mock()
+    user_repository.exists.return_value = True
 
     with pytest.raises(IntegrityError):
         service.create(

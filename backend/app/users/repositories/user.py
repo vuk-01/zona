@@ -18,6 +18,8 @@ class IUserRepository(Protocol):
 
     def get_by_id(self, user_id: int) -> User | None: ...
 
+    def exists(self, user_id: int) -> bool: ...
+
     def save(self, user: User) -> User: ...
 
     def delete(self, user_id: int) -> bool: ...
@@ -41,6 +43,12 @@ class UserRepository(IUserRepository):
     def get_by_id(self, user_id: int) -> User | None:
         db = self._session_factory()
         return db.get(User, user_id)
+
+    def exists(self, user_id: int) -> bool:
+        db = self._session_factory()
+        # Always a query to the database. db.get() may answer from the session's identity map when
+        # the user is loaded and not expired, and this check is about rows other requests changed.
+        return db.scalar(select(User.id).where(User.id == user_id)) is not None
 
     def save(self, user: User) -> User:
         db = self._session_factory()

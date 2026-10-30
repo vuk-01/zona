@@ -49,7 +49,7 @@ def space_repository() -> Mock:
 @pytest.fixture
 def user_repository() -> Mock:
     repository: Mock = create_autospec(IUserRepository, instance=True)
-    repository.get_by_id.return_value = Mock()
+    repository.exists.return_value = True
     return repository
 
 
@@ -68,7 +68,7 @@ def service(
 def test_refused_for_a_user_deleted_meanwhile_is_invalid_token(
     service: FavoriteService, user_repository: Mock
 ) -> None:
-    user_repository.get_by_id.return_value = None
+    user_repository.exists.return_value = False
 
     with pytest.raises(InvalidTokenException):
         service.create(data=SAVE_SPACE_7, current_user=create_current_user(1))

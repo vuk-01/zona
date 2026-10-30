@@ -109,7 +109,7 @@ class SpaceService(ISpaceService):
         except IntegrityError as e:
             # Every CHECK has a Pydantic twin; what is left is the host_id foreign key, refused when
             # the host's account was deleted during the request. Their token is then invalid.
-            if self._user_repository.get_by_id(current_user.id) is None:
+            if not self._user_repository.exists(current_user.id):
                 raise InvalidTokenException from e
             raise  # the host exists: a rule Pydantic lets through, a bug, not a client error
         return self._to_response(space, self._local_now())
