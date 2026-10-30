@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 
 
 class AppBaseException(Exception):
@@ -51,6 +51,33 @@ class ConflictException(AppBaseException):
 
 class ServerException(AppBaseException):
     pass
+
+
+class ValidationFailedException(UnprocessableEntityException):
+    """422 for input FastAPI rejected before the endpoint ran; `fieldErrors` names each field."""
+
+    def __init__(self, field_errors: dict[str, str]) -> None:
+        super().__init__(
+            message="Validation failed", code="validation_error", field_errors=field_errors
+        )
+
+
+STATUS_BY_EXCEPTION: dict[type[AppBaseException], int] = {
+    NotFoundException: status.HTTP_404_NOT_FOUND,
+    InvalidRequestException: status.HTTP_400_BAD_REQUEST,
+    UnprocessableEntityException: status.HTTP_422_UNPROCESSABLE_ENTITY,
+    UnauthenticatedException: status.HTTP_401_UNAUTHORIZED,
+    ForbiddenException: status.HTTP_403_FORBIDDEN,
+    ConflictException: status.HTTP_409_CONFLICT,
+    ServerException: status.HTTP_500_INTERNAL_SERVER_ERROR,
+}
+
+
+def status_code_for(exc: AppBaseException) -> int:
+    return next(
+        (code for base, code in STATUS_BY_EXCEPTION.items() if isinstance(exc, base)),
+        status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
 
 
 class HTTPExceptionWithCode(HTTPException):

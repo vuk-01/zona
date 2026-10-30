@@ -6,7 +6,19 @@ from fastapi import Depends, Path, Query, status
 
 from app.auth.schemas.auth import CurrentUser
 from app.database.session_handler import DBAPIRouter
-from app.deps import get_current_user, get_di_entity, get_optional_user
+from app.deps import (
+    CURRENT_USER_ERRORS,
+    OPTIONAL_USER_ERRORS,
+    get_current_user,
+    get_di_entity,
+    get_optional_user,
+)
+from app.spaces.exceptions.space import (
+    NotAHostException,
+    NotSpaceOwnerException,
+    SpaceConflictException,
+    SpaceNotFoundException,
+)
 from app.spaces.models.space import SpaceCategory, SpaceStatus
 from app.spaces.schemas.space import (
     SpaceCreateRequestSchema,
@@ -15,6 +27,8 @@ from app.spaces.schemas.space import (
     SpaceUpdateRequestSchema,
 )
 from app.spaces.services.space import ISpaceService
+from app.utils.exceptions import ValidationFailedException
+from app.utils.openapi import error_responses
 from app.utils.pagination import Page, PaginationParams, get_pagination_params
 
 router = DBAPIRouter(prefix="/spaces")
@@ -23,6 +37,13 @@ router = DBAPIRouter(prefix="/spaces")
 _MAX_ID = 2**31 - 1
 
 SpaceId = Annotated[int, Path(ge=1, le=_MAX_ID)]
+
+# Examples for /docs, copied from real responses.
+_INVALID_FILTER = ValidationFailedException({"size": "Input should be greater than or equal to 1"})
+_INVALID_ID = ValidationFailedException(
+    {"space_id": "Input should be a valid integer, unable to parse string as an integer"}
+)
+_INVALID_BODY = ValidationFailedException({"name": "String should have at least 3 characters"})
 
 
 def get_space_filters(
@@ -56,6 +77,7 @@ def get_space_filters(
         "Newest first. Listed spaces for everyone, plus the signed-in user's own drafts. "
         "`hostId` = own id adds `bookingCounts` to every space."
     ),
+    responses=error_responses(*OPTIONAL_USER_ERRORS, _INVALID_FILTER),
 )
 def get_spaces(
     space_service: Annotated[ISpaceService, Depends(get_di_entity(ISpaceService))],
@@ -68,7 +90,12 @@ def get_spaces(
     )
 
 
-@router.get(path="/{space_id}", summary="Get space", description="404 for someone else's draft.")
+@router.get(
+    path="/{space_id}",
+    summary="Get space",
+    description="404 for someone else's draft.",
+    responses=error_responses(*OPTIONAL_USER_ERRORS, SpaceNotFoundException(), _INVALID_ID),
+)
 def get_space(
     space_id: SpaceId,
     space_service: Annotated[ISpaceService, Depends(get_di_entity(ISpaceService))],
@@ -77,7 +104,14 @@ def get_space(
     return space_service.get(space_id=space_id, current_user=current_user)
 
 
-@router.post(path="", status_code=status.HTTP_201_CREATED, summary="Create space (hosts only)")
+@router.post(
+    path="",
+    status_code=status.HTTP_201_CREATED,
+    summary="Create space (hosts only)",
+    responses=error_responses(
+        *CURRENT_USER_ERRORS, NotAHostException(), SpaceConflictException(), _INVALID_BODY
+    ),
+)
 def create_space(
     data: SpaceCreateRequestSchema,
     space_service: Annotated[ISpaceService, Depends(get_di_entity(ISpaceService))],
@@ -86,7 +120,18 @@ def create_space(
     return space_service.create(data=data, current_user=current_user)
 
 
-@router.patch(path="/{space_id}", summary="Update space (host only)")
+@router.patch(
+    path="/{space_id}",
+    summary="Update space (host only)",
+    description="The space after the change is validated as a whole.",
+    responses=error_responses(
+        *CURRENT_USER_ERRORS,
+        NotSpaceOwnerException(),
+        SpaceNotFoundException(),
+        SpaceConflictException(),
+        _INVALID_BODY,
+    ),
+)
 def update_space(
     space_id: SpaceId,
     data: SpaceUpdateRequestSchema,
@@ -101,6 +146,9 @@ def update_space(
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     summary="Delete space (host only)",
+    responses=error_responses(
+        *CURRENT_USER_ERRORS, NotSpaceOwnerException(), SpaceNotFoundException(), _INVALID_ID
+    ),
 )
 def delete_space(
     space_id: SpaceId,

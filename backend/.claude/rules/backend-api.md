@@ -20,3 +20,4 @@ paths:
 - List endpoints take `pagination_params: Annotated[PaginationParams, Depends(get_pagination_params)]` and return `Page[...ResponseSchema]` (`total`, `items`, `pages`) (ADR-016)
 - `app/<domain>/routes.py` collects the domain's api routers under one `APIRouter(tags=[...])`; it is registered in `app/routes.py` on `api_router`; the path in `docs/entities.md` is the full path including `/api`
 - Every endpoint has `summary=` (and `description=` when the summary is not enough); they are what `/docs` shows the frontend team
+- Every endpoint with input or auth has `responses=error_responses(...)` from `app.utils.openapi`, listing the exceptions it can return (`*CURRENT_USER_ERRORS` / `*OPTIONAL_USER_ERRORS` from `app.deps`, the domain exceptions, a `ValidationFailedException({...})` example for `422`); without it `/docs` shows FastAPI's default `{"detail": [{loc, msg, type}]}` and `tests/unit/test_openapi.py` fails (ADR-005)

@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, status
 
+from app.auth.exceptions.auth import EmailAlreadyRegisteredException, InvalidCredentialsException
 from app.auth.schemas.auth import (
     AuthenticationResponseSchema,
     CurrentUser,
@@ -12,8 +13,10 @@ from app.auth.schemas.auth import (
 )
 from app.auth.services.auth import IAuthService
 from app.database.session_handler import DBAPIRouter
-from app.deps import get_current_user, get_di_entity
+from app.deps import CURRENT_USER_ERRORS, get_current_user, get_di_entity
 from app.users.schemas.user import UserResponseSchema
+from app.utils.exceptions import ValidationFailedException
+from app.utils.openapi import error_responses
 
 router = DBAPIRouter()
 
@@ -23,6 +26,12 @@ router = DBAPIRouter()
     status_code=status.HTTP_201_CREATED,
     summary="Register",
     description="Creates a user and returns a token for it.",
+    responses=error_responses(
+        EmailAlreadyRegisteredException(),
+        ValidationFailedException(
+            {"email": "value is not a valid email address: An email address must have an @-sign."}
+        ),
+    ),
 )
 def register(
     data: RegisterRequestSchema,
@@ -31,7 +40,14 @@ def register(
     return auth_service.register(data)
 
 
-@router.post(path="/login", summary="Login", description="Returns a token for valid credentials.")
+@router.post(
+    path="/login",
+    summary="Login",
+    description="Returns a token for valid credentials.",
+    responses=error_responses(
+        InvalidCredentialsException(), ValidationFailedException({"password": "Field required"})
+    ),
+)
 def login(
     data: LoginRequestSchema,
     auth_service: Annotated[IAuthService, Depends(get_di_entity(IAuthService))],
@@ -39,7 +55,12 @@ def login(
     return auth_service.login(data)
 
 
-@router.get(path="/me", summary="Get logged in user", description="The user behind the token.")
+@router.get(
+    path="/me",
+    summary="Get logged in user",
+    description="The user behind the token.",
+    responses=error_responses(*CURRENT_USER_ERRORS),
+)
 def get_logged_in_user(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> UserResponseSchema:
