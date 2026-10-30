@@ -6,6 +6,7 @@ from unittest.mock import Mock, create_autospec
 import pytest
 
 from app.auth.services.auth import IAuthService
+from app.bookings.services.booking import IBookingService
 from app.database.session_factory import ISessionFactory
 from app.favorites.services.favorite import IFavoriteService
 from app.listings.services.listing import IListingService
@@ -65,3 +66,11 @@ def favorite_service() -> Generator[Mock]:
     add_to_di_container(IFavoriteService, mock_service)
     yield mock_service
     remove_from_di_container(IFavoriteService)
+
+
+@pytest.fixture
+def booking_service() -> Generator[Mock]:
+    mock_service = create_autospec(IBookingService, instance=True)
+    add_to_di_container(IBookingService, mock_service)
+    yield mock_service
+    remove_from_di_container(IBookingService)

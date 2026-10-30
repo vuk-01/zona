@@ -8,7 +8,7 @@ Add a backend domain: $ARGUMENTS
 The format is `<name>: <description>`, e.g. `messages: messages between a buyer and a seller`. The name is plural and snake_case.
 If `docs/specs/<name>.md` exists (written by `/brief`), it is the agreed spec: follow it and skip the questions it already answers.
 
-1. Read CLAUDE.md, docs/entities.md, `.claude/decisions.md` and `app/listings/` as the reference (`models/listing.py`, `schemas/listing.py`, `exceptions/listing.py`, `repositories/listing.py`, `services/listing.py`, `api/listing.py`, `routes.py`) plus `tests/unit/test_listings_api.py` and `tests/integration/test_listings.py`
+1. Read CLAUDE.md, docs/entities.md, `.claude/decisions.md` and `app/listings/` as the reference (`models/listing.py`, `schemas/listing.py`, `exceptions/listing.py`, `repositories/listing.py`, `services/listing.py`, `api/listing.py`, `routes.py`) plus `tests/unit/test_listings_api.py` and `tests/integration/test_listings.py`; if the domain has a rule across rows that no constraint can hold, or times a person picks in local time, also read ADR-022 and ADR-023
 2. Propose the table (columns with types, limits and constraints), relations to existing tables (foreign keys with `ondelete`), access rules (who may read, create, change, delete) and the routes, and wait for my confirmation
 3. Create `app/<name>/` with no `__init__.py` anywhere in it (ADR-014) and these files, one entity per file name (singular):
    - `models/<entity>.py`: the table (`Mapped[]`, `TIMESTAMP(timezone=True)`, `CheckConstraint`, `ForeignKey(ondelete=...)`), enums as `StrEnum`

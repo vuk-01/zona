@@ -37,6 +37,26 @@ def test_every_error_response_uses_the_error_shape(client: TestClient) -> None:
                 assert content["schema"] == ERROR_SCHEMA, f"{method} {path} {status_code}"
 
 
+def test_patch_booking_documents_an_invalid_id_and_an_invalid_status(client: TestClient) -> None:
+    """Both are `validation_error`, so they share one example; the second would replace the first."""
+    responses = _openapi(client)["paths"]["/api/bookings/{booking_id}"]["patch"]["responses"]
+    example = responses["422"]["content"]["application/json"]["examples"]["validation_error"]
+
+    assert set(example["value"]["fieldErrors"]) == {"booking_id", "status"}
+
+
+def test_patch_booking_with_an_invalid_id_and_status_answers_both_fields(
+    client: TestClient,
+) -> None:
+    """The /docs example above is a real answer: FastAPI reports the path and the body together."""
+    response = client.patch(
+        "/api/bookings/x", json={"status": "done"}, headers={"Authorization": "Bearer token"}
+    )
+
+    assert response.status_code == 422
+    assert set(response.json()["fieldErrors"]) == {"booking_id", "status"}
+
+
 def test_create_space_documents_its_errors_with_real_codes(client: TestClient) -> None:
     responses = _openapi(client)["paths"]["/api/spaces"]["post"]["responses"]
 

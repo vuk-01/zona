@@ -46,6 +46,134 @@ The backend has `GET/POST/DELETE /api/favorites` and `GET /api/spaces?favoriteOf
   backend; a `403 not_own_favorites` or `401` means the page asked with the wrong id or no token.
 - `frontend/src/lib/favorite.ts` and the rows in `frontend/src/lib/mock-db.ts` go with the mock.
 
+## Frontend: connect bookings to the backend
+
+The backend has `GET/POST/PATCH/DELETE /api/bookings` (branch `feat/bookings`, PR 1); the frontend
+still uses the mock. When the frontend is connected:
+
+- `frontend/src/features/bookings/api/bookings-api.ts`: a real `fetch` for every route; `list` reads
+  `items` from the paginated answer.
+- Until then the mock follows the contract: a `PATCH` to the status the booking already has answers
+  `422 invalid_status_change` (not idempotent), and `create` answers `422 booking_in_past` for a start
+  that is not strictly after now.
+- The status buttons (`components/reservation-actions.tsx`, `components/booking-card.tsx`) are disabled
+  while their mutation is pending, so a double click does not send the same change twice.
+- Local time is Europe/Podgorica, not the browser's zone: `statusNow` in `frontend/src/lib/booking.ts`,
+  `localToday` in `bookings-api.ts` (`Intl.DateTimeFormat` without `timeZone` today) and
+  `hooks/use-booking-slot.ts`.
+- `422 invalid_slot` and `422 booking_in_past` map to `InvalidBookingError`, with `fieldErrors` on
+  the field at fault.
+- **Booking window.** The backend takes a `date` from today to 365 days ahead (Podgorica) and answers
+  `422 booking_too_far_ahead` ("Pick a date within the next 365 days", `fieldErrors.date`) after that,
+  and `booking_in_past` for a date before today before any slot check. The mock's `create` in
+  `bookings-api.ts` checks only the past (with its own message, "Pick today or a later date"):
+  give it the same two checks, and map `booking_too_far_ahead` to `InvalidBookingError` on `date`.
+  The date picker allows 60 days (`BOOKABLE_DAYS` in `hooks/use-booking-slot.ts`), so the UI never
+  reaches the limit today; decide whether the picker stays at 60 or follows the backend's 365.
+
+## From bookings PR 1 (left out of `feat/bookings` on purpose)
+
+- **Bookings PR 2: remove the temporary sentence in `entities.md`.** The Booking "Built so far" note
+  (line 164 in both copies) says that `/api/bookings/availability` and `/popular-times` match
+  `GET /api/bookings/:id` and fail as an invalid id. When PR 2 registers both routes before
+  `/{booking_id}` in `backend/app/bookings/api/booking.py`, delete that sentence from both copies in
+  the same PR.
+- **`PATCH /api/spaces` against confirmed bookings.** A lower `deskCount`, a change of category or
+  new opening hours can leave confirmed bookings that no longer fit. The check takes
+  `ISpaceRepository.lock(space_id)` as its first statement, the lock `DELETE /api/spaces` takes in
+  bookings PR 2 (ADR-023). Until then PR 2 computes `availableDesks` as `max(…, 0)`, so a lowered
+  `deskCount` never shows a negative number.
+- **Confirm after the space became a draft.** The contract does not say what happens; today the host
+  can still confirm (`200`, pinned by `test_confirm_after_the_space_became_a_draft_is_200_today` in
+  `backend/tests/integration/test_bookings.py`). Decide, then change the contract and that test together.
+- **`delete()` on the default `synchronize_session`.** `backend/app/users/repositories/user.py`,
+  `app/spaces/repositories/space.py`, `app/listings/repositories/listing.py` and
+  `app/favorites/repositories/favorite.py` leave it on `"auto"`. No wrong answer was found: their
+  `WHERE` is on the id only, not a compare-and-set. The fix would be `"fetch"`, for consistency with
+  the bookings repository and `.claude/frequent-mistakes.md` (ADR-023).
+- **The `format` hook ignores `extend-exclude` and deletes new imports.** `backend/.claude/hooks/format.mjs`
+  passes the edited file to `ruff check --fix` and `black` by name, and both apply `extend-exclude`
+  (`alembic/versions` in `pyproject.toml`) only to files they find themselves, unless `--force-exclude`
+  is given. `--fix` also removes an import (F401) added in an edit before its first use, so the entry
+  about it in `.claude/frequent-mistakes.md` keeps coming back: the cause is the hook, not the agent.
+  Fix: `--force-exclude` for both commands and `--extend-unfixable F401` for ruff, then remove that
+  frequent-mistakes entry.
+- **`backend/app/database/__init__.py`** goes against `backend/CLAUDE.md` and ADR-014 (no
+  `__init__.py` below `app/` except `app/__init__.py`). It only re-exports `Base`, for
+  `alembic/env.py`; import `Base` from `app.database.base` there and delete the file.
+- **Postgres run of the concurrency tests (still open after the PR 1 review).**
+  `backend/tests/integration/test_bookings_concurrency.py` passed on SQLite only; the Postgres command
+  is in its docstring (not run on 2026-10-30, Docker was not running). The lock (ADR-023) and the
+  `403` before it (ADR-024) are proven on SQLite only, so bookings is not done until this runs. Run the
+  whole `test_bookings.py` on Postgres in the same go: the lost-race tests and
+  `test_cancel_or_delete_never_reaches_a_new_booking_with_the_same_id` insert and change rows over a
+  second connection, which behaves differently under Postgres' READ COMMITTED. Update the docstring
+  with the result.
+- **A host can confirm a booking whose slot has already started.** A `pending` booking turns
+  `expired` only once its slot has ended, so between the start and the end the host can still
+  confirm it (`200`), although the guest could no longer book that start (`booking_in_past`). The
+  contract does not say whether that is wanted. Product decision: either allow it and say so in
+  `entities.md`, or answer `422 invalid_status_change` for a confirm after the start, with a test, in
+  both copies of `entities.md` in the same PR.
+
+## Bookings PR 1, second review (left out of `feat/bookings` on purpose)
+
+The second review (2026-10-30) was APPROVED with 2 MEDIUM and 7 LOW. Only the SQLite id reuse was
+fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
+
+- **The mock does not follow the contract yet, although "Frontend: connect bookings to the backend"
+  above says it does.** `frontend/src/features/bookings/api/bookings-api.ts` returns the booking
+  unchanged for a `PATCH` to the status it already has (contract: `422 invalid_status_change`,
+  "Confirmed bookings cannot be confirmed again"), and `create` checks only the date, not a start
+  earlier today (contract: `422 booking_in_past`, "Pick a time that has not started yet"). The mock
+  also sets `createdAt` to a date only (`.slice(0, 10)`) and uses its own messages ("Pick a whole hour,
+  for example 10:00", "The end time must be after the start time", "`<Label>` bookings cannot be
+  changed"). Either fix the mock or reword that paragraph as an open to-do (ADR-018, ADR-002).
+- **`PATCH` and `DELETE` error-mapping tests assert only `code`.** `test_patch_maps_the_service_errors`
+  and `test_delete_maps_the_service_errors` in `backend/tests/unit/test_bookings_api.py` should assert
+  the full `{"detail", "code"}` body, as the `POST` test does; the integration tests for
+  `not_booking_participant` on `PATCH`/`DELETE` and the `DELETE` `404` in `test_bookings.py` too. This
+  breaks the `*_maps_the_service_errors` entry in `.claude/frequent-mistakes.md` that this PR added:
+  sharpen that entry so it names the full body (ADR-011, ADR-005).
+- **`"2026-11-04\n"` gets Pydantic's message, not "Use the format YYYY-MM-DD".** `_ISO_DATE.match` in
+  `backend/app/bookings/schemas/booking.py` uses `$`, which also matches before a trailing newline:
+  use `fullmatch` and add the case to the unit test. `entities.md` should also say that a well-formed
+  but impossible date (`2026-02-30`) is `422 validation_error` with Pydantic's message (ADR-002).
+- **A cancel that loses to a confirm after the slot ended says "confirmed meanwhile".**
+  `_raise_lost_race` in `backend/app/bookings/services/booking.py` builds the message from the stored
+  status; the contract asks for the status as returned (`finished`). Pass it through
+  `_returned_status(…, now)` (ADR-002).
+- **`entities.md` does not list every `invalid_status_change` message.** Name "Only a pending or
+  confirmed booking can be cancelled" and the "`<Status>` bookings cannot be `<status>` again" pattern
+  in both copies (ADR-002).
+- **`entities.md` does not say the order for a date of today:** the slot rules come before
+  `booking_in_past` (`now` 10:00, a slot 07:00–09:00 at a space opening at 08:00 answers
+  `invalid_slot`). Add the sentence to both copies (ADR-002).
+- **No test for the "Built so far" behaviour of `/availability` and `/popular-times`** (`401` without
+  or with a bad token, `422 validation_error` with a valid one). Add a parametrized test for both
+  paths; it goes away with the sentence in bookings PR 2 (ADR-011).
+- **Stale line number.** The first item of "From bookings PR 1" above says "line 164 in both copies";
+  quote the "Built so far" sentence instead of a line number.
+- **`not_booking_participant` says "see" on `PATCH` and `DELETE`.** "Only the guest or the host can see
+  this booking" is written for `GET`. Optional wording change in the code and both copies of
+  `entities.md` (ADR-005).
+- **`spaces` and `users` reuse the id of a deleted last row too.** Only `bookings` got
+  `sqlite_autoincrement` (migration `1a1aed7865e4`, ADR-024). `spaces` and `users` are also named by
+  id in requests (`PATCH`/`DELETE /api/spaces/:id`, `/api/users/:id`) and lose rows, so a request from
+  a stale page can reach a new space or account that got the deleted one's id. The ownership checks
+  keep it to the owner's own rows, but a host who deletes their last space and creates another can,
+  from an old tab, edit or delete the new one. Postgres is not affected. **Their rebuild is not safe
+  the way the `bookings` one was:** other tables point at them (`bookings.space_id` and
+  `favorites.space_id` → `spaces`; `spaces.host_id`, `bookings.guest_id`, `favorites.user_id` and
+  `listings.owner_id` → `users`, all `ON DELETE CASCADE`). The batch rebuild drops the old table; with
+  `PRAGMA foreign_keys=ON` that drop is an implicit `DELETE` of every row and cascades into those
+  tables (all bookings and favorites gone), and whether it is on depends on the connection
+  (`SessionFactory` turns it on, `alembic/env.py` does not today). A safe version needs SQLite's
+  documented table-rebuild procedure: `PRAGMA foreign_keys=OFF` outside the transaction, rebuild with
+  the ids kept, `PRAGMA foreign_key_check` before commit, then on again; tried on a copy of a
+  database with rows in every child table and counted before and after. Decide whether the
+  stale-tab case is worth that, or whether the frontend handles it (ADR-024, ADR-003, ADR-004).
+
 ## From the favorites review (left out of `feat/favorites` on purpose)
 
 - **Index for "newest saved first".** `GET /api/favorites` and `GET /api/spaces?favoriteOf=` find a

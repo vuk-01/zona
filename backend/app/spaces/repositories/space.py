@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from sqlalchemy import Select, delete, func, or_, select
+from sqlalchemy import Select, delete, func, or_, select, update
 from sqlalchemy.orm import joinedload
 
+from app.bookings.models.booking import Booking
 from app.database.session_factory import ISessionFactory
 from app.favorites.models.favorite import Favorite
 from app.spaces.models.space import Space, space_visible_to
@@ -27,6 +28,8 @@ class ISpaceRepository(Protocol):
     def save(self, space: Space) -> Space: ...
 
     def delete(self, space_id: int) -> bool: ...
+
+    def lock_for_booking(self, booking_id: int) -> int | None: ...
 
 
 @inject(alias=ISpaceRepository)
@@ -88,6 +91,26 @@ class SpaceRepository(ISpaceRepository):
             delete(Space).where(Space.id == space_id).returning(Space.id)
         ).scalar_one_or_none()
         return deleted_id is not None
+
+    def lock_for_booking(self, booking_id: int) -> int | None:
+        """Locks the space of a booking until the transaction ends; None when the booking is gone.
+
+        The first write of the transaction (ADR-023): the space is found through the booking
+        inside the same statement, so nothing the rule depends on is read before the lock; only
+        the booking's participants are, and they never change (ADR-024).
+        """
+        db = self._session_factory()
+        # Another domain's table in the same query (ADR-020). A no-op UPDATE is a write on both
+        # engines (ADR-003): a row lock on Postgres, the database's write lock on SQLite. The
+        # values do not change, so there is nothing to synchronize in the session.
+        space_id = select(Booking.space_id).where(Booking.id == booking_id).scalar_subquery()
+        return db.execute(
+            update(Space)
+            .where(Space.id == space_id)
+            .values(id=Space.id)
+            .returning(Space.id)
+            .execution_options(synchronize_session=False)
+        ).scalar_one_or_none()
 
 
 def _filtered(query: Select[Space], filters: SpaceListFilters) -> Select[Space]:

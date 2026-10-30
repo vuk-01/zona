@@ -5,8 +5,8 @@ description: Patterns for FastAPI endpoints, services, repositories, SQLAlchemy 
 
 # Backend patterns
 
-Every snippet below is copied from `app/listings/`, the reference domain. Copy the shape, rename the
-entity. All paths are relative to the repo root. A domain has no `__init__.py`; file names are the singular entity.
+Every snippet below is copied from `app/listings/`, the reference domain, except §10 and §11, which come from
+`app/bookings/` and `app/spaces/`. Copy the shape, rename the entity. All paths are relative to the repo root. A domain has no `__init__.py`; file names are the singular entity.
 
 ```
 app/listings/
@@ -323,7 +323,123 @@ Unit: the autouse `auth_service` fixture authenticates every request as user 1. 
 3. Read `alembic/versions/<new file>.py`: autogenerate misses renames and data moves and may drop what it does not know
 4. `poetry run migrate`, then `poetry run alembic check` must say "No new upgrade operations detected"
 
-## 10. File uploads: metadata before bytes
+## 10. A rule no constraint can hold: lock first, then read, count, compare-and-set (ADR-023)
+
+"At most `deskCount` confirmed bookings in any hour" spans rows, and no portable constraint counts rows per hour.
+Confirm serializes on the space row instead. The lock is the first write of the transaction; the space is
+found through the booking inside the same statement, so nothing the rule depends on is read before it:
+
+```python
+# app/spaces/repositories/space.py (a repository may query another domain's table, ADR-020)
+def lock_for_booking(self, booking_id: int) -> int | None:
+    """Locks the space of a booking until the transaction ends; None when the booking is gone.
+
+    The first write of the transaction (ADR-023): the space is found through the booking
+    inside the same statement, so nothing the rule depends on is read before the lock; only
+    the booking's participants are, and they never change (ADR-024).
+    """
+    db = self._session_factory()
+    # Another domain's table in the same query (ADR-020). A no-op UPDATE is a write on both
+    # engines (ADR-003): a row lock on Postgres, the database's write lock on SQLite. The
+    # values do not change, so there is nothing to synchronize in the session.
+    space_id = select(Booking.space_id).where(Booking.id == booking_id).scalar_subquery()
+    return db.execute(
+        update(Space)
+        .where(Space.id == space_id)
+        .values(id=Space.id)
+        .returning(Space.id)
+        .execution_options(synchronize_session=False)
+    ).scalar_one_or_none()
+```
+
+Only a write that takes room takes the lock: `BookingService.update` calls it when the change is `confirmed`,
+before it reads the booking; `None` means the booking is gone (`404 booking_not_found`). Right before the lock it
+checks who may confirm, so anyone but the host is `403` without holding the space (ADR-024):
+
+```python
+# app/bookings/services/booking.py
+participants = self._booking_repository.get_participants(booking_id)
+if participants is None:
+    raise BookingNotFoundException
+guest_id, host_id = participants
+if current_user.id not in (guest_id, host_id):
+    raise NotBookingParticipantException
+if current_user.id != host_id:
+    raise NotBookingHostException
+```
+
+`get_participants` selects `Booking.guest_id, Space.host_id` as columns, never the `Booking` entity: an entity read
+before the lock would sit in the identity map, and the read after the lock would return it with the status it had
+before. Only values that never change may be read before a lock.
+
+Then the service reads the booking, checks the role and the transition, and counts the confirmed bookings per
+hour without this one. Under the lock the count is the truth (on `POST` the same count is only advice, because a
+`pending` booking takes no room):
+
+```python
+# app/bookings/services/booking.py
+taken = self._booking_repository.confirmed_per_hour(
+    space_id=space_id, day=day, exclude_id=exclude_id
+)
+# A database CHECK keeps desk_count NULL for every category but desk.
+units = desk_count or 1
+for hour in range(start_hour, end_hour):
+    if taken.get(hour, 0) >= units:
+        raise SlotFullException.at(_hh_mm(hour), has_desks=desk_count is not None)
+```
+
+The write is a compare-and-set, which also guards cancel, decline and delete (no lock there):
+
+```python
+# app/bookings/repositories/booking.py
+def set_status(self, booking_id: int, expected: str, new: str) -> bool:
+    """Compare-and-set: False when the row is gone or no longer has the `expected` status."""
+    db = self._session_factory()
+    # One statement, so no other request can change the status between the check and the
+    # write; the service reads again to tell a deleted row from a changed one (ADR-023).
+    # "fetch": only the row RETURNING names gets the new status in the session. The default
+    # ("auto") evaluated the WHERE in Python here and set it on the loaded booking even when
+    # the database changed no row.
+    updated_id = db.execute(
+        update(Booking)
+        .where(Booking.id == booking_id, Booking.status == expected)
+        .values(status=new)
+        .returning(Booking.id)
+        .execution_options(synchronize_session="fetch")
+    ).scalar_one_or_none()
+    return updated_id is not None
+```
+
+`synchronize_session="fetch"` is part of the pattern. The default, `"auto"`, tries `"evaluate"` first: SQLAlchemy
+evaluates the `WHERE` in Python against the booking already loaded in the session and, when the loaded object still
+has `expected`, sets `new` on it, even when the database changed no row because a parallel request got there first.
+The service would then answer with a status that is not stored. `"fetch"` updates in the session only the rows
+`RETURNING` names. The same goes for a compare-and-set `delete()` (`delete_pending`): with `"evaluate"` the loaded
+object leaves the session although the row is still there.
+
+On `False` the service reads the status again with a `select()` (`get_status`), not `db.get`, because the first
+read is in the identity map: no row → `404 booking_not_found`, another status → `422 invalid_status_change`
+(`_raise_lost_race`). It never assumes the row is still there. On SQLite this works only in pysqlite's legacy
+transaction mode (ADR-023).
+
+## 11. Local time (ADR-022)
+
+Booking slots are wall-clock hours in Europe/Podgorica: `date` + `start_hour`/`end_hour`, not timestamps. "Now"
+always comes from `IClock` (`app/utils/clock.py`), next to `LOCAL_TIMEZONE`, `WEEKDAYS` (`mon`…`sun`, indexed by
+`date.weekday()`), `local_hour_to_utc(day, hour)` (`24` is the next day's 00:00) and `hour_exists(day, hour)`
+(`False` for 02:00 on 2027-03-28). `ends_at` is the only UTC column, computed in Python at create, so SQL can return
+`finished`/`expired` with `ends_at <= now`, where `now` is a bound parameter from `IClock`, never `func.now()`:
+
+```python
+# app/bookings/repositories/booking.py
+ended = Booking.ends_at <= now.astimezone(UTC)  # in UTC: SQLite compares the stored ends_at as text
+```
+
+In Python the same rule reads `ends_at` back naive on SQLite and aware on Postgres, so `_returned_status` in the
+service adds `tzinfo=UTC` to a naive value before it compares. Tests fix the time with `FixedClock`
+(`tests/utils.py`).
+
+## 12. File uploads: metadata before bytes
 
 The database never stores file contents. An upload endpoint saves the file outside the database (a folder
 such as `data/uploads/`, or object storage) and the row keeps only the path or URL (`image_url`),
