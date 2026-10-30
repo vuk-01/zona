@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, event, func, select, update
 
 from app.bookings.models.booking import Booking, BookingStatus
 from app.bookings.repositories.booking import BookingRepository
@@ -16,7 +16,7 @@ from app.spaces.models.space import Space
 from app.users.models.user import User
 from app.utils.clock import IClock
 from app.utils.di import add_to_di_container, get_from_di_container, remove_from_di_container
-from tests.integration.conftest import user_id
+from tests.integration.conftest import register, user_id
 from tests.utils import FixedClock, space_body
 
 # Wednesday 2026-10-28 10:00 in Podgorica (CET, UTC+1, since the clocks went back on 25 October).
@@ -433,3 +433,346 @@ def test_create_after_the_space_or_guest_was_deleted_meanwhile(
     assert bookings_in_db() == 0
     # The failed transaction was rolled back, so the next request on the same thread works.
     assert client.get("/api/spaces").status_code == 200
+
+
+# --- GET list -----------------------------------------------------------------------------------
+
+
+def list_bookings(client: TestClient, headers: dict[str, str], query: str = "") -> Response:
+    return client.get(f"/api/bookings{query}", headers=headers)
+
+
+def ids(response: Response) -> list[int]:
+    assert response.status_code == 200, response.text
+    return [booking["id"] for booking in response.json()["items"]]
+
+
+@pytest.fixture
+def jovana_headers(client: TestClient) -> dict[str, str]:
+    """A third user, neither the guest nor the host of the bookings above."""
+    return register(client, "jovana@example.com")
+
+
+def test_list_has_the_guests_and_the_hosts_bookings_earliest_first(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    jovana_headers: dict[str, str],
+    space_id: int,
+) -> None:
+    later = book(client, other_auth_headers, space_id, date="2026-11-05").json()["id"]
+    afternoon = book(client, other_auth_headers, space_id, startTime="14:00", endTime="15:00")
+    morning = book(client, other_auth_headers, space_id, startTime="09:00", endTime="10:00")
+    same_slot = book(client, other_auth_headers, space_id, startTime="09:00", endTime="10:00")
+    earliest_first = [
+        morning.json()["id"],
+        same_slot.json()["id"],
+        afternoon.json()["id"],
+        later,
+    ]
+
+    as_guest = list_bookings(client, other_auth_headers)
+    as_host = list_bookings(client, host_auth_headers)
+
+    assert ids(as_guest) == earliest_first
+    assert ids(as_host) == earliest_first
+    assert as_guest.json()["total"] == 4
+    assert ids(list_bookings(client, jovana_headers)) == []
+
+
+def test_list_item_has_the_same_shape_as_the_created_booking(
+    client: TestClient, other_auth_headers: dict[str, str], booking_id: int
+) -> None:
+    created = client.get(f"/api/bookings/{booking_id}", headers=other_auth_headers).json()
+
+    response = list_bookings(client, other_auth_headers)
+
+    assert response.json() == {"total": 1, "items": [created], "pages": 1}
+
+
+def test_list_with_guest_id_or_host_id_narrows_to_one_role(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    space_id: int,
+) -> None:
+    ana_id = user_id(client, host_auth_headers)
+    marko_id = user_id(client, other_auth_headers)
+    marko_books_ana = book(client, other_auth_headers, space_id).json()["id"]
+    marko_space = new_space(client, make_host(client, other_auth_headers))
+    ana_books_marko = book(client, host_auth_headers, marko_space).json()["id"]
+
+    assert ids(list_bookings(client, host_auth_headers)) == [marko_books_ana, ana_books_marko]
+    assert ids(list_bookings(client, host_auth_headers, f"?guestId={ana_id}")) == [ana_books_marko]
+    assert ids(list_bookings(client, host_auth_headers, f"?hostId={ana_id}")) == [marko_books_ana]
+    assert ids(list_bookings(client, other_auth_headers, f"?hostId={marko_id}")) == [
+        ana_books_marko
+    ]
+
+
+def test_list_with_another_users_guest_id_is_403(
+    client: TestClient, host_auth_headers: dict[str, str], other_auth_headers: dict[str, str]
+) -> None:
+    marko_id = user_id(client, other_auth_headers)
+
+    response = list_bookings(client, host_auth_headers, f"?guestId={marko_id}")
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "You can only list your own bookings",
+        "code": "not_own_bookings",
+    }
+
+
+def test_list_with_another_users_host_id_is_403(
+    client: TestClient, host_auth_headers: dict[str, str], other_auth_headers: dict[str, str]
+) -> None:
+    ana_id = user_id(client, host_auth_headers)
+
+    response = list_bookings(client, other_auth_headers, f"?hostId={ana_id}")
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "You can only list your own bookings",
+        "code": "not_own_bookings",
+    }
+
+
+def test_list_with_space_id_and_date_narrows(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    space_id: int,
+) -> None:
+    other_space = new_space(client, host_auth_headers)
+    here = book(client, other_auth_headers, space_id).json()["id"]
+    there = book(client, other_auth_headers, other_space).json()["id"]
+    next_day = book(client, other_auth_headers, space_id, date="2026-11-05").json()["id"]
+
+    assert ids(list_bookings(client, other_auth_headers, f"?spaceId={space_id}")) == [
+        here,
+        next_day,
+    ]
+    assert ids(list_bookings(client, other_auth_headers, f"?date={WEDNESDAY}")) == [here, there]
+    assert (
+        ids(list_bookings(client, other_auth_headers, f"?spaceId={other_space}&date=2026-11-05"))
+        == []
+    )
+
+
+def test_list_with_status_matches_the_status_as_returned(
+    client: TestClient,
+    other_auth_headers: dict[str, str],
+    space_id: int,
+    set_now: Callable[[datetime], None],
+) -> None:
+    pending = book(client, other_auth_headers, space_id, startTime="08:00", endTime="09:00")
+    confirmed = book(client, other_auth_headers, space_id, startTime="09:00", endTime="10:00")
+    future = book(client, other_auth_headers, space_id, startTime="12:00", endTime="13:00")
+    confirm_in_db(confirmed.json()["id"])
+    confirm_in_db(future.json()["id"])
+    set_now(datetime(2026, 11, 4, 10, 0, tzinfo=UTC))  # Wednesday 11:00 in Podgorica
+
+    def with_status(status: str) -> list[int]:
+        return ids(list_bookings(client, other_auth_headers, f"?status={status}"))
+
+    assert with_status("expired") == [pending.json()["id"]]
+    assert with_status("finished") == [confirmed.json()["id"]]
+    assert with_status("confirmed") == [future.json()["id"]]
+    assert with_status("pending") == []
+    statuses = [b["status"] for b in list_bookings(client, other_auth_headers).json()["items"]]
+    assert statuses == ["expired", "finished", "confirmed"]
+
+
+def test_list_pagination(
+    client: TestClient, other_auth_headers: dict[str, str], space_id: int
+) -> None:
+    for start in ("09:00", "10:00", "11:00"):
+        book(client, other_auth_headers, space_id, startTime=start, endTime="12:00")
+
+    response = list_bookings(client, other_auth_headers, "?page=2&size=2")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["total"], body["pages"], len(body["items"])) == (3, 2, 1)
+    assert body["items"][0]["startTime"] == "11:00"
+
+
+def test_list_without_token_is_401(client: TestClient) -> None:
+    response = list_bookings(client, {})
+
+    assert response.status_code == 401
+    assert response.json() == NOT_AUTHENTICATED
+    assert response.headers["WWW-Authenticate"] == "Bearer"
+
+
+@pytest.mark.parametrize(
+    ("query", "field"),
+    [
+        ("?spaceId=0", "spaceId"),
+        ("?guestId=abc", "guestId"),
+        ("?hostId=2147483648", "hostId"),
+        ("?status=done", "status"),
+        ("?date=2026-11-31", "date"),
+        ("?size=0", "size"),
+        ("?page=0", "page"),
+    ],
+)
+def test_list_with_an_invalid_filter_is_422(
+    client: TestClient, other_auth_headers: dict[str, str], query: str, field: str
+) -> None:
+    response = list_bookings(client, other_auth_headers, query)
+
+    assert response.status_code == 422
+    body = response.json()
+    assert (body["detail"], body["code"]) == ("Validation failed", "validation_error")
+    assert set(body["fieldErrors"]) == {field}
+
+
+def test_list_reads_space_and_guest_in_the_same_queries_for_any_number_of_rows(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    space_id: int,
+) -> None:
+    """No N+1: the host's list runs the same statements for one booking and for three."""
+    engine = get_from_di_container(ISessionFactory).engine
+    statements: list[str] = []
+
+    def count(*args: Any) -> None:
+        statements.append(args[2])
+
+    def statements_for_list(headers: dict[str, str]) -> int:
+        statements.clear()
+        event.listen(engine, "before_cursor_execute", count)
+        try:
+            response = list_bookings(client, headers)
+        finally:
+            event.remove(engine, "before_cursor_execute", count)
+        assert response.status_code == 200, response.text
+        return len(statements)
+
+    # Each row has its own guest and its own space: a lazy load could not be answered from the
+    # identity map, so a missing eager load adds a statement per row.
+    book(client, other_auth_headers, space_id)
+    with_one = statements_for_list(host_auth_headers)
+    for email in ("jovana@example.com", "petar@example.com"):
+        guest = register(client, email)
+        book(client, guest, new_space(client, host_auth_headers))
+
+    assert statements_for_list(host_auth_headers) == with_one
+
+
+# --- GET by id ----------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def booking_id(client: TestClient, other_auth_headers: dict[str, str], space_id: int) -> int:
+    """Marko's pending booking of Ana's desk space, Wednesday 10:00-12:00."""
+    response = book(client, other_auth_headers, space_id)
+    assert response.status_code == 201, response.text
+    return int(response.json()["id"])
+
+
+def make_host(client: TestClient, headers: dict[str, str]) -> dict[str, str]:
+    response = client.patch(
+        f"/api/users/{user_id(client, headers)}", json={"mode": "host"}, headers=headers
+    )
+    assert response.status_code == 200, response.text
+    return headers
+
+
+def test_get_by_the_guest_and_by_the_host_is_200(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+) -> None:
+    as_guest = client.get(f"/api/bookings/{booking_id}", headers=other_auth_headers)
+    as_host = client.get(f"/api/bookings/{booking_id}", headers=host_auth_headers)
+
+    assert as_guest.status_code == 200, as_guest.text
+    assert as_guest.json() == as_host.json()
+    body = as_guest.json()
+    assert (body["id"], body["status"], body["startTime"]) == (booking_id, "pending", "10:00")
+    assert body["guest"]["id"] == user_id(client, other_auth_headers)
+    assert body["space"]["hostId"] == user_id(client, host_auth_headers)
+
+
+def test_get_by_someone_else_is_403(
+    client: TestClient, jovana_headers: dict[str, str], booking_id: int
+) -> None:
+    response = client.get(f"/api/bookings/{booking_id}", headers=jovana_headers)
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Only the guest or the host can see this booking",
+        "code": "not_booking_participant",
+    }
+
+
+def test_get_an_unknown_booking_is_404(
+    client: TestClient, other_auth_headers: dict[str, str]
+) -> None:
+    response = client.get("/api/bookings/2000000", headers=other_auth_headers)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+
+
+def test_get_without_token_is_401(client: TestClient, booking_id: int) -> None:
+    response = client.get(f"/api/bookings/{booking_id}")
+
+    assert response.status_code == 401
+    assert response.json() == NOT_AUTHENTICATED
+
+
+@pytest.mark.parametrize("bad_id", ["abc", "0", "2147483648"])
+def test_get_with_an_invalid_id_is_422(
+    client: TestClient, other_auth_headers: dict[str, str], bad_id: str
+) -> None:
+    response = client.get(f"/api/bookings/{bad_id}", headers=other_auth_headers)
+
+    assert response.status_code == 422
+    body = response.json()
+    assert (body["code"], set(body["fieldErrors"])) == ("validation_error", {"booking_id"})
+
+
+@pytest.mark.parametrize(("confirm", "returned"), [(False, "expired"), (True, "finished")])
+def test_get_after_the_slot_ended_returns_expired_or_finished(
+    client: TestClient,
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+    set_now: Callable[[datetime], None],
+    confirm: bool,
+    returned: str,
+) -> None:
+    if confirm:
+        confirm_in_db(booking_id)
+    path = f"/api/bookings/{booking_id}"
+    # The slot ends Wednesday 12:00 in Podgorica = 11:00 UTC.
+    set_now(datetime(2026, 11, 4, 10, 59, tzinfo=UTC))
+    before = client.get(path, headers=other_auth_headers).json()["status"]
+    set_now(datetime(2026, 11, 4, 11, 0, tzinfo=UTC))
+    after = client.get(path, headers=other_auth_headers).json()["status"]
+
+    assert (before, after) == ("confirmed" if confirm else "pending", returned)
+    [row] = booking_rows()
+    assert row.status == ("confirmed" if confirm else "pending")  # the stored status stays
+
+
+def test_guest_still_sees_the_booking_after_the_host_turns_the_space_into_a_draft(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    space_id: int,
+    booking_id: int,
+) -> None:
+    response = client.patch(
+        f"/api/spaces/{space_id}", json={"status": "draft"}, headers=host_auth_headers
+    )
+    assert response.status_code == 200, response.text
+
+    assert client.get(f"/api/spaces/{space_id}", headers=other_auth_headers).status_code == 404
+    assert client.get(f"/api/bookings/{booking_id}", headers=other_auth_headers).status_code == 200
+    assert ids(list_bookings(client, other_auth_headers)) == [booking_id]

@@ -9,8 +9,11 @@ from app.auth.exceptions.auth import InvalidTokenException
 from app.auth.schemas.auth import CurrentUser
 from app.bookings.exceptions.booking import (
     BookingInPastException,
+    BookingNotFoundException,
     CannotBookOwnSpaceException,
     InvalidSlotException,
+    NotBookingParticipantException,
+    NotOwnBookingsException,
     SlotFullException,
 )
 from app.bookings.models.booking import Booking, BookingStatus
@@ -18,6 +21,7 @@ from app.bookings.repositories.booking import IBookingRepository
 from app.bookings.schemas.booking import (
     BookingCreateRequestSchema,
     BookingGuestSchema,
+    BookingListFilters,
     BookingResponseSchema,
     BookingReturnedStatus,
     BookingSpaceSchema,
@@ -29,9 +33,19 @@ from app.spaces.services.space import ISpaceService
 from app.users.repositories.user import IUserRepository
 from app.utils.clock import WEEKDAYS, IClock, hour_exists, local_hour_to_utc
 from app.utils.di import inject
+from app.utils.pagination import Page, PaginationParams
 
 
 class IBookingService(Protocol):
+    def list(
+        self,
+        filters: BookingListFilters,
+        pagination_params: PaginationParams,
+        current_user: CurrentUser,
+    ) -> Page[BookingResponseSchema]: ...
+
+    def get(self, booking_id: int, current_user: CurrentUser) -> BookingResponseSchema: ...
+
     def create(
         self, data: BookingCreateRequestSchema, current_user: CurrentUser
     ) -> BookingResponseSchema: ...
@@ -52,6 +66,38 @@ class BookingService(IBookingService):
         self._space_repository = space_repository
         self._user_repository = user_repository
         self._clock = clock
+
+    def list(
+        self,
+        filters: BookingListFilters,
+        pagination_params: PaginationParams,
+        current_user: CurrentUser,
+    ) -> Page[BookingResponseSchema]:
+        # `guestId` and `hostId` narrow the list to one role, and only to the user's own.
+        for own_id in (filters.guest_id, filters.host_id):
+            if own_id is not None and own_id != current_user.id:
+                raise NotOwnBookingsException
+        # One "now" for the filter in SQL and for the statuses in the response.
+        now = self._clock.now()
+        bookings = self._booking_repository.get_all(
+            user_id=current_user.id,
+            filters=filters,
+            now=now,
+            pagination_params=pagination_params,
+        )
+        return Page(
+            total=bookings.total,
+            items=[_to_response(booking, now) for booking in bookings.items],
+            pages=bookings.pages,
+        )
+
+    def get(self, booking_id: int, current_user: CurrentUser) -> BookingResponseSchema:
+        booking = self._booking_repository.get_by_id(booking_id)
+        if booking is None:
+            raise BookingNotFoundException
+        if current_user.id not in (booking.guest_id, booking.space.host_id):
+            raise NotBookingParticipantException
+        return _to_response(booking, self._clock.now())
 
     def create(
         self, data: BookingCreateRequestSchema, current_user: CurrentUser

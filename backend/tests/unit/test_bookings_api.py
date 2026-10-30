@@ -9,12 +9,19 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 
+from app.bookings.exceptions.booking import (
+    BookingNotFoundException,
+    NotBookingParticipantException,
+    NotOwnBookingsException,
+)
 from app.bookings.schemas.booking import (
     BookingGuestSchema,
+    BookingListFilters,
     BookingResponseSchema,
     BookingReturnedStatus,
     BookingSpaceSchema,
 )
+from app.utils.pagination import Page
 
 pytestmark = pytest.mark.unit
 
@@ -129,3 +136,139 @@ def test_create_with_a_time_off_the_whole_hour_reaches_the_service(
 
     assert response.status_code == 201
     assert booking_service.create.call_args.kwargs["data"].start_time == "10:30"
+
+
+# --- GET list and GET by id -----------------------------------------------------------------------
+
+
+def test_list_passes_the_filters_pagination_and_user(
+    client: TestClient, booking_service: Mock
+) -> None:
+    booking_service.list.return_value = Page(total=1, items=[BOOKING], pages=1)
+
+    response = client.get(
+        "/api/bookings?spaceId=7&guestId=1&hostId=1&status=expired&date=2026-11-04"
+        "&page=2&size=10",
+        headers=AUTH,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"total": 1, "items": [BOOKING_JSON], "pages": 1}
+    kwargs = booking_service.list.call_args.kwargs
+    assert kwargs["filters"] == BookingListFilters(
+        space_id=7,
+        guest_id=1,
+        host_id=1,
+        status=BookingReturnedStatus.EXPIRED,
+        date=date(2026, 11, 4),
+    )
+    assert (kwargs["pagination_params"].page, kwargs["pagination_params"].size) == (2, 10)
+    assert kwargs["current_user"].id == 1
+
+
+def test_list_without_filters_passes_empty_filters(
+    client: TestClient, booking_service: Mock
+) -> None:
+    booking_service.list.return_value = Page(total=0, items=[], pages=0)
+
+    response = client.get("/api/bookings", headers=AUTH)
+
+    assert response.status_code == 200
+    assert booking_service.list.call_args.kwargs["filters"] == BookingListFilters()
+
+
+@pytest.mark.parametrize(
+    ("query", "field"),
+    [
+        ("spaceId=0", "spaceId"),
+        ("guestId=x", "guestId"),
+        ("hostId=2147483648", "hostId"),
+        ("status=done", "status"),
+        ("date=2026-02-30", "date"),
+        ("size=501", "size"),
+    ],
+)
+def test_list_with_an_invalid_filter_is_422(
+    client: TestClient, booking_service: Mock, query: str, field: str
+) -> None:
+    response = client.get(f"/api/bookings?{query}", headers=AUTH)
+
+    assert response.status_code == 422
+    assert set(response.json()["fieldErrors"]) == {field}
+    booking_service.list.assert_not_called()
+
+
+def test_list_not_own_is_403(client: TestClient, booking_service: Mock) -> None:
+    booking_service.list.side_effect = NotOwnBookingsException
+
+    response = client.get("/api/bookings?guestId=2", headers=AUTH)
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "You can only list your own bookings",
+        "code": "not_own_bookings",
+    }
+
+
+def test_get_passes_the_id_and_user(client: TestClient, booking_service: Mock) -> None:
+    booking_service.get.return_value = BOOKING
+
+    response = client.get("/api/bookings/3", headers=AUTH)
+
+    assert response.status_code == 200
+    assert response.json() == BOOKING_JSON
+    kwargs = booking_service.get.call_args.kwargs
+    assert (kwargs["booking_id"], kwargs["current_user"].id) == (3, 1)
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "body"),
+    [
+        (
+            NotBookingParticipantException,
+            403,
+            {
+                "detail": "Only the guest or the host can see this booking",
+                "code": "not_booking_participant",
+            },
+        ),
+        (
+            BookingNotFoundException,
+            404,
+            {"detail": "Booking not found", "code": "booking_not_found"},
+        ),
+    ],
+)
+def test_get_maps_the_service_errors(
+    client: TestClient,
+    booking_service: Mock,
+    error: type[Exception],
+    status_code: int,
+    body: dict[str, str],
+) -> None:
+    booking_service.get.side_effect = error
+
+    response = client.get("/api/bookings/3", headers=AUTH)
+
+    assert response.status_code == status_code
+    assert response.json() == body
+
+
+@pytest.mark.parametrize("bad_id", ["abc", "0", "2147483648"])
+def test_get_with_an_invalid_id_is_422(
+    client: TestClient, booking_service: Mock, bad_id: str
+) -> None:
+    response = client.get(f"/api/bookings/{bad_id}", headers=AUTH)
+
+    assert response.status_code == 422
+    assert set(response.json()["fieldErrors"]) == {"booking_id"}
+    booking_service.get.assert_not_called()
+
+
+@pytest.mark.parametrize("path", ["/api/bookings", "/api/bookings/3"])
+def test_get_without_token_is_401(client: TestClient, booking_service: Mock, path: str) -> None:
+    response = client.get(path)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required", "code": "not_authenticated"}
+    assert not booking_service.method_calls

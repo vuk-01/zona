@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from dataclasses import dataclass
 from enum import StrEnum
 
 from pydantic import Field
@@ -48,6 +49,17 @@ class BookingGuestSchema(CamelCaseResponseModel):
     id: int
     name: str
     avatar_url: str | None
+
+
+@dataclass
+class BookingListFilters:
+    space_id: int | None = None
+    # Only the signed-in user's own id; the service checks both (docs/entities.md).
+    guest_id: int | None = None
+    host_id: int | None = None
+    # The status as returned, so `finished` and `expired` can be asked for.
+    status: BookingReturnedStatus | None = None
+    date: dt.date | None = None
 
 
 class BookingResponseSchema(CamelCaseResponseModel):

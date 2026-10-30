@@ -5,12 +5,31 @@ from typing import Self
 from app.utils.exceptions import (
     ConflictException,
     ForbiddenException,
+    NotFoundException,
     UnprocessableEntityException,
 )
 
 # The contract writes ranges with an en dash (U+2013), "open 08:00-20:00" with a long dash; chr()
 # keeps the character out of the source, where ruff (RUF001) flags it as a look-alike of "-".
 _EN_DASH = chr(0x2013)
+
+
+class BookingNotFoundException(NotFoundException):
+    def __init__(self) -> None:
+        super().__init__(message="Booking not found", code="booking_not_found")
+
+
+class NotOwnBookingsException(ForbiddenException):
+    def __init__(self) -> None:
+        super().__init__(message="You can only list your own bookings", code="not_own_bookings")
+
+
+class NotBookingParticipantException(ForbiddenException):
+    def __init__(self) -> None:
+        super().__init__(
+            message="Only the guest or the host can see this booking",
+            code="not_booking_participant",
+        )
 
 
 class CannotBookOwnSpaceException(ForbiddenException):
