@@ -1,5 +1,4 @@
 import { Loader2, LogIn, LogOut } from 'lucide-react'
-import { Link } from 'react-router'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -24,13 +23,12 @@ export function SidebarAccount({ account }: SidebarAccountProps) {
             <p className="text-xs text-sidebar-foreground/70">Log in to book a space or list your own.</p>
           </div>
           <Button
-            asChild
+            aria-haspopup="dialog"
             className="h-10 w-full rounded-full focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-sidebar-accent"
+            onClick={account.onLogin}
           >
-            <Link to={account.loginHref}>
-              <LogIn aria-hidden="true" />
-              Log in
-            </Link>
+            <LogIn aria-hidden="true" />
+            Log in
           </Button>
         </div>
       )}

@@ -50,6 +50,14 @@ Dependency direction: shared code -> features -> app, never the other way around
   pass it into space cards through `cardAction` / `action` and next to the title on the space page
 - `src/app/auth-shell.tsx`: passes the spaces showcase (category illustrations, live line) into
   `AuthLayout` for `/login` and `/signup`
+- `src/app/login-dialog.tsx`: `LoginDialogProvider` (around `AppShell` in `src/app/router.tsx`) and
+  `useLoginDialog()`, which opens the login dialog (`features/auth/components/auth-dialog.tsx`) over the
+  current page: `openLogin({ continueWith, redirect })`, where `continueWith(user)` continues the action
+  and `redirect` is the page to go to after logging in (checked with `safeRedirect` from
+  `features/auth/hooks/use-redirect-target.ts`, like `?redirect=` on `/login`). Features get it as an
+  `onLogin` prop from `src/app` (`AccountMenu`, `navAccount`, `BookingForm`, `FavoriteButton`), the
+  layout as `onProtectedNav` (nav items with `requiresAuth`); `/login` stays for direct links and
+  `RequireAuth`'s redirects
 - Protected routes are wrapped in `RequireAuth` (`mode="host"` for `/host/*`) in `src/app/router.tsx`
 - `src/lib/`: `utils.ts` (`cn`) and `mock-db.ts` (mock database and delay)
 

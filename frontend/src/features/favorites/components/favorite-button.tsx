@@ -1,7 +1,6 @@
 import { cva } from 'class-variance-authority'
 import { Heart } from 'lucide-react'
 import { useState } from 'react'
-import { useLocation, useNavigate } from 'react-router'
 
 import { Button } from '@/components/ui/button'
 
@@ -38,26 +37,36 @@ const heartVariants = cva('size-5 transition-colors duration-200', {
 type FavoriteButtonProps = {
   spaceId: number
   spaceName: string
-  // undefined while the session loads; null for a visitor, whom a click sends to log in first
+  // undefined while the session loads; null for a visitor, whose click opens the login dialog first
   userId: number | null | undefined
+  // Opens the login dialog over the page; `continueWith` runs with the user's id once they are signed in
+  onLogin: (continueWith: (userId: number) => void) => void
   placement?: 'card' | 'page'
 }
 
 // The heart (DESIGN.md "Favorite heart"): an outline that turns red on hover, filled red once the space
 // is saved; every click pulses it once. It is a toggle button (aria-pressed), and all hearts of one space
 // share the favorites query, so they always show the same state.
-export function FavoriteButton({ spaceId, spaceName, userId, placement = 'card' }: FavoriteButtonProps) {
+export function FavoriteButton({
+  spaceId,
+  spaceName,
+  userId,
+  onLogin,
+  placement = 'card',
+}: FavoriteButtonProps) {
   const { data: savedIds } = useFavoriteIds(userId)
   const setFavorite = useSetFavorite()
-  const navigate = useNavigate()
-  const location = useLocation()
   const [clicks, setClicks] = useState(0)
   const saved = savedIds?.has(spaceId) ?? false
 
   function toggle() {
     if (userId === undefined) return
     if (userId === null) {
-      navigate(`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`)
+      // Once signed in the space is saved; saving twice changes nothing, so it is fine if it already was
+      onLogin((signedInId) => {
+        setClicks((count) => count + 1)
+        setFavorite.mutate({ userId: signedInId, spaceId, saved: true })
+      })
       return
     }
     setClicks((count) => count + 1)
