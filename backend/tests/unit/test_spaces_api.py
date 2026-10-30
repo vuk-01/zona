@@ -9,10 +9,11 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 
-from app.auth.exceptions.auth import InvalidTokenException
+from app.auth.exceptions.auth import InvalidTokenException, NotAuthenticatedException
 from app.spaces.exceptions.space import (
     InvalidSpaceException,
     NotAHostException,
+    NotOwnFavoritesException,
     NotSpaceOwnerException,
     SpaceNotFoundException,
 )
@@ -77,7 +78,8 @@ def test_list_passes_every_filter_to_the_service(client: TestClient, space_servi
 
     response = client.get(
         "/api/spaces?search=glass&category=meeting-room&city=Podgorica&hostId=3"
-        "&status=listed&minPrice=10&maxPrice=30.5&page=2&size=5"
+        "&status=listed&minPrice=10&maxPrice=30.5&favoriteOf=1&page=2&size=5",
+        headers=AUTH,
     )
 
     assert response.status_code == 200
@@ -89,6 +91,7 @@ def test_list_passes_every_filter_to_the_service(client: TestClient, space_servi
     assert filters.host_id == 3
     assert filters.status == SpaceStatus.LISTED
     assert (filters.min_price, filters.max_price) == (10, 30.5)
+    assert filters.favorite_of == 1
     assert (call["pagination_params"].page, call["pagination_params"].size) == (2, 5)
 
 
@@ -130,7 +133,17 @@ def test_list_with_invalid_filters_is_422(client: TestClient, space_service: Moc
 
 
 @pytest.mark.parametrize(
-    "query", ["size=0", "size=-1", "size=501", "page=0", f"page={2**31}", f"hostId={2**31}"]
+    "query",
+    [
+        "size=0",
+        "size=-1",
+        "size=501",
+        "page=0",
+        f"page={2**31}",
+        f"hostId={2**31}",
+        "favoriteOf=0",
+        f"favoriteOf={2**31}",
+    ],
 )
 def test_list_with_out_of_range_numbers_is_422(
     client: TestClient, space_service: Mock, query: str
@@ -410,3 +423,33 @@ def test_write_with_invalid_id_is_422(
     assert response.json()["code"] == "validation_error"
     space_service.update.assert_not_called()
     space_service.delete.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "body"),
+    [
+        (
+            NotAuthenticatedException(),
+            401,
+            {"detail": "Authentication required", "code": "not_authenticated"},
+        ),
+        (
+            NotOwnFavoritesException(),
+            403,
+            {"detail": "You can only list your own favorites", "code": "not_own_favorites"},
+        ),
+    ],
+)
+def test_list_favorite_of_maps_service_errors(
+    client: TestClient,
+    space_service: Mock,
+    error: Exception,
+    status_code: int,
+    body: dict[str, str],
+) -> None:
+    space_service.list.side_effect = error
+
+    response = client.get("/api/spaces?favoriteOf=2")
+
+    assert response.status_code == status_code
+    assert response.json() == body

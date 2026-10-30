@@ -22,6 +22,11 @@ class NotAHostException(ForbiddenException):
         super().__init__(message="Only hosts can create spaces", code="not_a_host")
 
 
+class NotOwnFavoritesException(ForbiddenException):
+    def __init__(self) -> None:
+        super().__init__(message="You can only list your own favorites", code="not_own_favorites")
+
+
 class InvalidSpaceException(UnprocessableEntityException):
     """A PATCH that leaves the space invalid as a whole (e.g. a desk space without a desk count)."""
 

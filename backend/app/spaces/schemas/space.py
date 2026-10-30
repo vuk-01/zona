@@ -135,6 +135,8 @@ class SpaceListFilters:
     status: SpaceStatus | None = None
     min_price: float | None = None
     max_price: float | None = None
+    # Only the signed-in user's own id; the service checks it (docs/entities.md).
+    favorite_of: int | None = None
 
 
 class SpaceHostSchema(CamelCaseResponseModel):

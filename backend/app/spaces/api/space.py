@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import Depends, Path, Query, status
 
+from app.auth.exceptions.auth import NotAuthenticatedException
 from app.auth.schemas.auth import CurrentUser
 from app.database.session_handler import DBAPIRouter
 from app.deps import (
@@ -15,6 +16,7 @@ from app.deps import (
 )
 from app.spaces.exceptions.space import (
     NotAHostException,
+    NotOwnFavoritesException,
     NotSpaceOwnerException,
     SpaceNotFoundException,
 )
@@ -57,6 +59,9 @@ def get_space_filters(
     max_price: Annotated[
         float | None, Query(alias="maxPrice", ge=0, le=1000, allow_inf_nan=False)
     ] = None,
+    favorite_of: Annotated[
+        int | None, Query(alias="favoriteOf", ge=1, le=_MAX_ID, description="Own id only")
+    ] = None,
 ) -> SpaceListFilters:
     return SpaceListFilters(
         search=search,
@@ -66,6 +71,7 @@ def get_space_filters(
         status=space_status,
         min_price=min_price,
         max_price=max_price,
+        favorite_of=favorite_of,
     )
 
 
@@ -74,9 +80,15 @@ def get_space_filters(
     summary="List spaces",
     description=(
         "Newest first. Listed spaces for everyone, plus the signed-in user's own drafts. "
-        "`hostId` = own id adds `bookingCounts` to every space."
+        "`hostId` = own id adds `bookingCounts` to every space. `favoriteOf` = own id lists the "
+        "spaces the user saved, newest saved first (needs a token)."
     ),
-    responses=error_responses(*OPTIONAL_USER_ERRORS, _INVALID_FILTER),
+    responses=error_responses(
+        *OPTIONAL_USER_ERRORS,
+        NotAuthenticatedException(),
+        NotOwnFavoritesException(),
+        _INVALID_FILTER,
+    ),
 )
 def get_spaces(
     space_service: Annotated[ISpaceService, Depends(get_di_entity(ISpaceService))],

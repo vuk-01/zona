@@ -6,6 +6,7 @@ from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from app.database.session_factory import ISessionFactory
+from app.favorites.models.favorite import Favorite
 from app.spaces.models.space import Space, SpaceStatus
 from app.spaces.schemas.space import SpaceListFilters
 from app.utils.di import inject
@@ -38,13 +39,18 @@ class SpaceRepository(ISpaceRepository):
     ) -> Page[Space]:
         db = self._session_factory()
         # The host is on every card: load it in the same query, not one query per row (N+1).
-        query = (
-            select(Space)
-            .options(joinedload(Space.host))
-            .order_by(Space.created_at.desc(), Space.id.desc())
-        )
+        query = select(Space).options(joinedload(Space.host))
         query = _visible_to(query, viewer_id)
         query = _filtered(query, filters)
+        if filters.favorite_of is not None:
+            # Another domain's table in the same query (ADR-020): only the spaces this user saved,
+            # newest saved first; the other filters and the visibility rule still apply.
+            query = query.join(
+                Favorite,
+                (Favorite.space_id == Space.id) & (Favorite.user_id == filters.favorite_of),
+            ).order_by(Favorite.created_at.desc(), Favorite.id.desc())
+        else:
+            query = query.order_by(Space.created_at.desc(), Space.id.desc())
         return paginate(query=query, pagination_params=pagination_params, db=db)
 
     def get_by_id(self, space_id: int) -> Space | None:
