@@ -42,8 +42,8 @@ type SpaceSearchProps = {
   hasActiveFilters?: boolean
 }
 
-// Search pill with city suggestions, the round filter button and Search. Picking a city only fills the
-// field; Search (or Enter with no city marked) runs it.
+// Search pill with city suggestions, the round filter button and Search. Picking a city searches it at
+// once (?city=); Search (or Enter with no city marked) searches the typed text (?q=).
 export function SpaceSearch({
   defaultValue = EMPTY,
   onSearch,
@@ -62,8 +62,7 @@ export function SpaceSearch({
     setValue(defaultValue)
   }
 
-  const search = () => {
-    const query = toQuery(value)
+  const run = (query: SpaceSearchQuery) => {
     if (onSearch) onSearch(query)
     else navigate(exploreHref(query))
   }
@@ -74,10 +73,15 @@ export function SpaceSearch({
       className="flex w-full max-w-2xl items-center gap-2 md:gap-3"
       onSubmit={(event) => {
         event.preventDefault()
-        search()
+        run(toQuery(value))
       }}
     >
-      <SearchSuggestions value={value} onValueChange={setValue} className="min-w-0 flex-1" />
+      <SearchSuggestions
+        value={value}
+        onValueChange={setValue}
+        onPick={(city) => run({ city })}
+        className="min-w-0 flex-1"
+      />
       {onToggleFilters ? (
         <Button
           type="button"

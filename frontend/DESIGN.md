@@ -177,12 +177,15 @@ replace them.
   `primary` on hover and turns `card` with a `primary` icon while typing; the filter button stays `secondary`
   with a `primary` border while the filters are open. A click in the field opens the city list under it (a
   floating card like the time select's, "Cities" title, pill rows with a `MapPin`, scrolls after six); typing
-  filters it and bolds the matching part. Picking a city only fills the field; Search or Enter runs it
-  (`/spaces?city=` for a picked city, `/spaces?q=` for typed text). Code:
+  filters it and bolds the matching part. Picking a city searches it at once (`/spaces?city=`); Search, or
+  Enter with no city marked, searches the typed text (`/spaces?q=`). Code:
   `features/spaces/components/space-search.tsx` and `search-suggestions.tsx`.
-- **Search chips** (Explore): the active search above the results, "Podgorica ✕" or "“hub” ✕", as a selected
-  chip (`secondary`, `primary` border, `secondary-foreground` label) that is one button; a click removes that
-  filter and moves focus to the results.
+- **Filter chips** (Explore): one per active filter above the results, side by side and wrapping onto a new
+  row on phones: city ("Podgorica ✕"), text ("“hub” ✕"), price ("Over €30 ✕") and category ("Desk ✕"); "Any"
+  and "All" have none. Each is a selected chip (`secondary`, `primary` border, `secondary-foreground` label)
+  that is one button and removes only its filter. With two or more, an underlined `primary` "Clear all" link
+  ends the row. Afterwards focus moves to the results. Every filter lives in the URL
+  (`/spaces?city=Podgorica&price=over-30&category=desk`).
 - **Categories**: illustration + label per category (All, Desk, Meeting room, Office, Event hall), and the
   number of spaces as a small round badge on each illustration (`primary` on the selected one). The
   numbers follow the search and price filters, never the category itself. The selected one sits in a

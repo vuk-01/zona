@@ -45,6 +45,7 @@ export function Spaces() {
         showCount
         onClearFilters={filters.hasFilters ? filters.clear : undefined}
         chips={filters.chips}
+        onClearAll={filters.clear}
         cardAction={(space) => <FavoriteHeart space={space} />}
       />
     </section>

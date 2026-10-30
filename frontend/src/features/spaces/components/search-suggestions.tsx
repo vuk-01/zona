@@ -70,6 +70,8 @@ export type SearchValue = { text: string; city: string | null }
 type SearchSuggestionsProps = {
   value: SearchValue
   onValueChange: (value: SearchValue) => void
+  // A city was picked from the list (a click, or ↑/↓ and Enter): the search form runs it at once
+  onPick?: (city: string) => void
   // The number of spaces next to each city. Off until the counts come from the backend; the mock's are
   // made up.
   showCount?: boolean
@@ -79,12 +81,13 @@ type SearchSuggestionsProps = {
 // The search pill with city suggestions (docs/ref/search-reference.png, cities only), for a search form.
 // A click or focus opens every city with spaces under the field, most spaces first, and the list scrolls
 // after six. Typing filters it (starts with the term first, then contains it; case and accents do not
-// matter) and bolds the matching part. Picking a city (click, or ↑/↓ and Enter) only fills it in; Enter
-// with no city marked submits the form. Esc or a click outside closes the list. The list is portaled, so
-// it also opens fully inside the hero panel (overflow-hidden), and it is as wide as the field.
+// matter) and bolds the matching part. Picking a city (click, or ↑/↓ and Enter) fills it in and calls
+// onPick; Enter with no city marked submits the form. Esc or a click outside closes the list. The list is
+// portaled, so it also opens fully inside the hero panel (overflow-hidden), and it is as wide as the field.
 export function SearchSuggestions({
   value,
   onValueChange,
+  onPick,
   showCount = false,
   className,
 }: SearchSuggestionsProps) {
@@ -120,6 +123,7 @@ export function SearchSuggestions({
     onValueChange({ text: city, city })
     setOpen(false)
     setActive(-1)
+    onPick?.(city)
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {

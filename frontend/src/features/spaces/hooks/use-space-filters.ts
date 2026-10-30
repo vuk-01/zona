@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router'
 
 import type { FilterChip } from '../components/search-filter-chip'
 import {
+  CATEGORY_LABELS,
   PRICE_RANGES,
   isPriceRange,
   isSpaceCategory,
@@ -49,7 +50,8 @@ export function useSpaceFilters() {
     maxPrice: price && PRICE_RANGES[price].maxPrice,
   }
 
-  // One removable chip per active search, above the results
+  // One removable chip per active filter, above the results: city, text, price, category. "Any" price and
+  // "All" categories are no parameter at all, so they have no chip.
   const chips: FilterChip[] = []
   if (city) {
     chips.push({
@@ -65,6 +67,24 @@ export function useSpaceFilters() {
       label: `“${q}”`,
       removeLabel: `Remove search “${q}”`,
       remove: () => set('q', undefined),
+    })
+  }
+  if (price) {
+    const label = PRICE_RANGES[price].label
+    chips.push({
+      key: 'price',
+      label,
+      removeLabel: `Remove price filter ${label}`,
+      remove: () => set('price', undefined),
+    })
+  }
+  if (category) {
+    const label = CATEGORY_LABELS[category]
+    chips.push({
+      key: 'category',
+      label,
+      removeLabel: `Remove category filter ${label}`,
+      remove: () => set('category', undefined),
     })
   }
 

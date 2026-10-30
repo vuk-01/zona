@@ -49,8 +49,10 @@ type SpacesListProps = {
   showCount?: boolean
   // When filters are on, the empty state offers "Clear filters" (Explore)
   onClearFilters?: () => void
-  // The active search as removable chips above the results, also over the empty state (Explore)
+  // The active filters as removable chips above the results, also over the empty state (Explore)
   chips?: FilterChip[]
+  // With two chips or more, "Clear all" at the end of their row removes every filter
+  onClearAll?: () => void
   // Top right on every card's photo, e.g. the favorite heart (the route passes it in)
   cardAction?: (space: Space) => ReactNode
   // Only these ids, on top of the filters (Favorites: the favorites as they are right now). A card whose
@@ -68,6 +70,7 @@ export function SpacesList({
   showCount = false,
   onClearFilters,
   chips = [],
+  onClearAll,
   cardAction,
   only,
   empty,
@@ -190,11 +193,25 @@ export function SpacesList({
         {isLoading || error ? '' : visibleCount ? `${spacesFound(visibleCount)} found` : 'No spaces found'}
       </p>
       {chips.length > 0 && (
-        <div role="group" aria-label="Active search" className="mb-4 flex flex-wrap gap-2">
+        // Wraps onto a new row when the chips do not fit (phones)
+        <div role="group" aria-label="Active filters" className="mb-4 flex flex-wrap items-center gap-2">
           {chips.map((chip) => (
             // The chip goes away with its filter, so focus moves to the results, like after "Clear filters"
             <SearchFilterChip key={chip.key} chip={chip} onRemoved={() => resultsRef.current?.focus()} />
           ))}
+          {onClearAll && chips.length >= 2 && (
+            // A text link (DESIGN.md: always underlined), 44 px tall on phones
+            <button
+              type="button"
+              onClick={() => {
+                onClearAll()
+                resultsRef.current?.focus()
+              }}
+              className="inline-flex min-h-11 items-center rounded-full px-2 text-sm font-medium text-primary underline underline-offset-4 outline-none hover:text-primary/80 focus-visible:ring-[3px] focus-visible:ring-ring md:min-h-0"
+            >
+              Clear all
+            </button>
+          )}
         </div>
       )}
       {content()}
