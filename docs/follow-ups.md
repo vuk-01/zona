@@ -46,6 +46,18 @@ The backend has `GET/POST/DELETE /api/favorites` and `GET /api/spaces?favoriteOf
   backend; a `403 not_own_favorites` or `401` means the page asked with the wrong id or no token.
 - `frontend/src/lib/favorite.ts` and the rows in `frontend/src/lib/mock-db.ts` go with the mock.
 
+## From the favorites review (left out of `feat/favorites` on purpose)
+
+- **Index for "newest saved first".** `GET /api/favorites` and `GET /api/spaces?favoriteOf=` find a
+  user's rows through `ix_favorites_user_id`, then sort `created_at desc, id desc` in a temporary
+  B-tree (SQLite's plan: `USE TEMP B-TREE FOR ORDER BY`). Cheap while a user has few favorites. If
+  it grows: `Index("ix_favorites_user_id_created_at", "user_id", "created_at", "id")` on `Favorite`,
+  in a new revision (`156c87f4d970` is committed and is not edited).
+- **One constant for the largest id.** `2**31 - 1` is written four times:
+  `app/favorites/schemas/favorite.py` (`MAX_ID`), `app/spaces/api/space.py` (`_MAX_ID`),
+  `app/users/api/user.py` (`_MAX_ID`) and `app/utils/pagination.py` (the `page` limit). Move it to
+  one `MAX_ID` in `app/utils/schemas.py` and import it everywhere; no behaviour changes.
+
 ## From the users review (left out of `backend-users` on purpose)
 
 - Frontend: the `auth-api.ts` mock that forces `mode: guest`, and the 80-character `city` limit in the
