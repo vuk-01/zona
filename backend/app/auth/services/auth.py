@@ -65,7 +65,11 @@ class AuthService(IAuthService):
         if user is None:
             raise InvalidTokenException
         return CurrentUser(
-            id=user.id, email=user.email, display_name=user.display_name, created_at=user.created_at
+            id=user.id,
+            email=user.email,
+            display_name=user.display_name,
+            is_host=user.is_host,
+            created_at=user.created_at,
         )
 
     def _authentication_response(self, user: User) -> AuthenticationResponseSchema:

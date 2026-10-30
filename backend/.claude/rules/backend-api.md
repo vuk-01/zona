@@ -12,6 +12,7 @@ paths:
 - Endpoint functions are plain `def`, not `async def`: the database session is synchronous (ADR-009)
 - The return type annotation is the response schema (`-> ListingResponseSchema`, `-> Page[ListingResponseSchema]`); a `204` sets `response_model=None`; every schema extends `CamelCaseModel` or `CamelCaseResponseModel` from `app.utils.schemas`, so JSON is camelCase in and out (ADR-010)
 - Status codes: `POST` returns `status.HTTP_201_CREATED`, `DELETE` returns `status.HTTP_204_NO_CONTENT` and no body, missing record `404`, not the owner `403`, invalid input `422` with `fieldErrors` (ADR-005)
+- A `422` raised by a service (a rule across fields, a slot, a status change) extends `UnprocessableEntityException`, never `InvalidRequestException` (that one is `400`) (ADR-005)
 - Every write endpoint (`POST`, `PATCH`, `DELETE`) takes `current_user: Annotated[CurrentUser, Depends(get_current_user)]` from `app.deps` unless `docs/entities.md` says it is public (ADR-006)
 - The record id comes from the path (`/{listing_id}`), the owner from `current_user.id`; request schemas have no `id` or `ownerId` field (ADR-006)
 - Validation limits in `schemas/<name>.py` (`min_length`, `max_length`, `ge`, `StrEnum`) match `docs/entities.md` exactly (ADR-002)
@@ -19,3 +20,4 @@ paths:
 - List endpoints take `pagination_params: Annotated[PaginationParams, Depends(get_pagination_params)]` and return `Page[...ResponseSchema]` (`total`, `items`, `pages`) (ADR-016)
 - `app/<domain>/routes.py` collects the domain's api routers under one `APIRouter(tags=[...])`; it is registered in `app/routes.py` on `api_router`; the path in `docs/entities.md` is the full path including `/api`
 - Every endpoint has `summary=` (and `description=` when the summary is not enough); they are what `/docs` shows the frontend team
+- Every endpoint with input or auth has `responses=error_responses(...)` from `app.utils.openapi`, listing the exceptions it can return (`*CURRENT_USER_ERRORS` / `*OPTIONAL_USER_ERRORS` from `app.deps`, the domain exceptions, a `ValidationFailedException({...})` example for `422`); without it `/docs` shows FastAPI's default `{"detail": [{loc, msg, type}]}` and `tests/unit/test_openapi.py` fails (ADR-005)

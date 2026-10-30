@@ -26,9 +26,10 @@ Format: `- **<what went wrong>** → <the rule> (ADR-0XX)`
 - **`raise HTTPException(status_code=..., detail=...)` in a service, or `except Exception: pass` around a database call** → raise a domain exception from `app/<domain>/exceptions/` with `message` and `code`; catch `IntegrityError` and raise the `ConflictException` subclass; never swallow (ADR-005)
 - **Secret pasted into `settings.py` or a test "because `.env` did not load"** → defaults stay dev-only placeholders; the real value goes in `.env`, which the agent never reads or writes (rules/safety.md)
 - **Uniqueness checked with a `SELECT` before the `INSERT`** → `unique=True` on the column and `IntegrityError` → `409` (ADR-007)
+- **New imports added in one Edit and their first use in a later Edit: the `format` hook (`ruff --fix`, F401) deletes them in between, leaving `F821 Undefined name`** → add an import in the same edit as its first use, or after the use exists (rules/hooks)
 - **List endpoint returns `list[...ResponseSchema]` with every row** → `PaginationParams` in, `Page[...ResponseSchema]` out, `paginate()` in the repository (ADR-016)
 
 ## Contract
 
-- **Schema or route changed, `docs/entities.md` left as it was** → doc and code move together in one commit; run `contract-keeper` when unsure, and say that the frontend repo needs the same doc change (ADR-001, ADR-002)
+- **Schema or route changed, `docs/entities.md` left as it was, or updated for the fields but not for the limits** → every `Field`/`Query`/`Path` limit (`max_length`, `ge`/`le`, required keys, `allow_inf_nan`) and every 4xx a route can return (including `401 invalid_token` on public reads and `422` on query/path params) appears in `docs/entities.md`, in the same commit; run `contract-keeper` when unsure, and say that the frontend repo needs the same doc change (ADR-001, ADR-002)
 - **Contract changed here, frontend repo never told** → the PR description names the frontend change (`src/features/<name>/api/<name>-api.ts` and `types.ts` in the frontend repo); a list client must read `items` (ADR-001, ADR-016)

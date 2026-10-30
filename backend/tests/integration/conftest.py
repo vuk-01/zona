@@ -11,14 +11,16 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 
 from app.config.settings import DBSettings, Settings
 from app.database.base import Base
 from app.database.session_factory import ISessionFactory, SessionFactory
 from app.listings.models.listing import Listing
+from app.spaces.models.space import Space
 from app.users.models.user import User
 from app.utils.di import add_to_di_container, get_from_di_container
+from tests.utils import space_body
 
 pytestmark = pytest.mark.integration
 
@@ -64,6 +66,7 @@ def clean_tables() -> Generator[None]:
     session_factory = get_from_di_container(ISessionFactory)
     with session_factory() as session:
         session.execute(delete(Listing))
+        session.execute(delete(Space))
         session.execute(delete(User))
         session.commit()
 
@@ -85,6 +88,23 @@ def auth_headers(client: TestClient) -> dict[str, str]:
 @pytest.fixture
 def other_auth_headers(client: TestClient) -> dict[str, str]:
     return register(client, "marko@example.com")
+
+
+@pytest.fixture
+def host_auth_headers(auth_headers: dict[str, str]) -> dict[str, str]:
+    """`auth_headers` (ana) as a host. There is no route that makes a host yet (users feature)."""
+    session_factory = get_from_di_container(ISessionFactory)
+    with session_factory() as session:
+        session.execute(update(User).where(User.email == "ana@example.com").values(is_host=True))
+        session.commit()
+    return auth_headers
+
+
+@pytest.fixture
+def space_id(client: TestClient, host_auth_headers: dict[str, str]) -> int:
+    response = client.post("/api/spaces", json=space_body(), headers=host_auth_headers)
+    assert response.status_code == 201, response.text
+    return int(response.json()["id"])
 
 
 @pytest.fixture

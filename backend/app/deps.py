@@ -5,17 +5,32 @@ from typing import Annotated
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.auth.exceptions.auth import NotAuthenticatedException
+from app.auth.exceptions.auth import InvalidTokenException, NotAuthenticatedException
 from app.auth.schemas.auth import CurrentUser
 from app.auth.services.auth import IAuthService
+from app.database.session_handler import db_session_handler
 from app.utils.di import get_di_entity
 
-__all__ = ["get_current_user", "get_di_entity", "get_optional_user"]
+__all__ = [
+    "CURRENT_USER_ERRORS",
+    "OPTIONAL_USER_ERRORS",
+    "get_current_user",
+    "get_di_entity",
+    "get_optional_user",
+]
+
+# What each dependency can raise, for `error_responses(...)` on the routes that use it.
+OPTIONAL_USER_ERRORS = (InvalidTokenException(),)
+CURRENT_USER_ERRORS = (NotAuthenticatedException(), InvalidTokenException())
 
 # auto_error=False: a missing header is handled below, as a 401 with our error shape (not a 403).
 security = HTTPBearer(auto_error=False)
 
 
+# Its own unit of work. Sessions are per thread, and FastAPI may resolve this dependency on another
+# worker thread than the endpoint, or never run the endpoint at all (a 422 on the body). Without
+# this wrapper the session that read the user would stay open and keep its pooled connection.
+@db_session_handler
 def get_optional_user(
     auth_service: Annotated[IAuthService, Depends(get_di_entity(IAuthService))],
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(security)],

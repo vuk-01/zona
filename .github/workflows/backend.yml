@@ -1,0 +1,33 @@
+name: Backend CI
+
+# GitHub only reads workflows from the repository root; the backend lives in backend/.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pipx install poetry
+      - run: poetry install
+      - run: poetry run lint
+      - run: poetry run typecheck
+      - run: poetry run test
+      # `alembic check` compares the models with a database at head, so migrate a fresh one first.
+      - run: poetry run migrate
+      - run: poetry run alembic check
