@@ -85,3 +85,34 @@ class SlotFullException(ConflictException):
         if has_desks:
             return cls(f"No desks left at {hour}")
         return cls(f"This space is already booked at {hour}")
+
+
+class NotBookingHostException(ForbiddenException):
+    def __init__(self) -> None:
+        super().__init__(
+            message="Only the host can confirm or decline this booking", code="not_booking_host"
+        )
+
+
+class NotBookingGuestException(ForbiddenException):
+    def __init__(self) -> None:
+        super().__init__(message="Only the guest can delete this booking", code="not_booking_guest")
+
+
+class InvalidStatusChangeException(UnprocessableEntityException):
+    """A status change the flow does not allow, also the status the booking already has."""
+
+    def __init__(self, message: str = "Only a pending booking can be declined") -> None:
+        super().__init__(message=message, code="invalid_status_change")
+
+    @classmethod
+    def again(cls, status: str) -> Self:
+        return cls(f"{status.capitalize()} bookings cannot be {status} again")
+
+    @classmethod
+    def only_from(cls, allowed: tuple[str, ...], change: str) -> Self:
+        return cls(f"Only a {' or '.join(allowed)} booking can be {change}")
+
+    @classmethod
+    def changed_meanwhile(cls, status: str) -> Self:
+        return cls(f"This booking was {status} meanwhile")

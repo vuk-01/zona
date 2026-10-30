@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import Protocol
+from typing import NoReturn, Protocol
 
 from sqlalchemy.exc import IntegrityError
 
@@ -12,6 +12,9 @@ from app.bookings.exceptions.booking import (
     BookingNotFoundException,
     CannotBookOwnSpaceException,
     InvalidSlotException,
+    InvalidStatusChangeException,
+    NotBookingGuestException,
+    NotBookingHostException,
     NotBookingParticipantException,
     NotOwnBookingsException,
     SlotFullException,
@@ -25,6 +28,7 @@ from app.bookings.schemas.booking import (
     BookingResponseSchema,
     BookingReturnedStatus,
     BookingSpaceSchema,
+    BookingUpdateRequestSchema,
 )
 from app.spaces.exceptions.space import SpaceNotFoundException
 from app.spaces.repositories.space import ISpaceRepository
@@ -45,6 +49,12 @@ class IBookingService(Protocol):
     ) -> Page[BookingResponseSchema]: ...
 
     def get(self, booking_id: int, current_user: CurrentUser) -> BookingResponseSchema: ...
+
+    def update(
+        self, booking_id: int, data: BookingUpdateRequestSchema, current_user: CurrentUser
+    ) -> BookingResponseSchema: ...
+
+    def delete(self, booking_id: int, current_user: CurrentUser) -> None: ...
 
     def create(
         self, data: BookingCreateRequestSchema, current_user: CurrentUser
@@ -92,12 +102,55 @@ class BookingService(IBookingService):
         )
 
     def get(self, booking_id: int, current_user: CurrentUser) -> BookingResponseSchema:
+        booking = self._get_as_participant_or_raise(booking_id, current_user)
+        return _to_response(booking, self._clock.now())
+
+    def update(
+        self, booking_id: int, data: BookingUpdateRequestSchema, current_user: CurrentUser
+    ) -> BookingResponseSchema:
+        booking = self._get_as_participant_or_raise(booking_id, current_user)
+        change = BookingStatus(data.status)
+        # Cancelling is for the guest and the host; everything else only for the host.
+        if change != BookingStatus.CANCELLED and current_user.id != booking.space.host_id:
+            raise NotBookingHostException
+        now = self._clock.now()
+        error = _status_change_error(_returned_status(booking, now), change)
+        if error is not None:
+            raise error
+        # Compare-and-set, no lock: declining and cancelling take no room (ADR-023).
+        if not self._booking_repository.set_status(booking_id, expected=booking.status, new=change):
+            self._raise_lost_race(booking_id, change)
+        # The UPDATE also set the new status on `booking` in the session.
+        return _to_response(booking, now)
+
+    def delete(self, booking_id: int, current_user: CurrentUser) -> None:
+        booking = self._get_as_participant_or_raise(booking_id, current_user)
+        if current_user.id != booking.guest_id:
+            raise NotBookingGuestException
+        if _returned_status(booking, self._clock.now()) != BookingReturnedStatus.PENDING:
+            raise InvalidStatusChangeException.only_from(_PENDING, "deleted")
+        if not self._booking_repository.delete_pending(booking_id):
+            # Deleted or changed by a parallel request after the read: read again, never assume.
+            if self._booking_repository.get_status(booking_id) is None:
+                raise BookingNotFoundException
+            raise InvalidStatusChangeException.only_from(_PENDING, "deleted")
+
+    def _get_as_participant_or_raise(self, booking_id: int, current_user: CurrentUser) -> Booking:
         booking = self._booking_repository.get_by_id(booking_id)
         if booking is None:
             raise BookingNotFoundException
         if current_user.id not in (booking.guest_id, booking.space.host_id):
             raise NotBookingParticipantException
-        return _to_response(booking, self._clock.now())
+        return booking
+
+    def _raise_lost_race(self, booking_id: int, change: BookingStatus) -> NoReturn:
+        """The compare-and-set changed no row: the booking was deleted or changed after the read."""
+        status = self._booking_repository.get_status(booking_id)
+        if status is None:
+            raise BookingNotFoundException
+        raise _status_change_error(
+            BookingReturnedStatus(status), change
+        ) or InvalidStatusChangeException.changed_meanwhile(status)
 
     def create(
         self, data: BookingCreateRequestSchema, current_user: CurrentUser
@@ -185,6 +238,27 @@ def _hour(time: str) -> int:
 
 def _hh_mm(hour: int) -> str:
     return f"{hour:02d}:00"
+
+
+# The statuses each change may start from (docs/entities.md, status flow).
+_PENDING = (BookingReturnedStatus.PENDING,)
+_ALLOWED_FROM: dict[BookingStatus, tuple[BookingReturnedStatus, ...]] = {
+    BookingStatus.DECLINED: _PENDING,
+    BookingStatus.CANCELLED: (BookingReturnedStatus.PENDING, BookingReturnedStatus.CONFIRMED),
+}
+
+
+def _status_change_error(
+    current: BookingReturnedStatus, change: BookingStatus
+) -> InvalidStatusChangeException | None:
+    """Why `current` cannot become `change`, or None when the flow allows it."""
+    # The same status again is an error, not a no-op (docs/entities.md).
+    if current == BookingReturnedStatus(change):
+        return InvalidStatusChangeException.again(current)
+    allowed = _ALLOWED_FROM[change]
+    if current not in allowed:
+        return InvalidStatusChangeException.only_from(allowed, change)
+    return None
 
 
 def _returned_status(booking: Booking, now: datetime) -> BookingReturnedStatus:

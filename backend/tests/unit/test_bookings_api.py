@@ -11,6 +11,9 @@ from fastapi.testclient import TestClient
 
 from app.bookings.exceptions.booking import (
     BookingNotFoundException,
+    InvalidStatusChangeException,
+    NotBookingGuestException,
+    NotBookingHostException,
     NotBookingParticipantException,
     NotOwnBookingsException,
 )
@@ -268,6 +271,125 @@ def test_get_with_an_invalid_id_is_422(
 @pytest.mark.parametrize("path", ["/api/bookings", "/api/bookings/3"])
 def test_get_without_token_is_401(client: TestClient, booking_service: Mock, path: str) -> None:
     response = client.get(path)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required", "code": "not_authenticated"}
+    assert not booking_service.method_calls
+
+
+# --- PATCH and DELETE -----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("change", ["declined", "cancelled"])
+def test_patch_passes_the_id_change_and_user(
+    client: TestClient, booking_service: Mock, change: str
+) -> None:
+    booking_service.update.return_value = BOOKING
+
+    response = client.patch("/api/bookings/3", json={"status": change}, headers=AUTH)
+
+    assert response.status_code == 200
+    assert response.json() == BOOKING_JSON
+    kwargs = booking_service.update.call_args.kwargs
+    assert (kwargs["booking_id"], kwargs["data"].status, kwargs["current_user"].id) == (
+        3,
+        change,
+        1,
+    )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"status": "pending"}, {"status": "finished"}, {"status": "done"}, {"status": None}],
+)
+def test_patch_with_an_invalid_body_is_422(
+    client: TestClient, booking_service: Mock, body: dict[str, Any]
+) -> None:
+    response = client.patch("/api/bookings/3", json=body, headers=AUTH)
+
+    assert response.status_code == 422
+    assert set(response.json()["fieldErrors"]) == {"status"}
+    booking_service.update.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "code"),
+    [
+        (NotBookingParticipantException, 403, "not_booking_participant"),
+        (NotBookingHostException, 403, "not_booking_host"),
+        (BookingNotFoundException, 404, "booking_not_found"),
+        (InvalidStatusChangeException, 422, "invalid_status_change"),
+    ],
+)
+def test_patch_maps_the_service_errors(
+    client: TestClient,
+    booking_service: Mock,
+    error: type[Exception],
+    status_code: int,
+    code: str,
+) -> None:
+    booking_service.update.side_effect = error
+
+    response = client.patch("/api/bookings/3", json={"status": "declined"}, headers=AUTH)
+
+    assert response.status_code == status_code
+    assert response.json()["code"] == code
+
+
+def test_delete_is_204_without_a_body(client: TestClient, booking_service: Mock) -> None:
+    response = client.delete("/api/bookings/3", headers=AUTH)
+
+    assert response.status_code == 204
+    assert response.content == b""
+    kwargs = booking_service.delete.call_args.kwargs
+    assert (kwargs["booking_id"], kwargs["current_user"].id) == (3, 1)
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "code"),
+    [
+        (NotBookingParticipantException, 403, "not_booking_participant"),
+        (NotBookingGuestException, 403, "not_booking_guest"),
+        (BookingNotFoundException, 404, "booking_not_found"),
+        (InvalidStatusChangeException, 422, "invalid_status_change"),
+    ],
+)
+def test_delete_maps_the_service_errors(
+    client: TestClient,
+    booking_service: Mock,
+    error: type[Exception],
+    status_code: int,
+    code: str,
+) -> None:
+    booking_service.delete.side_effect = error
+
+    response = client.delete("/api/bookings/3", headers=AUTH)
+
+    assert response.status_code == status_code
+    assert response.json()["code"] == code
+
+
+@pytest.mark.parametrize("method", ["patch", "delete"])
+@pytest.mark.parametrize("bad_id", ["abc", "0", "2147483648"])
+def test_patch_or_delete_with_an_invalid_id_is_422(
+    client: TestClient, booking_service: Mock, method: str, bad_id: str
+) -> None:
+    kwargs: dict[str, Any] = {"json": {"status": "cancelled"}} if method == "patch" else {}
+
+    response = getattr(client, method)(f"/api/bookings/{bad_id}", headers=AUTH, **kwargs)
+
+    assert response.status_code == 422
+    assert set(response.json()["fieldErrors"]) == {"booking_id"}
+    assert not booking_service.method_calls
+
+
+@pytest.mark.parametrize("method", ["patch", "delete"])
+def test_patch_or_delete_without_token_is_401(
+    client: TestClient, booking_service: Mock, method: str
+) -> None:
+    kwargs: dict[str, Any] = {"json": {"status": "cancelled"}} if method == "patch" else {}
+
+    response = getattr(client, method)("/api/bookings/3", **kwargs)
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required", "code": "not_authenticated"}

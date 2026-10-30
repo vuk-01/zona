@@ -11,6 +11,9 @@ from app.bookings.exceptions.booking import (
     BookingNotFoundException,
     CannotBookOwnSpaceException,
     InvalidSlotException,
+    InvalidStatusChangeException,
+    NotBookingGuestException,
+    NotBookingHostException,
     NotBookingParticipantException,
     NotOwnBookingsException,
     SlotFullException,
@@ -21,6 +24,7 @@ from app.bookings.schemas.booking import (
     BookingListFilters,
     BookingResponseSchema,
     BookingReturnedStatus,
+    BookingUpdateRequestSchema,
 )
 from app.bookings.services.booking import IBookingService
 from app.database.session_handler import DBAPIRouter
@@ -39,6 +43,7 @@ _INVALID_FILTER = ValidationFailedException({"size": "Input should be greater th
 _INVALID_ID = ValidationFailedException(
     {"booking_id": "Input should be a valid integer, unable to parse string as an integer"}
 )
+_INVALID_STATUS = ValidationFailedException({"status": "Input should be 'declined' or 'cancelled'"})
 _INVALID_BODY = ValidationFailedException(
     {"startTime": "String should match pattern '^([01]\\d|2[0-3]):[0-5]\\d$'"}
 )
@@ -127,3 +132,51 @@ def create_booking(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> BookingResponseSchema:
     return booking_service.create(data=data, current_user=current_user)
+
+
+@router.patch(
+    path="/{booking_id}",
+    summary="Decline or cancel a booking",
+    description=(
+        "The host declines a `pending` booking; the guest or the host cancels a `pending` or "
+        "`confirmed` one. The same status again is `422`, not a no-op."
+    ),
+    responses=error_responses(
+        *CURRENT_USER_ERRORS,
+        NotBookingParticipantException(),
+        NotBookingHostException(),
+        BookingNotFoundException(),
+        InvalidStatusChangeException(),
+        _INVALID_STATUS,
+    ),
+)
+def update_booking(
+    booking_id: BookingId,
+    data: BookingUpdateRequestSchema,
+    booking_service: Annotated[IBookingService, Depends(get_di_entity(IBookingService))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> BookingResponseSchema:
+    return booking_service.update(booking_id=booking_id, data=data, current_user=current_user)
+
+
+@router.delete(
+    path="/{booking_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Delete a pending booking",
+    description="Only the guest, and only while the booking is `pending`.",
+    responses=error_responses(
+        *CURRENT_USER_ERRORS,
+        NotBookingParticipantException(),
+        NotBookingGuestException(),
+        BookingNotFoundException(),
+        InvalidStatusChangeException("Only a pending booking can be deleted"),
+        _INVALID_ID,
+    ),
+)
+def delete_booking(
+    booking_id: BookingId,
+    booking_service: Annotated[IBookingService, Depends(get_di_entity(IBookingService))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> None:
+    booking_service.delete(booking_id=booking_id, current_user=current_user)

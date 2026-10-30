@@ -776,3 +776,337 @@ def test_guest_still_sees_the_booking_after_the_host_turns_the_space_into_a_draf
     assert client.get(f"/api/spaces/{space_id}", headers=other_auth_headers).status_code == 404
     assert client.get(f"/api/bookings/{booking_id}", headers=other_auth_headers).status_code == 200
     assert ids(list_bookings(client, other_auth_headers)) == [booking_id]
+
+
+# --- PATCH: decline and cancel ------------------------------------------------------------------
+
+
+def change(client: TestClient, headers: dict[str, str], booking_id: int, status: str) -> Response:
+    return client.patch(f"/api/bookings/{booking_id}", json={"status": status}, headers=headers)
+
+
+def invalid_status_change(message: str) -> dict[str, str]:
+    return {"detail": message, "code": "invalid_status_change"}
+
+
+def stored_status(booking_id: int) -> str | None:
+    with get_from_di_container(ISessionFactory)() as session:
+        return session.scalar(select(Booking.status).where(Booking.id == booking_id))
+
+
+def test_host_declines_a_pending_booking(
+    client: TestClient, host_auth_headers: dict[str, str], booking_id: int
+) -> None:
+    response = change(client, host_auth_headers, booking_id, "declined")
+
+    assert response.status_code == 200, response.text
+    assert (response.json()["id"], response.json()["status"]) == (booking_id, "declined")
+    assert stored_status(booking_id) == "declined"
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+@pytest.mark.parametrize("who", ["guest", "host"])
+def test_guest_or_host_cancels_a_pending_or_confirmed_booking(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+    who: str,
+    confirmed: bool,
+) -> None:
+    if confirmed:
+        confirm_in_db(booking_id)
+    headers = other_auth_headers if who == "guest" else host_auth_headers
+
+    response = change(client, headers, booking_id, "cancelled")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "cancelled"
+    assert stored_status(booking_id) == "cancelled"
+
+
+def test_guest_declines_is_403_not_booking_host(
+    client: TestClient, other_auth_headers: dict[str, str], booking_id: int
+) -> None:
+    response = change(client, other_auth_headers, booking_id, "declined")
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Only the host can confirm or decline this booking",
+        "code": "not_booking_host",
+    }
+    assert stored_status(booking_id) == "pending"
+
+
+def test_patch_by_someone_else_is_403(
+    client: TestClient, jovana_headers: dict[str, str], booking_id: int
+) -> None:
+    response = change(client, jovana_headers, booking_id, "cancelled")
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_booking_participant"
+    assert stored_status(booking_id) == "pending"
+
+
+@pytest.mark.parametrize(
+    ("first", "then", "message"),
+    [
+        ("cancelled", "cancelled", "Cancelled bookings cannot be cancelled again"),
+        ("declined", "declined", "Declined bookings cannot be declined again"),
+        ("declined", "cancelled", "Only a pending or confirmed booking can be cancelled"),
+        ("cancelled", "declined", "Only a pending booking can be declined"),
+    ],
+)
+def test_a_change_the_flow_does_not_allow_is_422(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    booking_id: int,
+    first: str,
+    then: str,
+    message: str,
+) -> None:
+    assert change(client, host_auth_headers, booking_id, first).status_code == 200
+
+    response = change(client, host_auth_headers, booking_id, then)
+
+    assert response.status_code == 422
+    assert response.json() == invalid_status_change(message)
+    assert stored_status(booking_id) == first
+
+
+def test_declining_a_confirmed_booking_is_422(
+    client: TestClient, host_auth_headers: dict[str, str], booking_id: int
+) -> None:
+    confirm_in_db(booking_id)
+
+    response = change(client, host_auth_headers, booking_id, "declined")
+
+    assert response.status_code == 422
+    assert response.json() == invalid_status_change("Only a pending booking can be declined")
+
+
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_cancelling_after_the_slot_ended_is_422(
+    client: TestClient,
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+    set_now: Callable[[datetime], None],
+    confirmed: bool,
+) -> None:
+    """An expired or finished booking is final."""
+    if confirmed:
+        confirm_in_db(booking_id)
+    set_now(datetime(2026, 11, 4, 11, 0, tzinfo=UTC))  # Wednesday 12:00 in Podgorica, the end
+
+    response = change(client, other_auth_headers, booking_id, "cancelled")
+
+    assert response.status_code == 422
+    assert response.json() == invalid_status_change(
+        "Only a pending or confirmed booking can be cancelled"
+    )
+
+
+def test_patch_an_unknown_booking_is_404(
+    client: TestClient, other_auth_headers: dict[str, str]
+) -> None:
+    response = change(client, other_auth_headers, 2_000_000, "cancelled")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+
+
+@pytest.mark.parametrize(
+    "body", [{}, {"status": "pending"}, {"status": "expired"}, {"status": "confirmed "}]
+)
+def test_patch_with_an_invalid_body_is_422(
+    client: TestClient,
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+    body: dict[str, Any],
+) -> None:
+    response = client.patch(f"/api/bookings/{booking_id}", json=body, headers=other_auth_headers)
+
+    assert response.status_code == 422
+    body = response.json()
+    assert (body["code"], set(body["fieldErrors"])) == ("validation_error", {"status"})
+
+
+def test_patch_without_token_is_401(client: TestClient, booking_id: int) -> None:
+    response = change(client, {}, booking_id, "cancelled")
+
+    assert response.status_code == 401
+    assert response.json() == NOT_AUTHENTICATED
+    assert stored_status(booking_id) == "pending"
+
+
+# --- DELETE -------------------------------------------------------------------------------------
+
+
+def test_guest_deletes_a_pending_booking(
+    client: TestClient, other_auth_headers: dict[str, str], booking_id: int
+) -> None:
+    response = client.delete(f"/api/bookings/{booking_id}", headers=other_auth_headers)
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert stored_status(booking_id) is None
+
+
+def test_host_deletes_is_403_not_booking_guest(
+    client: TestClient, host_auth_headers: dict[str, str], booking_id: int
+) -> None:
+    response = client.delete(f"/api/bookings/{booking_id}", headers=host_auth_headers)
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Only the guest can delete this booking",
+        "code": "not_booking_guest",
+    }
+    assert stored_status(booking_id) == "pending"
+
+
+def test_delete_by_someone_else_is_403(
+    client: TestClient, jovana_headers: dict[str, str], booking_id: int
+) -> None:
+    response = client.delete(f"/api/bookings/{booking_id}", headers=jovana_headers)
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_booking_participant"
+
+
+@pytest.mark.parametrize("state", ["confirmed", "cancelled", "expired"])
+def test_delete_when_not_pending_is_422(
+    client: TestClient,
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+    set_now: Callable[[datetime], None],
+    state: str,
+) -> None:
+    if state == "confirmed":
+        confirm_in_db(booking_id)
+    elif state == "cancelled":
+        assert change(client, other_auth_headers, booking_id, "cancelled").status_code == 200
+    else:
+        set_now(datetime(2026, 11, 4, 11, 0, tzinfo=UTC))
+
+    response = client.delete(f"/api/bookings/{booking_id}", headers=other_auth_headers)
+
+    assert response.status_code == 422
+    assert response.json() == invalid_status_change("Only a pending booking can be deleted")
+    assert stored_status(booking_id) is not None
+
+
+def test_delete_an_unknown_booking_is_404(
+    client: TestClient, other_auth_headers: dict[str, str]
+) -> None:
+    response = client.delete("/api/bookings/2000000", headers=other_auth_headers)
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "booking_not_found"
+
+
+@pytest.mark.parametrize("bad_id", ["abc", "0", "2147483648"])
+def test_patch_or_delete_with_an_invalid_id_is_422(
+    client: TestClient, other_auth_headers: dict[str, str], bad_id: str
+) -> None:
+    patched = client.patch(
+        f"/api/bookings/{bad_id}", json={"status": "cancelled"}, headers=other_auth_headers
+    )
+    deleted = client.delete(f"/api/bookings/{bad_id}", headers=other_auth_headers)
+
+    for response in (patched, deleted):
+        assert response.status_code == 422
+        assert set(response.json()["fieldErrors"]) == {"booking_id"}
+
+
+def test_delete_without_token_is_401(client: TestClient, booking_id: int) -> None:
+    response = client.delete(f"/api/bookings/{booking_id}")
+
+    assert response.status_code == 401
+    assert response.json() == NOT_AUTHENTICATED
+    assert stored_status(booking_id) == "pending"
+
+
+# --- PATCH and DELETE: the row changes between the read and the compare-and-set ----------------
+
+
+def run_first(monkeypatch: pytest.MonkeyPatch, method: str, statement: Any) -> None:
+    """Runs `statement` on a second connection right before `BookingRepository.<method>`."""
+    original = getattr(BookingRepository, method)
+
+    def parallel_then_original(self: BookingRepository, *args: Any, **kwargs: Any) -> Any:
+        on_second_connection(statement)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(BookingRepository, method, parallel_then_original)
+
+
+def test_patch_of_a_booking_deleted_meanwhile_is_404(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    run_first(monkeypatch, "set_status", delete(Booking).where(Booking.id == booking_id))
+
+    response = change(client, host_auth_headers, booking_id, "declined")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+    assert stored_status(booking_id) is None
+
+
+def test_patch_of_a_booking_changed_meanwhile_is_422(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The host declines while the guest's parallel request cancels: the cancel stays."""
+    run_first(
+        monkeypatch,
+        "set_status",
+        update(Booking).where(Booking.id == booking_id).values(status=BookingStatus.CANCELLED),
+    )
+
+    response = change(client, host_auth_headers, booking_id, "declined")
+
+    assert response.status_code == 422
+    assert response.json() == invalid_status_change("Only a pending booking can be declined")
+    assert stored_status(booking_id) == "cancelled"
+
+
+@pytest.mark.parametrize(
+    ("statement_for", "status_code", "body", "left"),
+    [
+        ("delete", 404, {"detail": "Booking not found", "code": "booking_not_found"}, None),
+        (
+            "confirm",
+            422,
+            invalid_status_change("Only a pending booking can be deleted"),
+            "confirmed",
+        ),
+    ],
+)
+def test_delete_of_a_booking_deleted_or_changed_meanwhile(
+    client: TestClient,
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+    statement_for: str,
+    status_code: int,
+    body: dict[str, str],
+    left: str | None,
+) -> None:
+    statement = (
+        delete(Booking).where(Booking.id == booking_id)
+        if statement_for == "delete"
+        else update(Booking).where(Booking.id == booking_id).values(status=BookingStatus.CONFIRMED)
+    )
+    run_first(monkeypatch, "delete_pending", statement)
+
+    response = client.delete(f"/api/bookings/{booking_id}", headers=other_auth_headers)
+
+    assert response.status_code == status_code
+    assert response.json() == body
+    assert stored_status(booking_id) == left

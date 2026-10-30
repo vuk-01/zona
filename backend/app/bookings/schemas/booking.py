@@ -38,6 +38,17 @@ class BookingCreateRequestSchema(CamelCaseModel):
     end_time: str = Field(pattern=_END_TIME, examples=["12:00"])
 
 
+class BookingStatusChange(StrEnum):
+    """What `PATCH` may set. `confirmed` comes with the space lock (ADR-023)."""
+
+    DECLINED = "declined"
+    CANCELLED = "cancelled"
+
+
+class BookingUpdateRequestSchema(CamelCaseModel):
+    status: BookingStatusChange
+
+
 class BookingSpaceSchema(CamelCaseResponseModel):
     id: int
     name: str

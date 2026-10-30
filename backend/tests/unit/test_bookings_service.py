@@ -13,16 +13,24 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.exceptions.auth import InvalidTokenException
+from app.auth.schemas.auth import CurrentUser
 from app.bookings.exceptions.booking import (
     BookingNotFoundException,
     CannotBookOwnSpaceException,
+    InvalidStatusChangeException,
+    NotBookingGuestException,
+    NotBookingHostException,
     NotBookingParticipantException,
     NotOwnBookingsException,
     SlotFullException,
 )
 from app.bookings.models.booking import Booking, BookingStatus
 from app.bookings.repositories.booking import IBookingRepository
-from app.bookings.schemas.booking import BookingCreateRequestSchema, BookingListFilters
+from app.bookings.schemas.booking import (
+    BookingCreateRequestSchema,
+    BookingListFilters,
+    BookingUpdateRequestSchema,
+)
 from app.bookings.services.booking import BookingService
 from app.spaces.exceptions.space import SpaceNotFoundException
 from app.spaces.models.space import Space
@@ -308,3 +316,184 @@ def test_get_returns_finished_or_expired_once_the_slot_has_ended(
     booking_repository.get_by_id.return_value = booking
 
     assert service.get(3, GUEST).status == returned
+
+
+# --- status changes and delete --------------------------------------------------------------------
+
+# The slot of `stored_booking()` ends at 2026-11-04 11:00 UTC.
+AFTER_THE_SLOT = datetime(2026, 11, 4, 11, 0, tzinfo=UTC)
+HOST = create_current_user(HOST_ID)
+STRANGER = create_current_user(99)
+
+
+def service_at(now: datetime, booking_repository: Mock) -> BookingService:
+    return BookingService(
+        booking_repository=booking_repository,
+        space_service=create_autospec(ISpaceService, instance=True),
+        space_repository=create_autospec(ISpaceRepository, instance=True),
+        user_repository=create_autospec(IUserRepository, instance=True),
+        clock=FixedClock(now),
+    )
+
+
+def change_to(status: str) -> BookingUpdateRequestSchema:
+    return BookingUpdateRequestSchema.model_validate({"status": status})
+
+
+@pytest.mark.parametrize(
+    ("stored", "ended", "change", "error"),
+    [
+        ("pending", False, "declined", None),
+        ("pending", False, "cancelled", None),
+        ("confirmed", False, "cancelled", None),
+        ("confirmed", False, "declined", "Only a pending booking can be declined"),
+        ("declined", False, "declined", "Declined bookings cannot be declined again"),
+        ("declined", False, "cancelled", "Only a pending or confirmed booking can be cancelled"),
+        ("cancelled", False, "cancelled", "Cancelled bookings cannot be cancelled again"),
+        ("cancelled", False, "declined", "Only a pending booking can be declined"),
+        # expired
+        ("pending", True, "declined", "Only a pending booking can be declined"),
+        ("pending", True, "cancelled", "Only a pending or confirmed booking can be cancelled"),
+        # finished
+        ("confirmed", True, "cancelled", "Only a pending or confirmed booking can be cancelled"),
+    ],
+)
+def test_status_change_follows_the_flow(
+    booking_repository: Mock, stored: str, ended: bool, change: str, error: str | None
+) -> None:
+    service = service_at(AFTER_THE_SLOT if ended else NOW, booking_repository)
+    booking = stored_booking()
+    booking.status = stored
+    booking_repository.get_by_id.return_value = booking
+    booking_repository.set_status.return_value = True
+
+    if error is None:
+        service.update(3, change_to(change), HOST)
+        booking_repository.set_status.assert_called_once_with(3, expected=stored, new=change)
+        return
+    with pytest.raises(InvalidStatusChangeException) as raised:
+        service.update(3, change_to(change), HOST)
+    assert raised.value.message == error
+    booking_repository.set_status.assert_not_called()
+
+
+def test_the_guest_cannot_decline(service: BookingService, booking_repository: Mock) -> None:
+    booking_repository.get_by_id.return_value = stored_booking()
+
+    with pytest.raises(NotBookingHostException):
+        service.update(3, change_to("declined"), GUEST)
+
+    booking_repository.set_status.assert_not_called()
+
+
+@pytest.mark.parametrize("user", [GUEST, HOST])
+def test_the_guest_and_the_host_can_cancel(
+    service: BookingService, booking_repository: Mock, user: CurrentUser
+) -> None:
+    booking_repository.get_by_id.return_value = stored_booking()
+    booking_repository.set_status.return_value = True
+
+    service.update(3, change_to("cancelled"), user)
+
+    booking_repository.set_status.assert_called_once_with(3, expected="pending", new="cancelled")
+
+
+def test_someone_else_cannot_change_or_delete(
+    service: BookingService, booking_repository: Mock
+) -> None:
+    booking_repository.get_by_id.return_value = stored_booking()
+
+    with pytest.raises(NotBookingParticipantException):
+        service.update(3, change_to("cancelled"), STRANGER)
+    with pytest.raises(NotBookingParticipantException):
+        service.delete(3, STRANGER)
+
+    booking_repository.set_status.assert_not_called()
+    booking_repository.delete_pending.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("status_now", "change", "error"),
+    [
+        (None, "cancelled", BookingNotFoundException),
+        ("cancelled", "declined", "Only a pending booking can be declined"),
+        ("declined", "cancelled", "Only a pending or confirmed booking can be cancelled"),
+        ("confirmed", "cancelled", "This booking was confirmed meanwhile"),
+    ],
+)
+def test_a_lost_compare_and_set_reads_the_status_again(
+    service: BookingService,
+    booking_repository: Mock,
+    status_now: str | None,
+    change: str,
+    error: type[Exception] | str,
+) -> None:
+    booking_repository.get_by_id.return_value = stored_booking()
+    booking_repository.set_status.return_value = False
+    booking_repository.get_status.return_value = status_now
+
+    if isinstance(error, str):
+        with pytest.raises(InvalidStatusChangeException) as raised:
+            service.update(3, change_to(change), HOST)
+        assert raised.value.message == error
+    else:
+        with pytest.raises(error):
+            service.update(3, change_to(change), HOST)
+    booking_repository.get_status.assert_called_once_with(3)
+
+
+def test_delete_by_the_guest_while_pending(
+    service: BookingService, booking_repository: Mock
+) -> None:
+    booking_repository.get_by_id.return_value = stored_booking()
+    booking_repository.delete_pending.return_value = True
+
+    service.delete(3, GUEST)
+
+    booking_repository.delete_pending.assert_called_once_with(3)
+    booking_repository.get_status.assert_not_called()
+
+
+def test_the_host_cannot_delete(service: BookingService, booking_repository: Mock) -> None:
+    booking_repository.get_by_id.return_value = stored_booking()
+
+    with pytest.raises(NotBookingGuestException):
+        service.delete(3, HOST)
+
+    booking_repository.delete_pending.assert_not_called()
+
+
+@pytest.mark.parametrize(("stored", "ended"), [("confirmed", False), ("pending", True)])
+def test_delete_when_not_pending_is_invalid_status_change(
+    booking_repository: Mock, stored: str, ended: bool
+) -> None:
+    service = service_at(AFTER_THE_SLOT if ended else NOW, booking_repository)
+    booking = stored_booking()
+    booking.status = stored
+    booking_repository.get_by_id.return_value = booking
+
+    with pytest.raises(InvalidStatusChangeException) as raised:
+        service.delete(3, GUEST)
+
+    assert raised.value.message == "Only a pending booking can be deleted"
+    booking_repository.delete_pending.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("status_now", "error"),
+    [(None, BookingNotFoundException), ("confirmed", InvalidStatusChangeException)],
+)
+def test_a_lost_delete_reads_the_status_again(
+    service: BookingService,
+    booking_repository: Mock,
+    status_now: str | None,
+    error: type[Exception],
+) -> None:
+    booking_repository.get_by_id.return_value = stored_booking()
+    booking_repository.delete_pending.return_value = False
+    booking_repository.get_status.return_value = status_now
+
+    with pytest.raises(error):
+        service.delete(3, GUEST)
+
+    booking_repository.get_status.assert_called_once_with(3)

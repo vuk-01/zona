@@ -4,7 +4,7 @@ from collections import Counter
 from datetime import UTC, date, datetime
 from typing import Protocol
 
-from sqlalchemy import ColumnElement, case, or_, select
+from sqlalchemy import ColumnElement, case, delete, or_, select, update
 from sqlalchemy.orm import contains_eager, joinedload
 
 from app.bookings.models.booking import Booking, BookingStatus
@@ -31,6 +31,12 @@ class IBookingRepository(Protocol):
     def confirmed_per_hour(
         self, space_id: int, day: date, exclude_id: int | None = None
     ) -> dict[int, int]: ...
+
+    def set_status(self, booking_id: int, expected: str, new: str) -> bool: ...
+
+    def get_status(self, booking_id: int) -> str | None: ...
+
+    def delete_pending(self, booking_id: int) -> bool: ...
 
 
 @inject(alias=IBookingRepository)
@@ -103,6 +109,42 @@ class BookingRepository(IBookingRepository):
         for start_hour, end_hour in db.execute(query):
             taken.update(range(start_hour, end_hour))
         return dict(taken)
+
+    def set_status(self, booking_id: int, expected: str, new: str) -> bool:
+        """Compare-and-set: False when the row is gone or no longer has the `expected` status."""
+        db = self._session_factory()
+        # One statement, so no other request can change the status between the check and the
+        # write; the service reads again to tell a deleted row from a changed one (ADR-023).
+        # "fetch": only the row RETURNING names gets the new status in the session. The default
+        # ("auto") evaluated the WHERE in Python here and set it on the loaded booking even when
+        # the database changed no row.
+        updated_id = db.execute(
+            update(Booking)
+            .where(Booking.id == booking_id, Booking.status == expected)
+            .values(status=new)
+            .returning(Booking.id)
+            .execution_options(synchronize_session="fetch")
+        ).scalar_one_or_none()
+        return updated_id is not None
+
+    def get_status(self, booking_id: int) -> str | None:
+        """The stored status as the database has it now; None when the row is gone."""
+        db = self._session_factory()
+        # A select(), not db.get(): the booking read earlier in the request is in the identity
+        # map with the status it had then.
+        return db.scalar(select(Booking.status).where(Booking.id == booking_id))
+
+    def delete_pending(self, booking_id: int) -> bool:
+        """False when the row is gone or no longer pending (deleted or changed by a parallel request)."""
+        db = self._session_factory()
+        # "fetch", as in set_status: the loaded booking leaves the session only if the row went.
+        deleted_id = db.execute(
+            delete(Booking)
+            .where(Booking.id == booking_id, Booking.status == BookingStatus.PENDING)
+            .returning(Booking.id)
+            .execution_options(synchronize_session="fetch")
+        ).scalar_one_or_none()
+        return deleted_id is not None
 
 
 def _returned_status(now: datetime) -> ColumnElement[str]:
