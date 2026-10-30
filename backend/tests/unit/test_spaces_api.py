@@ -15,6 +15,7 @@ from app.spaces.exceptions.space import (
     NotAHostException,
     NotOwnFavoritesException,
     NotSpaceOwnerException,
+    SpaceHasActiveBookingsException,
     SpaceNotFoundException,
 )
 from app.spaces.models.space import SpaceCategory, SpaceStatus
@@ -406,6 +407,42 @@ def test_delete_by_other_user_is_403(client: TestClient, space_service: Mock) ->
         "detail": "Only the host can change this space",
         "code": "not_space_owner",
     }
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "body"),
+    [
+        (
+            NotSpaceOwnerException(),
+            403,
+            {"detail": "Only the host can change this space", "code": "not_space_owner"},
+        ),
+        (SpaceNotFoundException(), 404, {"detail": "Space not found", "code": "space_not_found"}),
+        (
+            SpaceHasActiveBookingsException(1),
+            409,
+            {"detail": "This space has 1 active booking", "code": "space_has_active_bookings"},
+        ),
+        (
+            SpaceHasActiveBookingsException(2),
+            409,
+            {"detail": "This space has 2 active bookings", "code": "space_has_active_bookings"},
+        ),
+    ],
+)
+def test_delete_maps_the_service_errors(
+    client: TestClient,
+    space_service: Mock,
+    error: Exception,
+    status_code: int,
+    body: dict[str, str],
+) -> None:
+    space_service.delete.side_effect = error
+
+    response = client.delete("/api/spaces/7", headers=AUTH)
+
+    assert response.status_code == status_code
+    assert response.json() == body
 
 
 @pytest.mark.parametrize("method", ["patch", "delete"])

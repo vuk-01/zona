@@ -16,6 +16,7 @@ from app.spaces.exceptions.space import (
     NotAHostException,
     NotOwnFavoritesException,
     NotSpaceOwnerException,
+    SpaceHasActiveBookingsException,
     SpaceNotFoundException,
 )
 from app.spaces.models.space import OpeningHours, Space, SpaceCategory, SpaceStatus
@@ -130,10 +131,24 @@ class SpaceService(ISpaceService):
         return self._to_response(space)
 
     def delete(self, space_id: int, current_user: CurrentUser) -> None:
-        space = self._get_owned_or_raise(space_id, current_user)
-        # The bookings feature adds 409 space_has_active_bookings here.
-        if not self._space_repository.delete(space.id):
-            # Deleted by a parallel request after it was read.
+        # Only the host may delete, and anyone else is refused before the lock, so they never hold
+        # the space (on SQLite the whole database). The host never changes; the status only picks
+        # 404 or 403 for someone else, never what the rule below depends on (ADR-026).
+        owner = self._space_repository.get_owner(space_id)
+        if owner is None:
+            raise SpaceNotFoundException
+        _raise_unless_owner(*owner, current_user=current_user)
+        # The lock comes before the count, so no booking is created or confirmed between the count
+        # and the DELETE, which would delete that booking with the space (ADR-025).
+        if self._space_repository.lock(space_id) is None:
+            raise SpaceNotFoundException  # deleted by a parallel request after the check
+        active, _ = self._booking_repository.booking_counts(
+            space_ids=[space_id], now=self._clock.now()
+        ).get(space_id, (0, 0))
+        if active:
+            raise SpaceHasActiveBookingsException(active)
+        if not self._space_repository.delete(space_id):
+            # Never under the lock; read as a vanished row all the same, never assumed away.
             raise SpaceNotFoundException
 
     def _get_visible_or_raise(self, space_id: int, current_user: CurrentUser | None) -> Space:
@@ -147,9 +162,10 @@ class SpaceService(ISpaceService):
         return space
 
     def _get_owned_or_raise(self, space_id: int, current_user: CurrentUser) -> Space:
-        space = self._get_visible_or_raise(space_id, current_user)
-        if space.host_id != current_user.id:
-            raise NotSpaceOwnerException
+        space = self._space_repository.get_by_id(space_id)
+        if space is None:
+            raise SpaceNotFoundException
+        _raise_unless_owner(space.host_id, space.status, current_user=current_user)
         return space
 
     @staticmethod
@@ -224,6 +240,15 @@ def _response(
             else None
         ),
     )
+
+
+def _raise_unless_owner(host_id: int, status: str, current_user: CurrentUser) -> None:
+    if host_id == current_user.id:
+        return
+    # Someone else's draft does not exist for the viewer: 404, not 403.
+    if status == SpaceStatus.DRAFT:
+        raise SpaceNotFoundException
+    raise NotSpaceOwnerException
 
 
 def _desk_count_now(space: Space, local_now: datetime) -> int | None:

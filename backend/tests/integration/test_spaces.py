@@ -1,18 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Generator
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, event
+from sqlalchemy import delete, event, func, insert, select
 
+from app.bookings.models.booking import Booking, BookingStatus
 from app.database.session_factory import ISessionFactory
 from app.spaces.models.space import Space
 from app.spaces.repositories.space import SpaceRepository
 from app.users.models.user import User
-from app.utils.clock import IClock
+from app.utils.clock import IClock, local_hour_to_utc
 from app.utils.di import add_to_di_container, get_from_di_container, remove_from_di_container
 from tests.integration.conftest import register, user_id
 from tests.utils import FixedClock, space_body
@@ -654,6 +655,82 @@ def test_delete_unknown_space_is_404(client: TestClient, host_auth_headers: dict
     assert response.json() == SPACE_NOT_FOUND
 
 
+def bookings_of(space_id: int) -> int:
+    with get_from_di_container(ISessionFactory)() as session:
+        query = select(func.count()).select_from(Booking).where(Booking.space_id == space_id)
+        return int(session.scalar(query) or 0)
+
+
+@pytest.mark.parametrize(
+    ("now", "statuses", "detail"),
+    [
+        (WEDNESDAY_10_LOCAL, ["pending"], "This space has 1 active booking"),
+        (WEDNESDAY_10_LOCAL, ["pending", "confirmed"], "This space has 2 active bookings"),
+        (local(11), ["confirmed"], "This space has 1 active booking"),  # under way
+        (local(11), ["pending"], "This space has 1 active booking"),  # under way, not expired
+    ],
+    ids=["one-pending", "pending-and-confirmed", "confirmed-under-way", "pending-under-way"],
+)
+def test_delete_with_active_bookings_is_409_and_keeps_everything(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    set_now: Callable[[datetime], None],
+    now: datetime,
+    statuses: list[str],
+    detail: str,
+) -> None:
+    set_now(WEDNESDAY_10_LOCAL)
+    space_id = create(client, host_auth_headers)["id"]
+    for n, status in enumerate(statuses):
+        booking_id = book(
+            client, register(client, f"guest{n}@example.com"), space_id, "10:00", "12:00"
+        )
+        if status == "confirmed":
+            set_status(client, host_auth_headers, booking_id, "confirmed")
+    set_now(now)
+
+    response = client.delete(f"/api/spaces/{space_id}", headers=host_auth_headers)
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": detail, "code": "space_has_active_bookings"}
+    assert client.get(f"/api/spaces/{space_id}").status_code == 200
+    assert bookings_of(space_id) == len(statuses)
+
+
+def test_delete_deletes_the_bookings_that_are_no_longer_active_and_only_those(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    set_now: Callable[[datetime], None],
+) -> None:
+    set_now(WEDNESDAY_10_LOCAL)
+    space_id = create(client, host_auth_headers)["id"]
+    other_space_id = create(client, host_auth_headers, name="Second Hub")["id"]
+    guests = [register(client, f"guest{n}@example.com") for n in range(4)]
+    finished = book(client, guests[0], space_id, "10:00", "12:00")
+    set_status(client, host_auth_headers, finished, "confirmed")
+    book(client, guests[1], space_id, "10:00", "12:00")  # expires
+    declined = book(client, guests[2], space_id, "13:00", "14:00")
+    set_status(client, host_auth_headers, declined, "declined")
+    cancelled = book(client, guests[3], space_id, "13:00", "14:00")
+    set_status(client, guests[3], cancelled, "cancelled")
+    # Another space of the same host: its booking stays.
+    kept = book(client, other_auth_headers, other_space_id, "10:00", "12:00")
+    save_favorite(client, other_auth_headers, space_id)
+    set_now(local(14))
+
+    response = client.delete(f"/api/spaces/{space_id}", headers=host_auth_headers)
+
+    # finished, expired, declined and cancelled are not active: they go with the space (CASCADE).
+    assert response.status_code == 204
+    assert bookings_of(space_id) == 0
+    assert all(client.get("/api/bookings", headers=guest).json()["total"] == 0 for guest in guests)
+    assert [
+        b["id"] for b in client.get("/api/bookings", headers=other_auth_headers).json()["items"]
+    ] == [kept]
+    assert client.get("/api/favorites", headers=other_auth_headers).json()["total"] == 0
+
+
 # --- Database guarantees ------------------------------------------------------------------------
 
 
@@ -683,20 +760,34 @@ def vanish_after_read(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(SpaceRepository, "get_by_id", read_then_vanish)
 
 
-@pytest.mark.parametrize(
-    ("method", "body"),
-    [("PATCH", {"name": "Hub Morača"}), ("DELETE", None)],
-    ids=["patch", "delete"],
-)
+def run_before_lock(monkeypatch: pytest.MonkeyPatch, statement: Any) -> None:
+    """Runs `statement` over a second connection right before `SpaceRepository.lock`, that is
+    after DELETE checked the owner, as a parallel request would."""
+    lock = SpaceRepository.lock
+
+    def run_then_lock(self: SpaceRepository, space_id: int) -> int | None:
+        with get_from_di_container(ISessionFactory).engine.begin() as connection:
+            connection.execute(statement)
+        return lock(self, space_id)
+
+    monkeypatch.setattr(SpaceRepository, "lock", run_then_lock)
+
+
+@pytest.mark.parametrize("method", ["PATCH", "DELETE"])
 def test_a_space_deleted_meanwhile_is_404(
     client: TestClient,
     host_auth_headers: dict[str, str],
     space_id: int,
     monkeypatch: pytest.MonkeyPatch,
     method: str,
-    body: dict[str, str] | None,
 ) -> None:
-    vanish_after_read(monkeypatch)
+    body = None
+    if method == "PATCH":
+        body = {"name": "Hub Morača"}
+        vanish_after_read(monkeypatch)
+    else:
+        # DELETE reads the owner as columns, then locks: the row goes in between.
+        run_before_lock(monkeypatch, delete(Space).where(Space.id == space_id))
 
     response = client.request(
         method, f"/api/spaces/{space_id}", json=body, headers=host_auth_headers
@@ -706,6 +797,41 @@ def test_a_space_deleted_meanwhile_is_404(
     assert response.json() == {"detail": "Space not found", "code": "space_not_found"}
     # The failed transaction was rolled back, so the next request on the same thread works.
     assert client.get("/api/spaces").status_code == 200
+
+
+def test_delete_counts_a_booking_made_after_the_owner_check_and_answers_409(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    space_id: int,
+    set_now: Callable[[datetime], None],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The count comes after the lock: a booking made right before it is counted, not deleted."""
+    set_now(WEDNESDAY_10_LOCAL)
+    day = date(2026, 11, 4)
+    run_before_lock(
+        monkeypatch,
+        insert(Booking).values(
+            space_id=space_id,
+            guest_id=user_id(client, other_auth_headers),
+            date=day,
+            start_hour=10,
+            end_hour=12,
+            total_price=6,
+            status=BookingStatus.PENDING,
+            ends_at=local_hour_to_utc(day, 12),
+        ),
+    )
+
+    response = client.delete(f"/api/spaces/{space_id}", headers=host_auth_headers)
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "This space has 1 active booking",
+        "code": "space_has_active_bookings",
+    }
+    assert bookings_of(space_id) == 1
 
 
 def test_create_by_a_host_deleted_meanwhile_is_401(

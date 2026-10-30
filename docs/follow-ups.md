@@ -80,9 +80,12 @@ still uses the mock. When the frontend is connected:
   the same PR.
 - **`PATCH /api/spaces` against confirmed bookings.** A lower `deskCount`, a change of category or
   new opening hours can leave confirmed bookings that no longer fit. The check takes
-  `ISpaceRepository.lock(space_id)` as its first statement, the lock `DELETE /api/spaces` takes in
-  bookings PR 2 (ADR-023). Until then PR 2 computes `availableDesks` as `max(…, 0)`, so a lowered
-  `deskCount` never shows a negative number.
+  `ISpaceRepository.lock(space_id)` as its first statement, the lock `DELETE /api/spaces` takes since
+  bookings PR 2 (the no-op `UPDATE` plus `FOR UPDATE`, ADR-025). Product decision first: which code
+  answers it, and what happens to a booking outside new opening hours. Until then `availableDesks`
+  is `max(…, 0)` (ADR-027), so a lowered `deskCount` never shows a negative number
+  (`test_available_desks_never_go_below_0_when_the_desk_count_is_lowered` in
+  `backend/tests/integration/test_spaces.py`).
 - **Confirm after the space became a draft.** The contract does not say what happens; today the host
   can still confirm (`200`, pinned by `test_confirm_after_the_space_became_a_draft_is_200_today` in
   `backend/tests/integration/test_bookings.py`). Decide, then change the contract and that test together.
@@ -109,6 +112,14 @@ still uses the mock. When the frontend is connected:
   `test_cancel_or_delete_never_reaches_a_new_booking_with_the_same_id` insert and change rows over a
   second connection, which behaves differently under Postgres' READ COMMITTED. Update the docstring
   with the result.
+  **Since bookings PR 2, also `backend/tests/integration/test_spaces_concurrency.py`**, where the
+  difference is real: on Postgres the no-op `UPDATE` alone does not hold back a new booking's
+  foreign-key check (`FOR NO KEY UPDATE` vs `FOR KEY SHARE`), and `lock(space_id)` relies on the
+  `FOR UPDATE` after it (ADR-025), which is reasoned from the Postgres docs, not measured. Expected on
+  Postgres: every test green, and in `test_post_first_and_the_parallel_delete_is_409_with_the_booking_kept`
+  `delete_got_through` is `False` (DELETE waits for the POST's transaction); on SQLite it is `True`
+  (see the SAVEPOINT item below). Also run it once with `lock` reduced to the no-op `UPDATE` (no
+  `FOR UPDATE`): the POST ↔ DELETE tests should then fail on Postgres, which is what proves ADR-025.
 - **A host can confirm a booking whose slot has already started.** A `pending` booking turns
   `expired` only once its slot has ended, so between the start and the end the host can still
   confirm it (`200`), although the guest could no longer book that start (`booking_in_past`). The
@@ -173,6 +184,31 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
   the ids kept, `PRAGMA foreign_key_check` before commit, then on again; tried on a copy of a
   database with rows in every child table and counted before and after. Decide whether the
   stale-tab case is worth that, or whether the frontend handles it (ADR-024, ADR-003, ADR-004).
+
+## From bookings PR 2 (found in `feat/bookings-spaces`, left out on purpose)
+
+- **On SQLite a `POST` commits its row when `add()` releases its SAVEPOINT, before the request ends.**
+  `add()` in `spaces`, `favorites`, `bookings` and `listings` inserts inside `db.begin_nested()`. When
+  that is the request's first write, pysqlite's legacy mode (ADR-023) has no transaction open: the
+  `SAVEPOINT` starts one, and SQLite treats the `RELEASE` of the outermost savepoint as a `COMMIT`.
+  The row is visible to other connections right after `add()` returns, and the endpoint's rollback
+  on a later error no longer removes it, so ADR-009 ("one transaction per endpoint") does not hold
+  for these `POST`s on SQLite. Checked with a script on a temporary database (read, `begin_nested()`
+  + INSERT, then another connection sees the row, and `rollback()` leaves it). No wrong answer found
+  today: nothing after `add()` raises in those services. It shows in
+  `test_post_first_and_the_parallel_delete_is_409_with_the_booking_kept`
+  (`backend/tests/integration/test_spaces_concurrency.py`): DELETE does not wait for the POST,
+  because the booking is already committed. Postgres is not affected (the SAVEPOINT is inside the
+  request's transaction). A fix must keep ADR-023's legacy mode for the `SELECT`s before a lock, for
+  example a `BEGIN` before the first SAVEPOINT of a session that has no transaction yet; check it
+  against `test_bookings_concurrency.py` and `test_spaces_concurrency.py`, and the engine-dependent
+  assertion in that test then flips to `False` (ADR-009, ADR-019, ADR-023).
+- **Frontend: the `409 space_has_active_bookings` count is only in `detail`.**
+  `SpaceHasActiveBookingsError.activeBookings` in `frontend/src/features/spaces/api/spaces-api.ts`
+  needs the number; the contract body is `{"detail": "This space has 2 active bookings", "code"}`.
+  When the frontend is connected: take the count from `bookingCounts.active` of the host's list
+  (`delete-space-dialog.tsx` already falls back to it), or agree on a field in the contract; do not
+  parse `detail` (ADR-018, ADR-005).
 
 ## From the favorites review (left out of `feat/favorites` on purpose)
 

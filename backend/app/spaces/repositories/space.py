@@ -23,11 +23,15 @@ class ISpaceRepository(Protocol):
 
     def exists(self, space_id: int) -> bool: ...
 
+    def get_owner(self, space_id: int) -> tuple[int, str] | None: ...
+
     def add(self, space: Space) -> Space: ...
 
     def save(self, space: Space) -> Space: ...
 
     def delete(self, space_id: int) -> bool: ...
+
+    def lock(self, space_id: int) -> int | None: ...
 
     def lock_for_booking(self, booking_id: int) -> int | None: ...
 
@@ -66,6 +70,20 @@ class SpaceRepository(ISpaceRepository):
         # the space is loaded and not expired, and this check is about rows other requests changed.
         return db.scalar(select(Space.id).where(Space.id == space_id)) is not None
 
+    def get_owner(self, space_id: int) -> tuple[int, str] | None:
+        """`(host_id, status)` of a space; None when it is gone.
+
+        Columns, not the Space entity: nothing enters the identity map before the lock (ADR-024,
+        ADR-026).
+        """
+        db = self._session_factory()
+        row = db.execute(
+            select(Space.host_id, Space.status).where(Space.id == space_id)
+        ).one_or_none()
+        if row is None:
+            return None
+        return row.host_id, row.status
+
     def add(self, space: Space) -> Space:
         db = self._session_factory()
         # A SAVEPOINT: when the database refuses the row, only the savepoint rolls back and the
@@ -91,6 +109,26 @@ class SpaceRepository(ISpaceRepository):
             delete(Space).where(Space.id == space_id).returning(Space.id)
         ).scalar_one_or_none()
         return deleted_id is not None
+
+    def lock(self, space_id: int) -> int | None:
+        """Locks a space until the transaction ends, also against a new booking; None when it is gone.
+
+        The first write of the transaction, as `lock_for_booking` (ADR-023). The no-op UPDATE
+        takes SQLite's write lock, which also holds back the INSERT of a new booking. On Postgres
+        it is only `FOR NO KEY UPDATE` (the id keeps its value), which a new booking's foreign-key
+        check (`FOR KEY SHARE`) passes, so `FOR UPDATE` follows; SQLite leaves it out (ADR-025).
+        """
+        db = self._session_factory()
+        locked_id = db.execute(
+            update(Space)
+            .where(Space.id == space_id)
+            .values(id=Space.id)
+            .returning(Space.id)
+            .execution_options(synchronize_session=False)
+        ).scalar_one_or_none()
+        if locked_id is None:
+            return None
+        return db.scalar(select(Space.id).where(Space.id == locked_id).with_for_update())
 
     def lock_for_booking(self, booking_id: int) -> int | None:
         """Locks the space of a booking until the transaction ends; None when the booking is gone.

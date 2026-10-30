@@ -18,6 +18,7 @@ from app.spaces.exceptions.space import (
     NotAHostException,
     NotOwnFavoritesException,
     NotSpaceOwnerException,
+    SpaceHasActiveBookingsException,
     SpaceNotFoundException,
 )
 from app.spaces.models.space import SpaceCategory, SpaceStatus
@@ -154,8 +155,16 @@ def update_space(
     status_code=status.HTTP_204_NO_CONTENT,
     response_model=None,
     summary="Delete space (host only)",
+    description=(
+        "Not while the space has active bookings (upcoming `pending` or `confirmed`): `409`. "
+        "Deletes its other bookings and its favorites."
+    ),
     responses=error_responses(
-        *CURRENT_USER_ERRORS, NotSpaceOwnerException(), SpaceNotFoundException(), _INVALID_ID
+        *CURRENT_USER_ERRORS,
+        NotSpaceOwnerException(),
+        SpaceNotFoundException(),
+        SpaceHasActiveBookingsException(),
+        _INVALID_ID,
     ),
 )
 def delete_space(

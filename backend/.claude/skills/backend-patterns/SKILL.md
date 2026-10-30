@@ -422,6 +422,53 @@ read is in the identity map: no row → `404 booking_not_found`, another status 
 (`_raise_lost_race`). It never assumes the row is still there. On SQLite this works only in pysqlite's legacy
 transaction mode (ADR-023).
 
+### `DELETE /api/spaces`: the same lock, also against a new booking (ADR-025, ADR-026)
+
+Deleting a space deletes its bookings (CASCADE), so the count of active bookings must not change between the count
+and the DELETE. A new `pending` booking changes it, and `POST /api/bookings` takes no lock: its INSERT only checks
+the foreign key. `lock(space_id)` is therefore the no-op `UPDATE` first (SQLite's write lock, which the INSERT waits
+for) and `FOR UPDATE` right after it (on Postgres the no-op `UPDATE` is only `FOR NO KEY UPDATE`, which the
+foreign-key check's `FOR KEY SHARE` passes; SQLite leaves `FOR UPDATE` out):
+
+```python
+# app/spaces/repositories/space.py
+def lock(self, space_id: int) -> int | None:
+    db = self._session_factory()
+    locked_id = db.execute(
+        update(Space)
+        .where(Space.id == space_id)
+        .values(id=Space.id)
+        .returning(Space.id)
+        .execution_options(synchronize_session=False)
+    ).scalar_one_or_none()
+    if locked_id is None:
+        return None
+    return db.scalar(select(Space.id).where(Space.id == locked_id).with_for_update())
+```
+
+The service checks the owner before the lock, from columns (`get_owner`: `host_id` never changes, `status` only picks
+`404` or `403` for someone who is refused anyway), and counts after it:
+
+```python
+# app/spaces/services/space.py
+owner = self._space_repository.get_owner(space_id)
+if owner is None:
+    raise SpaceNotFoundException
+_raise_unless_owner(*owner, current_user=current_user)
+if self._space_repository.lock(space_id) is None:
+    raise SpaceNotFoundException  # deleted by a parallel request after the check
+active, _ = self._booking_repository.booking_counts(
+    space_ids=[space_id], now=self._clock.now()
+).get(space_id, (0, 0))
+if active:
+    raise SpaceHasActiveBookingsException(active)
+if not self._space_repository.delete(space_id):
+    raise SpaceNotFoundException
+```
+
+`booking_counts` is the same grouped query the host's list uses (§12), so "active" (`pending` or `confirmed` as
+returned) is defined once.
+
 ## 11. Local time (ADR-022)
 
 Booking slots are wall-clock hours in Europe/Podgorica: `date` + `start_hour`/`end_hour`, not timestamps. "Now"
