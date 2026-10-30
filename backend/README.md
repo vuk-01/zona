@@ -4,9 +4,10 @@ FastAPI API with a SQLite/Postgres database and JWT auth, laid out the way a pro
 one package per domain, services and repositories behind Protocols, dependency injection, one
 transaction per request, strict typing. Set up for working with Claude Code (`.claude/`).
 
-The frontend from Workshop 3 lives in its own repository. The contract between the two is
-`docs/entities.md`: field names, types, routes, status codes and the error shape. A change to it is made
-in both repositories in the same pull request.
+The backend lives in the `zona` monorepo, next to the frontend from Workshop 3 (`frontend/`). The contract
+between the two is `docs/entities.md`: field names, types, routes, status codes and the error shape. It has
+two identical copies, `docs/entities.md` at the repo root and `backend/docs/entities.md`; a change to it goes
+into both copies and into the frontend in the same pull request (ADR-018).
 
 ## Run it
 
@@ -92,7 +93,7 @@ poetry add <package>                              # add a dependency (updates py
 | --- | --- |
 | `CLAUDE.md` | Stack, domain-package structure, rules, "done when", how the agent is kept honest |
 | `.claude/rules/` | `backend-api`, `backend-db`, `backend-tests`, `anti-patterns` (WRONG/RIGHT pairs copied from the reference domain) load for matching files; `safety.md` always loads. Rules cite the ADR they come from |
-| `.claude/decisions.md` | ADR-001…017: why the repo works this way (contract, migrations, error shape, owner from token, constraints, UTC, one transaction per endpoint, camelCase, tests, no SQL strings, Poetry, domain packages, DI, pagination, strict typing) |
+| `.claude/decisions.md` | ADR-001…018: why the repo works this way (contract, migrations, error shape, owner from token, constraints, UTC, one transaction per endpoint, camelCase, tests, no SQL strings, Poetry, domain packages, DI, pagination, strict typing, monorepo) |
 | `.claude/frequent-mistakes.md` | Living log: one line per repeated mistake, read by every reviewer agent |
 | `.claude/commands/` | `/brief` (interview → `docs/specs/<feature>.md`), `/new-entity`, `/api-check`, `/review-changes` (parallel reviewers → one verdict) |
 | `.claude/skills/backend-patterns/` | Endpoint, service, repository, model, auth, error and migration patterns that load when working on the API |
@@ -101,7 +102,7 @@ poetry add <package>                              # add a dependency (updates py
 | `.claude/agents/api-reviewer.md` | Reviews correctness, layers, contract and tests; changes nothing |
 | `.claude/agents/security-reviewer.md` | Reviews auth on writes, ownership (IDOR), secrets, SQL injection, tokens, CORS; changes nothing |
 | `.claude/agents/migration-reviewer.md` | Reviews model vs migration, autogenerate pitfalls and the revision chain; changes nothing |
-| `.claude/agents/contract-keeper.md` | Compares `docs/entities.md` with the code and may edit only the doc |
+| `.claude/agents/contract-keeper.md` | Compares `docs/entities.md` with the code and may edit only the two copies of the doc |
 | `.claude/settings.json` | Permissions (poetry, curl, migrations allowed; force push, hard reset, downgrade and volume deletion denied), Explanatory output style, and the five hooks below |
 | `.claude/hooks/session-start.mjs` | SessionStart: branch, last commits, where the rules live |
 | `.claude/hooks/guard-bash.mjs` | PreToolUse (Bash): blocks destructive git, `rm -rf` on source trees, `alembic downgrade`, volume deletion, destructive SQL, reading `.env`, and unapproved `poetry add` |

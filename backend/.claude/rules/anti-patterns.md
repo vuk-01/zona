@@ -151,7 +151,7 @@ class ListingNotFoundException(NotFoundException):
     def __init__(self) -> None:
         super().__init__(message="Listing not found", code="listing_not_found")
 ```
-**Why:** the service knows the domain error, `app/app.py` knows the HTTP status; the `code` is what clients (the frontend repo) switch on. (ADR-005)
+**Why:** the service knows the domain error, `app/app.py` knows the HTTP status; the `code` is what clients (the frontend in `frontend/`) switch on. (ADR-005)
 
 ### `async def` with a sync session
 ```python
