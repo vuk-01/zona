@@ -26,6 +26,8 @@ class IBookingRepository(Protocol):
 
     def get_by_id(self, booking_id: int) -> Booking | None: ...
 
+    def get_participants(self, booking_id: int) -> tuple[int, int] | None: ...
+
     def add(self, booking: Booking) -> Booking: ...
 
     def confirmed_per_hour(
@@ -80,6 +82,21 @@ class BookingRepository(IBookingRepository):
         return db.get(
             Booking, booking_id, options=[joinedload(Booking.space), joinedload(Booking.guest)]
         )
+
+    def get_participants(self, booking_id: int) -> tuple[int, int] | None:
+        """`(guest_id, host_id)` of a booking; None when the booking is gone."""
+        db = self._session_factory()
+        # Columns, not the Booking entity: nothing enters the identity map, so the read after the
+        # space lock still loads the booking as the database has it then (ADR-024). Another
+        # domain's table in the same query (ADR-020).
+        row = db.execute(
+            select(Booking.guest_id, Space.host_id)
+            .join(Booking.space)
+            .where(Booking.id == booking_id)
+        ).one_or_none()
+        if row is None:
+            return None
+        return row.guest_id, row.host_id
 
     def add(self, booking: Booking) -> Booking:
         db = self._session_factory()

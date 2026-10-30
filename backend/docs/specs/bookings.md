@@ -57,8 +57,10 @@ since the favorites review (a query every time, never an answer from the identit
 would happen to work: `ISpaceService.get` returns a schema, and the session holds unchanged rows only weakly, so
 the space has left the identity map by then. The mid-request tests prove that each branch must exist: without
 it a deleted space or guest answers `500`.
-Confirm: `ISpaceRepository.lock_for_booking(booking_id)` as the first statement (it finds the space through a
-subquery on `bookings`, so nothing is read before the lock) → read → roles → transition → count confirmed
+Confirm: `IBookingRepository.get_participants(booking_id)` (columns that never change: no booking → `404`, not
+the guest or the host → `403 not_booking_participant`, both without the lock, ADR-024) →
+`ISpaceRepository.lock_for_booking(booking_id)` as the first write (it finds the space through a subquery on
+`bookings`, so nothing the rule depends on is read before the lock) → read → roles → transition → count confirmed
 per hour (without itself) → compare-and-set on status. A slot is refused only when an hour in `[start, end)` does not
 exist (DST). Cancel/decline/delete: compare-and-set, no lock. A compare-and-set that changes no row reads the status
 again with a `select()` (not `db.get`: the first read is in the identity map): no row → `404 booking_not_found`,

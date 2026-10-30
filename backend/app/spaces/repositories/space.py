@@ -95,8 +95,9 @@ class SpaceRepository(ISpaceRepository):
     def lock_for_booking(self, booking_id: int) -> int | None:
         """Locks the space of a booking until the transaction ends; None when the booking is gone.
 
-        The first statement of the transaction (ADR-023): the space is found through the booking
-        inside the same statement, so nothing is read before the lock.
+        The first write of the transaction (ADR-023): the space is found through the booking
+        inside the same statement, so nothing the rule depends on is read before the lock; only
+        the booking's participants are, and they never change (ADR-024).
         """
         db = self._session_factory()
         # Another domain's table in the same query (ADR-020). A no-op UPDATE is a write on both

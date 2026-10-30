@@ -13,6 +13,7 @@ from app.bookings.models.booking import Booking, BookingStatus
 from app.bookings.repositories.booking import BookingRepository
 from app.database.session_factory import ISessionFactory
 from app.spaces.models.space import Space
+from app.spaces.repositories.space import SpaceRepository
 from app.users.models.user import User
 from app.utils.clock import IClock
 from app.utils.di import add_to_di_container, get_from_di_container, remove_from_di_container
@@ -1318,3 +1319,25 @@ def test_confirm_of_a_booking_deleted_after_the_lock_is_404(
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+
+
+def test_confirm_of_a_booking_deleted_between_the_participant_check_and_the_lock_is_404(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only reads ran before the lock, so a second connection can still delete the row."""
+    lock_for_booking = SpaceRepository.lock_for_booking
+
+    def deleted_then_lock(self: SpaceRepository, *args: Any, **kwargs: Any) -> int | None:
+        on_second_connection(delete(Booking).where(Booking.id == booking_id))
+        return lock_for_booking(self, *args, **kwargs)
+
+    monkeypatch.setattr(SpaceRepository, "lock_for_booking", deleted_then_lock)
+
+    response = change(client, host_auth_headers, booking_id, "confirmed")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+    assert stored_status(booking_id) is None

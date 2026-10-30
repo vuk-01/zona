@@ -73,6 +73,7 @@ def booking_repository() -> Mock:
     repository: Mock = create_autospec(IBookingRepository, instance=True)
     repository.add.side_effect = REFUSED
     repository.confirmed_per_hour.return_value = {}
+    repository.get_participants.return_value = (GUEST.id, HOST_ID)
     return repository
 
 
@@ -400,10 +401,11 @@ def test_the_guest_cannot_confirm_or_decline(
 # --- confirm under the space lock (ADR-023) -------------------------------------------------------
 
 
-def test_confirm_takes_the_space_lock_before_anything_is_read(
+def test_confirm_checks_who_takes_part_then_locks_before_the_booking_is_read(
     service: BookingService, booking_repository: Mock, space_repository: Mock
 ) -> None:
     calls = Mock()
+    calls.attach_mock(booking_repository.get_participants, "get_participants")
     calls.attach_mock(space_repository.lock_for_booking, "lock_for_booking")
     calls.attach_mock(booking_repository.get_by_id, "get_by_id")
     calls.attach_mock(booking_repository.confirmed_per_hour, "confirmed_per_hour")
@@ -415,6 +417,7 @@ def test_confirm_takes_the_space_lock_before_anything_is_read(
     service.update(3, change_to("confirmed"), HOST)
 
     assert [name for name, _, _ in calls.mock_calls] == [
+        "get_participants",
         "lock_for_booking",
         "get_by_id",
         "confirmed_per_hour",
@@ -438,6 +441,29 @@ def test_confirm_of_a_booking_gone_before_the_lock_is_404(
     booking_repository.get_by_id.assert_not_called()
 
 
+def test_confirm_by_someone_else_is_403_without_the_lock(
+    service: BookingService, booking_repository: Mock, space_repository: Mock
+) -> None:
+    with pytest.raises(NotBookingParticipantException):
+        service.update(3, change_to("confirmed"), STRANGER)
+
+    booking_repository.get_participants.assert_called_once_with(3)
+    space_repository.lock_for_booking.assert_not_called()
+    booking_repository.get_by_id.assert_not_called()
+
+
+def test_confirm_of_an_unknown_booking_is_404_without_the_lock(
+    service: BookingService, booking_repository: Mock, space_repository: Mock
+) -> None:
+    booking_repository.get_participants.return_value = None
+
+    with pytest.raises(BookingNotFoundException):
+        service.update(3, change_to("confirmed"), HOST)
+
+    space_repository.lock_for_booking.assert_not_called()
+    booking_repository.get_by_id.assert_not_called()
+
+
 @pytest.mark.parametrize("change", ["declined", "cancelled"])
 def test_decline_and_cancel_take_no_lock(
     service: BookingService, booking_repository: Mock, space_repository: Mock, change: str
@@ -447,6 +473,7 @@ def test_decline_and_cancel_take_no_lock(
 
     service.update(3, change_to(change), HOST)
 
+    booking_repository.get_participants.assert_not_called()
     space_repository.lock_for_booking.assert_not_called()
     booking_repository.confirmed_per_hour.assert_not_called()
 

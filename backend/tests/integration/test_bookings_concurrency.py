@@ -5,7 +5,8 @@ real `SpaceRepository.lock_for_booking` is wrapped: thread A takes the lock and 
 transaction open until the test releases it; thread B sets `b_calling` right before calling the
 real lock and `b_returned` right after it. While A holds the lock, B must not return within
 `BLOCKED_FOR`: it is waiting in the database (SQLite's busy handler on the write lock, a row lock
-on Postgres). The control test replaces the lock with a plain read and must overbook.
+on Postgres). The control test replaces the lock with a plain read and must overbook. Someone
+else's confirm is refused before the lock (ADR-024): it answers while another confirm holds it.
 
 The same file runs on SQLite (default) and on Postgres through `DATABASE_URL`:
 
@@ -14,7 +15,7 @@ The same file runs on SQLite (default) and on Postgres through `DATABASE_URL`:
     DATABASE_URL=postgresql+psycopg://app:app@localhost:5432/app_test \
         poetry run pytest tests/integration
 
-SQLite: 3 passed, 15 runs in a row. Postgres: not verified yet (2026-10-30, Docker was not running).
+SQLite: 4 passed, 15 runs in a row. Postgres: not verified yet (2026-10-30, Docker was not running).
 """
 
 from __future__ import annotations
@@ -35,6 +36,7 @@ from app.database.session_factory import ISessionFactory
 from app.spaces.repositories.space import ISpaceRepository, SpaceRepository
 from app.utils.clock import IClock
 from app.utils.di import add_to_di_container, get_from_di_container, remove_from_di_container
+from tests.integration.conftest import register
 from tests.utils import FixedClock, space_body
 
 # Wednesday 2026-10-28 10:00 in Podgorica; the bookings are a week later, 10:00-12:00.
@@ -203,6 +205,41 @@ def test_parallel_confirms_wait_for_the_lock_and_never_overbook(
     assert statuses[0] == 200
     assert sorted(statuses) == outcome
     assert confirmed_in_db(space_id) == outcome.count(200)
+
+
+def test_confirm_by_someone_else_is_403_while_the_space_is_locked_and_never_waits(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    gated: GatedSpaceRepository,
+) -> None:
+    """A user who takes no part is refused before the lock (ADR-024): never in the database's queue."""
+    stranger_headers = register(client, "jovana@example.com")
+    space_id = new_space(client, host_auth_headers)
+    first, second = pending_bookings(client, other_auth_headers, space_id, 2)
+    a_holds, release_a = hold_after_lock(gated, first)
+    stranger_calling, _ = watch_lock_call(gated, second)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        try:
+            a: Future[int] = pool.submit(confirm, client, host_auth_headers, first)
+            assert a_holds.wait(TIMEOUT), "A never took the lock"
+            stranger = pool.submit(
+                client.patch,
+                f"/api/bookings/{second}",
+                json={"status": "confirmed"},
+                headers=stranger_headers,
+            )
+            # Answered while A still holds the lock: the request never waited for it.
+            response = stranger.result(TIMEOUT)
+        finally:
+            release_a.set()
+        assert a.result(TIMEOUT) == 200
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "not_booking_participant"
+    assert not stranger_calling.is_set(), "someone else's confirm reached the space lock"
+    assert confirmed_in_db(space_id) == 1
 
 
 def test_control_without_the_lock_two_confirms_overbook(

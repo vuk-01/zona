@@ -326,16 +326,17 @@ Unit: the autouse `auth_service` fixture authenticates every request as user 1. 
 ## 10. A rule no constraint can hold: lock first, then read, count, compare-and-set (ADR-023)
 
 "At most `deskCount` confirmed bookings in any hour" spans rows, and no portable constraint counts rows per hour.
-Confirm serializes on the space row instead. The lock is the first statement of the transaction; the space is
-found through the booking inside the same statement, so nothing is read before it:
+Confirm serializes on the space row instead. The lock is the first write of the transaction; the space is
+found through the booking inside the same statement, so nothing the rule depends on is read before it:
 
 ```python
 # app/spaces/repositories/space.py (a repository may query another domain's table, ADR-020)
 def lock_for_booking(self, booking_id: int) -> int | None:
     """Locks the space of a booking until the transaction ends; None when the booking is gone.
 
-    The first statement of the transaction (ADR-023): the space is found through the booking
-    inside the same statement, so nothing is read before the lock.
+    The first write of the transaction (ADR-023): the space is found through the booking
+    inside the same statement, so nothing the rule depends on is read before the lock; only
+    the booking's participants are, and they never change (ADR-024).
     """
     db = self._session_factory()
     # Another domain's table in the same query (ADR-020). A no-op UPDATE is a write on both
@@ -351,8 +352,22 @@ def lock_for_booking(self, booking_id: int) -> int | None:
     ).scalar_one_or_none()
 ```
 
-Only a write that takes room takes the lock: `BookingService.update` calls it first when the change is
-`confirmed`, before it reads the booking; `None` means the booking is gone (`404 booking_not_found`).
+Only a write that takes room takes the lock: `BookingService.update` calls it when the change is `confirmed`,
+before it reads the booking; `None` means the booking is gone (`404 booking_not_found`). Right before the lock it
+checks who takes part, so someone else's confirm is `403` without holding the space (ADR-024):
+
+```python
+# app/bookings/services/booking.py
+participants = self._booking_repository.get_participants(booking_id)
+if participants is None:
+    raise BookingNotFoundException
+if current_user.id not in participants:
+    raise NotBookingParticipantException
+```
+
+`get_participants` selects `Booking.guest_id, Space.host_id` as columns, never the `Booking` entity: an entity read
+before the lock would sit in the identity map, and the read after the lock would return it with the status it had
+before. Only values that never change may be read before a lock.
 
 Then the service reads the booking, checks the role and the transition, and counts the confirmed bookings per
 hour without this one. Under the lock the count is the truth (on `POST` the same count is only advice, because a
