@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 
 from app.database.session_factory import ISessionFactory
 from app.favorites.models.favorite import Favorite
-from app.spaces.models.space import Space, SpaceStatus
+from app.spaces.models.space import Space, space_visible_to
 from app.spaces.schemas.space import SpaceListFilters
 from app.utils.di import inject
 from app.utils.pagination import Page, PaginationParams, paginate
@@ -40,7 +40,7 @@ class SpaceRepository(ISpaceRepository):
         db = self._session_factory()
         # The host is on every card: load it in the same query, not one query per row (N+1).
         query = select(Space).options(joinedload(Space.host))
-        query = _visible_to(query, viewer_id)
+        query = query.where(space_visible_to(viewer_id))
         query = _filtered(query, filters)
         if filters.favorite_of is not None:
             # Another domain's table in the same query (ADR-020): only the spaces this user saved,
@@ -88,13 +88,6 @@ class SpaceRepository(ISpaceRepository):
             delete(Space).where(Space.id == space_id).returning(Space.id)
         ).scalar_one_or_none()
         return deleted_id is not None
-
-
-def _visible_to(query: Select[Space], viewer_id: int | None) -> Select[Space]:
-    """Listed spaces for everyone, plus the viewer's own drafts; other people's drafts never."""
-    if viewer_id is None:
-        return query.where(Space.status == SpaceStatus.LISTED)
-    return query.where(or_(Space.status == SpaceStatus.LISTED, Space.host_id == viewer_id))
 
 
 def _filtered(query: Select[Space], filters: SpaceListFilters) -> Select[Space]:

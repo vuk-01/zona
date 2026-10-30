@@ -4,7 +4,18 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, TIMESTAMP, CheckConstraint, ForeignKey, Numeric, String, Text, func
+from sqlalchemy import (
+    JSON,
+    TIMESTAMP,
+    CheckConstraint,
+    ColumnElement,
+    ForeignKey,
+    Numeric,
+    String,
+    Text,
+    func,
+    or_,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
@@ -76,3 +87,14 @@ class Space(Base):
     favorites: Mapped[list[Favorite]] = relationship(
         "Favorite", back_populates="space", cascade="all, delete-orphan", passive_deletes=True
     )
+
+
+def space_visible_to(viewer_id: int | None) -> ColumnElement[bool]:
+    """Listed spaces for everyone, plus the viewer's own drafts; other people's drafts never.
+
+    One rule for every query that returns spaces or rows about them (the spaces list, favorites):
+    a repository of another domain imports it with the model (ADR-020).
+    """
+    if viewer_id is None:
+        return Space.status == SpaceStatus.LISTED
+    return or_(Space.status == SpaceStatus.LISTED, Space.host_id == viewer_id)

@@ -45,8 +45,9 @@ in the contract.
 ## Access rules
 - Only a signed-in user; `user_id` is always `current_user.id`, never from the body (ADR-006).
 - Favorites are private: GET returns only the user's own, DELETE removes only the user's own pair.
-- `GET /api/favorites` returns every own favorite. The cards use `favoriteOf`, which hides a saved
-  space the user can no longer view (another host's space that became a draft).
+- `GET /api/favorites` and `favoriteOf` both leave out a saved space the user can no longer view
+  (another host's space that became a draft); the row stays and comes back when the space is
+  listed again. Both use the one visibility rule, `space_visible_to` in `app/spaces/models/space.py`.
 
 ## Error cases
 | status | when | detail | code |

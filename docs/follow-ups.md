@@ -40,6 +40,8 @@ The backend has `GET/POST/DELETE /api/favorites` and `GET /api/spaces?favoriteOf
   `userId`; the real API takes the user from the token, so the parameter goes. `list` reads `items`
   from the paginated answer.
 - `create` answers `201` or `200` (already saved); both are success. `remove` is `204` either way.
+- `list` leaves out a saved space the user can no longer view (another host's space that became a
+  draft), the same as `favoriteOf`; the hearts then show it as not saved until it is listed again.
 - `frontend/src/features/spaces/api/spaces-api.ts`: `favoriteOf` comes back newest saved first from the
   backend; a `403 not_own_favorites` or `401` means the page asked with the wrong id or no token.
 - `frontend/src/lib/favorite.ts` and the rows in `frontend/src/lib/mock-db.ts` go with the mock.

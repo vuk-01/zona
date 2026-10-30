@@ -126,6 +126,29 @@ def test_list_pagination(
     assert [item["spaceId"] for item in body["items"]] == [space_id]
 
 
+def test_list_leaves_out_a_saved_space_that_became_someone_elses_draft(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    space_id: int,
+) -> None:
+    second_id = new_space(client, host_auth_headers, name="Second space")
+    save(client, other_auth_headers, space_id)
+    save(client, other_auth_headers, second_id)
+    save(client, host_auth_headers, space_id)
+
+    patched = client.patch(
+        f"/api/spaces/{space_id}", json={"status": "draft"}, headers=host_auth_headers
+    )
+    assert patched.status_code == 200
+
+    other = client.get("/api/favorites", headers=other_auth_headers).json()
+    host = client.get("/api/favorites", headers=host_auth_headers).json()
+    assert (other["total"], [item["spaceId"] for item in other["items"]]) == (1, [second_id])
+    assert (host["total"], host["items"][0]["spaceId"]) == (1, space_id)  # own draft stays
+    assert favorites_in_db() == 3  # hidden, not deleted: listing the space again brings it back
+
+
 def test_list_without_token_is_401(client: TestClient) -> None:
     assert client.get("/api/favorites").status_code == 401
 

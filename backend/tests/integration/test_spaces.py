@@ -613,7 +613,7 @@ def test_favorite_of_hides_a_saved_space_that_became_someone_elses_draft(
     hearts = client.get("/api/favorites", headers=other_auth_headers).json()
 
     assert cards["total"] == 0
-    assert hearts["total"] == 1  # the favorite itself stays (docs/specs/favorites.md)
+    assert hearts["total"] == 0  # both lists use the one rule; the row stays in the database
 
 
 def test_favorite_of_needs_a_token_and_the_own_id(

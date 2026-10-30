@@ -6,6 +6,7 @@ from sqlalchemy import delete, select
 
 from app.database.session_factory import ISessionFactory
 from app.favorites.models.favorite import Favorite
+from app.spaces.models.space import Space, space_visible_to
 from app.utils.di import inject
 from app.utils.pagination import Page, PaginationParams, paginate
 
@@ -27,10 +28,13 @@ class FavoriteRepository(IFavoriteRepository):
 
     def get_all(self, user_id: int, pagination_params: PaginationParams) -> Page[Favorite]:
         db = self._session_factory()
+        # Another domain's table in the same query (ADR-020): a saved space the user can no longer
+        # view (another host's space that became a draft) is left out, as with `favoriteOf`.
         # Newest saved first; `id` breaks the tie between two rows saved in the same second.
         query = (
             select(Favorite)
-            .where(Favorite.user_id == user_id)
+            .join(Space, Favorite.space_id == Space.id)
+            .where(Favorite.user_id == user_id, space_visible_to(user_id))
             .order_by(Favorite.created_at.desc(), Favorite.id.desc())
         )
         return paginate(query=query, pagination_params=pagination_params, db=db)
