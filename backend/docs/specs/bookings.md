@@ -68,6 +68,14 @@ another status → `422 invalid_status_change`; it never assumes the row is stil
 (not idempotent, ADR-021 does not apply).
 Popular times: last 8 weeks (fewer if the space is younger), confirmed bookings only, per weekday and hour 08–21:
 taken units / units (`deskCount` or 1) averaged over that weekday's dates, 0–100 rounded; `null` for a closed day.
+Visibility through `ISpaceService.get` (another host's draft → `404`), then `now` from `IClock`:
+`now - created_at < 14 days` (UTC instants) → `200 null`. The window is local dates (`now` in Podgorica), from
+`max(today - 56 days, local creation date + 1 day)` to `today - 1 day`: today and the future are not history, and the
+creation day could not be booked before the space existed. `IBookingRepository.confirmed_per_date_and_hour` counts
+stored `confirmed` rows per `(date, hour)` on the `(space_id, date)` index. Per weekday: closed in the current opening
+hours → `null`; an hour outside them → `0`; else `S = Σ min(taken, units)` over the weekday's `N` dates and the value
+is `(200·S + units·N) // (2·units·N)`, half up in integers (Python's `round()` is half to even; the mock uses
+`Math.round`). DST does not reach it: the window is `date` arithmetic, and the shifted hours (02:00) are outside 08–21.
 
 ## Access rules
 - Booking: any signed-in user except the space's host; `guest_id` is `current_user.id`.
@@ -98,6 +106,7 @@ taken units / units (`deskCount` or 1) averaged over that weekday's dates, 0–1
 - [ ] Integration `test_bookings.py`: every route happy path + 401/403/404/422; same status → `422 invalid_status_change`; expired cannot be confirmed; `booking_in_past` at exactly start; DST with a fixed `IClock`: 2026-10-25 `ends_at`/finished, 2027-03-28 `01–02` → 201, `01–03` and `02–03` → `422 invalid_slot`; lock leaves the space row unchanged; mid-request (second connection): space deleted on POST → 404, guest deleted → 401, booking deleted on PATCH/DELETE → 404 (on confirm the space lock already holds SQLite's write lock: delete in the request's own session, as `test_favorites.py` does); a parallel status change between the read and the compare-and-set → `422 invalid_status_change`
 - [ ] `test_bookings_concurrency.py`: parallel confirms `[200, 409]` (whole space) and `[200, 200, 409]` (2 desks); control test without the lock overbooks; run on SQLite and Postgres
 - [ ] PR 2: `availableDesks` never below 0 after deskCount is lowered; `bookingCounts` on own list only; `DELETE` 409 with the count; availability matches confirm
+- [ ] PR 3: `/popular-times` registered above `/{booking_id}` (unit test: no token → `200`, not `401`); unit tests for the window (local today at 00:30, creation day + 1), half up (`21.875 → 22`, `12.5 → 13`), the cap at 100, closed day `null`, `0` outside the opening hours, 13 d 23 h → `null`, exactly 14 d → values; `tests/integration/test_bookings_popular_times.py` (own file, so PR 2 can change `test_bookings.py` meanwhile): bookings through `POST`/`PATCH` with the clock moved back, only confirmed, only this space, not today or later, a younger space, `200 null`, both DST dates, draft `200` for its host and `404` for others, `401 invalid_token`, `404`, `422`; both `entities.md` copies (the calculation, "Built so far" names only `availability`); `docs/follow-ups.md`
 - [ ] Local DB backed up (`data/app-prije-bookings.db`) before `migrate`; migration read; `alembic check` clean
 - [ ] Both `entities.md` copies identical and complete for all routes (PR 1); ADR-022, ADR-023; `docs/follow-ups.md`
 - [ ] `poetry run lint && poetry run typecheck && poetry run test` green; `/review-changes` APPROVED
