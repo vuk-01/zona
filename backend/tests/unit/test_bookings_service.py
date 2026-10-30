@@ -15,7 +15,9 @@ from sqlalchemy.exc import IntegrityError
 from app.auth.exceptions.auth import InvalidTokenException
 from app.auth.schemas.auth import CurrentUser
 from app.bookings.exceptions.booking import (
+    BookingInPastException,
     BookingNotFoundException,
+    BookingTooFarAheadException,
     CannotBookOwnSpaceException,
     InvalidStatusChangeException,
     NotBookingGuestException,
@@ -39,6 +41,7 @@ from app.spaces.schemas.space import SpaceResponseSchema
 from app.spaces.services.space import ISpaceService
 from app.users.models.user import User
 from app.users.repositories.user import IUserRepository
+from app.utils.clock import WEEKDAYS
 from app.utils.pagination import Page, PaginationParams
 from tests.utils import FixedClock, create_current_user, space_body
 
@@ -51,6 +54,7 @@ NOW = datetime(2026, 10, 28, 9, 0, tzinfo=UTC)
 WEDNESDAY_10_TO_12 = BookingCreateRequestSchema(
     space_id=7, date=date(2026, 11, 4), start_time="10:00", end_time="12:00"
 )
+ALL_DAY = {"open": "00:00", "close": "24:00"}
 REFUSED = IntegrityError("INSERT", {}, Exception("FOREIGN KEY constraint failed"))
 
 
@@ -203,6 +207,58 @@ def test_a_desk_left_in_every_hour_goes_on_to_the_insert(
 
     booking = booking_repository.add.call_args.args[0]
     assert (booking.guest_id, booking.status, booking.total_price) == (GUEST.id, "pending", 6.0)
+
+
+def all_day_on(day: date) -> BookingCreateRequestSchema:
+    return BookingCreateRequestSchema(space_id=7, date=day, start_time="00:00", end_time="24:00")
+
+
+@pytest.mark.parametrize(
+    ("day", "error"),
+    [
+        (date(2027, 10, 29), BookingTooFarAheadException),  # 366 days after 2026-10-28
+        (date(9999, 12, 31), BookingTooFarAheadException),  # its 24:00 would be in year 10000
+        (date(2026, 10, 27), BookingInPastException),  # yesterday in Podgorica
+        (date(1, 1, 1), BookingInPastException),  # its 00:00 in UTC would be in year 0
+    ],
+)
+def test_a_date_outside_the_next_365_days_is_refused_before_the_slot_is_checked(
+    service: BookingService,
+    space_service: Mock,
+    booking_repository: Mock,
+    day: date,
+    error: type[Exception],
+) -> None:
+    """The time helpers cannot reach year 0 or 10000, so the date goes first (ADR-022)."""
+    space_service.get.return_value = space(openingHours=dict.fromkeys(WEEKDAYS, ALL_DAY))
+
+    with pytest.raises(error):
+        service.create(all_day_on(day), GUEST)
+
+    booking_repository.confirmed_per_hour.assert_not_called()
+
+
+def test_a_past_date_is_booking_in_past_also_on_a_closed_day(
+    service: BookingService, booking_repository: Mock
+) -> None:
+    """Sunday 2026-10-25: the space is closed, but the date is already gone."""
+    with pytest.raises(BookingInPastException):
+        service.create(WEDNESDAY_10_TO_12.model_copy(update={"date": date(2026, 10, 25)}), GUEST)
+
+    booking_repository.confirmed_per_hour.assert_not_called()
+
+
+def test_the_365th_day_and_today_can_be_booked(
+    service: BookingService, space_service: Mock, booking_repository: Mock
+) -> None:
+    space_service.get.return_value = space(openingHours=dict.fromkeys(WEEKDAYS, ALL_DAY))
+
+    for day, start in ((date(2027, 10, 28), "00:00"), (date(2026, 10, 28), "11:00")):
+        request = all_day_on(day).model_copy(update={"start_time": start})
+        with pytest.raises(IntegrityError):  # the mocked INSERT refuses: it was reached
+            service.create(request, GUEST)
+
+    assert booking_repository.add.call_count == 2
 
 
 # --- list and get ---------------------------------------------------------------------------------

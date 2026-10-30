@@ -98,6 +98,14 @@ def test_create_without_token_is_401(client: TestClient, booking_service: Mock) 
         ({"spaceId": None}, "spaceId"),
         ({"date": "2026-13-01"}, "date"),
         ({"date": "04.11.2026"}, "date"),
+        # Pydantic's lax date would take these as 2026-11-05 and 2026-11-04.
+        ({"date": 1793836800}, "date"),
+        ({"date": "1793836800"}, "date"),
+        ({"date": "2026-11-04T00:00:00"}, "date"),
+        # Arabic-Indic digits: `\d` matched them and the service read "1\u0660" as 10.
+        ({"startTime": "1\u0660:00"}, "startTime"),
+        ({"endTime": "1\u0662:00"}, "endTime"),
+        ({"startTime": "10:0\u0660"}, "startTime"),
         ({"startTime": "10"}, "startTime"),
         ({"startTime": "24:00"}, "startTime"),
         ({"startTime": "9:00"}, "startTime"),
@@ -115,6 +123,19 @@ def test_create_with_invalid_body_is_422_with_field_errors(
     assert (body["detail"], body["code"]) == ("Validation failed", "validation_error")
     assert set(body["fieldErrors"]) == {field}
     booking_service.create.assert_not_called()
+
+
+def test_a_date_that_is_not_yyyy_mm_dd_says_the_format(
+    client: TestClient, booking_service: Mock
+) -> None:
+    created = client.post("/api/bookings", json=BODY | {"date": 1793836800}, headers=AUTH)
+    listed = client.get("/api/bookings?date=1793836800", headers=AUTH)
+
+    for response in (created, listed):
+        assert response.status_code == 422
+        assert response.json()["fieldErrors"]["date"] == "Use the format YYYY-MM-DD"
+    booking_service.create.assert_not_called()
+    booking_service.list.assert_not_called()
 
 
 @pytest.mark.parametrize("missing", ["spaceId", "date", "startTime", "endTime"])
@@ -189,6 +210,8 @@ def test_list_without_filters_passes_empty_filters(
         ("hostId=2147483648", "hostId"),
         ("status=done", "status"),
         ("date=2026-02-30", "date"),
+        ("date=1793836800", "date"),
+        ("date=2026-11-04T00:00:00", "date"),
         ("size=501", "size"),
     ],
 )

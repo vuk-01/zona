@@ -323,6 +323,41 @@ def test_create_that_starts_now_or_earlier_is_422_booking_in_past(
         }
 
 
+@pytest.mark.parametrize(
+    ("day", "status_code", "code"),
+    [
+        ("2027-10-28", 201, None),  # 365 days after Wednesday 2026-10-28
+        ("2027-10-29", 422, "booking_too_far_ahead"),
+        ("9999-12-31", 422, "booking_too_far_ahead"),  # was a 500: its 24:00 is in year 10000
+        ("0001-01-01", 422, "booking_in_past"),  # was a 500: its 00:00 in UTC is in year 0
+    ],
+)
+def test_create_takes_a_date_from_today_to_365_days_ahead(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    day: str,
+    status_code: int,
+    code: str | None,
+) -> None:
+    space_id = new_space(client, host_auth_headers, openingHours=open_every_day())
+
+    response = book(
+        client, other_auth_headers, space_id, date=day, startTime="00:00", endTime="24:00"
+    )
+
+    assert response.status_code == status_code, response.text
+    if code == "booking_too_far_ahead":
+        message = "Pick a date within the next 365 days"
+        assert response.json() == {
+            "detail": message,
+            "code": code,
+            "fieldErrors": {"date": message},
+        }
+    elif code is not None:
+        assert response.json()["code"] == code
+
+
 def test_ends_at_on_the_day_the_clocks_go_back_takes_the_first_02_00(
     client: TestClient,
     host_auth_headers: dict[str, str],

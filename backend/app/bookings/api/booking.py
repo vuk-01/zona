@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Annotated
 
 from fastapi import Depends, Path, Query, status
@@ -9,6 +8,7 @@ from app.auth.schemas.auth import CurrentUser
 from app.bookings.exceptions.booking import (
     BookingInPastException,
     BookingNotFoundException,
+    BookingTooFarAheadException,
     CannotBookOwnSpaceException,
     InvalidSlotException,
     InvalidStatusChangeException,
@@ -25,6 +25,7 @@ from app.bookings.schemas.booking import (
     BookingResponseSchema,
     BookingReturnedStatus,
     BookingUpdateRequestSchema,
+    IsoDate,
 )
 from app.bookings.services.booking import IBookingService
 from app.database.session_handler import DBAPIRouter
@@ -47,7 +48,7 @@ _INVALID_STATUS = ValidationFailedException(
     {"status": "Input should be 'confirmed', 'declined' or 'cancelled'"}
 )
 _INVALID_BODY = ValidationFailedException(
-    {"startTime": "String should match pattern '^([01]\\d|2[0-3]):[0-5]\\d$'"}
+    {"startTime": "String should match pattern '^([01][0-9]|2[0-3]):[0-5][0-9]$'"}
 )
 
 
@@ -63,7 +64,7 @@ def get_booking_filters(
         BookingReturnedStatus | None,
         Query(alias="status", description="As returned: `finished` and `expired` too"),
     ] = None,
-    day: Annotated[date | None, Query(alias="date", description="YYYY-MM-DD")] = None,
+    day: Annotated[IsoDate | None, Query(alias="date", description="YYYY-MM-DD")] = None,
 ) -> BookingListFilters:
     return BookingListFilters(
         space_id=space_id, guest_id=guest_id, host_id=host_id, status=booking_status, date=day
@@ -125,6 +126,7 @@ def get_booking(
         SlotFullException(),
         InvalidSlotException(),
         BookingInPastException(),
+        BookingTooFarAheadException(),
         _INVALID_BODY,
     ),
 )

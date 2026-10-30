@@ -63,6 +63,13 @@ still uses the mock. When the frontend is connected:
   `hooks/use-booking-slot.ts`.
 - `422 invalid_slot` and `422 booking_in_past` map to `InvalidBookingError`, with `fieldErrors` on
   the field at fault.
+- **Booking window.** The backend takes a `date` from today to 365 days ahead (Podgorica) and answers
+  `422 booking_too_far_ahead` ("Pick a date within the next 365 days", `fieldErrors.date`) after that,
+  and `booking_in_past` for a date before today before any slot check. The mock's `create` in
+  `bookings-api.ts` checks only the past (with its own message, "Pick today or a later date"):
+  give it the same two checks, and map `booking_too_far_ahead` to `InvalidBookingError` on `date`.
+  The date picker allows 60 days (`BOOKABLE_DAYS` in `hooks/use-booking-slot.ts`), so the UI never
+  reaches the limit today; decide whether the picker stays at 60 or follows the backend's 365.
 
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import NoReturn, Protocol
 
 from sqlalchemy.exc import IntegrityError
@@ -10,6 +10,7 @@ from app.auth.schemas.auth import CurrentUser
 from app.bookings.exceptions.booking import (
     BookingInPastException,
     BookingNotFoundException,
+    BookingTooFarAheadException,
     CannotBookOwnSpaceException,
     InvalidSlotException,
     InvalidStatusChangeException,
@@ -35,9 +36,18 @@ from app.spaces.repositories.space import ISpaceRepository
 from app.spaces.schemas.space import SpaceResponseSchema
 from app.spaces.services.space import ISpaceService
 from app.users.repositories.user import IUserRepository
-from app.utils.clock import WEEKDAYS, IClock, hour_exists, local_hour_to_utc
+from app.utils.clock import (
+    LOCAL_TIMEZONE,
+    WEEKDAYS,
+    IClock,
+    hour_exists,
+    local_hour_to_utc,
+)
 from app.utils.di import inject
 from app.utils.pagination import Page, PaginationParams
+
+# How far ahead a guest can book: a date at most this many days after today (docs/entities.md).
+BOOKING_DAYS_AHEAD = 365
 
 
 class IBookingService(Protocol):
@@ -187,8 +197,10 @@ class BookingService(IBookingService):
         space = self._space_service.get(space_id=data.space_id, current_user=current_user)
         if space.host.id == current_user.id:
             raise CannotBookOwnSpaceException
-        start_hour, end_hour = _slot_hours(space, data)
         now = self._clock.now()
+        # Before the slot: the time helpers cannot reach a date in year 1 or 9999 (OverflowError).
+        _raise_if_outside_booking_window(data.date, now)
+        start_hour, end_hour = _slot_hours(space, data)
         # A booking that starts exactly now has already started (ADR-022).
         if local_hour_to_utc(data.date, start_hour) <= now:
             raise BookingInPastException
@@ -240,6 +252,16 @@ class BookingService(IBookingService):
         for hour in range(start_hour, end_hour):
             if taken.get(hour, 0) >= units:
                 raise SlotFullException.at(_hh_mm(hour), has_desks=desk_count is not None)
+
+
+def _raise_if_outside_booking_window(day: date, now: datetime) -> None:
+    """From today to `BOOKING_DAYS_AHEAD` days ahead, today being the date in Podgorica now."""
+    today = now.astimezone(LOCAL_TIMEZONE).date()
+    # A day already gone is in the past whatever the space's hours that day (docs/entities.md).
+    if day < today:
+        raise BookingInPastException
+    if day > today + timedelta(days=BOOKING_DAYS_AHEAD):
+        raise BookingTooFarAheadException
 
 
 def _slot_hours(space: SpaceResponseSchema, data: BookingCreateRequestSchema) -> tuple[int, int]:

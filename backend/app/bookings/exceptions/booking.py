@@ -76,6 +76,14 @@ class BookingInPastException(UnprocessableEntityException):
         )
 
 
+class BookingTooFarAheadException(UnprocessableEntityException):
+    def __init__(self) -> None:
+        message = "Pick a date within the next 365 days"
+        super().__init__(
+            message=message, code="booking_too_far_ahead", field_errors={"date": message}
+        )
+
+
 class SlotFullException(ConflictException):
     def __init__(self, message: str = "No desks left at 10:00") -> None:
         super().__init__(message=message, code="slot_full")
