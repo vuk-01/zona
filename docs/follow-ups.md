@@ -101,9 +101,20 @@ still uses the mock. When the frontend is connected:
 - **`backend/app/database/__init__.py`** goes against `backend/CLAUDE.md` and ADR-014 (no
   `__init__.py` below `app/` except `app/__init__.py`). It only re-exports `Base`, for
   `alembic/env.py`; import `Base` from `app.database.base` there and delete the file.
-- **Postgres run of the concurrency tests.** `backend/tests/integration/test_bookings_concurrency.py`
-  passed on SQLite only; the Postgres command is in its docstring (not run on 2026-10-30, Docker was
-  not running). Update the docstring with the result.
+- **Postgres run of the concurrency tests (still open after the PR 1 review).**
+  `backend/tests/integration/test_bookings_concurrency.py` passed on SQLite only; the Postgres command
+  is in its docstring (not run on 2026-10-30, Docker was not running). The lock (ADR-023) and the
+  `403` before it (ADR-024) are proven on SQLite only, so bookings is not done until this runs. Run the
+  whole `test_bookings.py` on Postgres in the same go: the lost-race tests and
+  `test_cancel_or_delete_never_reaches_a_new_booking_with_the_same_id` insert and change rows over a
+  second connection, which behaves differently under Postgres' READ COMMITTED. Update the docstring
+  with the result.
+- **A host can confirm a booking whose slot has already started.** A `pending` booking turns
+  `expired` only once its slot has ended, so between the start and the end the host can still
+  confirm it (`200`), although the guest could no longer book that start (`booking_in_past`). The
+  contract does not say whether that is wanted. Product decision: either allow it and say so in
+  `entities.md`, or answer `422 invalid_status_change` for a confirm after the start, with a test, in
+  both copies of `entities.md` in the same PR.
 
 ## From the favorites review (left out of `feat/favorites` on purpose)
 
