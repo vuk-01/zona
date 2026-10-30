@@ -9,8 +9,13 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 
+from app.auth.exceptions.auth import InvalidTokenException
 from app.bookings.exceptions.booking import (
+    BookingInPastException,
     BookingNotFoundException,
+    BookingTooFarAheadException,
+    CannotBookOwnSpaceException,
+    InvalidSlotException,
     InvalidStatusChangeException,
     NotBookingGuestException,
     NotBookingHostException,
@@ -25,6 +30,7 @@ from app.bookings.schemas.booking import (
     BookingReturnedStatus,
     BookingSpaceSchema,
 )
+from app.spaces.exceptions.space import SpaceNotFoundException
 from app.utils.pagination import Page
 
 pytestmark = pytest.mark.unit
@@ -161,6 +167,74 @@ def test_create_with_a_time_off_the_whole_hour_reaches_the_service(
 
     assert response.status_code == 201
     assert booking_service.create.call_args.kwargs["data"].start_time == "10:30"
+
+
+_OPEN_08_TO_20 = f"Glass Room is open 08:00{chr(0x2013)}20:00 on that day"
+_NOT_STARTED = "Pick a time that has not started yet"
+_WITHIN_A_YEAR = "Pick a date within the next 365 days"
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "body"),
+    [
+        (
+            InvalidTokenException(),
+            401,
+            {"detail": "Invalid or expired token", "code": "invalid_token"},
+        ),
+        (
+            CannotBookOwnSpaceException(),
+            403,
+            {"detail": "You cannot book your own space", "code": "cannot_book_own_space"},
+        ),
+        (SpaceNotFoundException(), 404, {"detail": "Space not found", "code": "space_not_found"}),
+        (
+            SlotFullException.at("11:00", has_desks=True),
+            409,
+            {"detail": "No desks left at 11:00", "code": "slot_full"},
+        ),
+        (
+            InvalidSlotException(),
+            422,
+            {
+                "detail": _OPEN_08_TO_20,
+                "code": "invalid_slot",
+                "fieldErrors": {"endTime": _OPEN_08_TO_20},
+            },
+        ),
+        (
+            BookingInPastException(),
+            422,
+            {
+                "detail": _NOT_STARTED,
+                "code": "booking_in_past",
+                "fieldErrors": {"startTime": _NOT_STARTED},
+            },
+        ),
+        (
+            BookingTooFarAheadException(),
+            422,
+            {
+                "detail": _WITHIN_A_YEAR,
+                "code": "booking_too_far_ahead",
+                "fieldErrors": {"date": _WITHIN_A_YEAR},
+            },
+        ),
+    ],
+)
+def test_create_maps_the_service_errors(
+    client: TestClient,
+    booking_service: Mock,
+    error: Exception,
+    status_code: int,
+    body: dict[str, Any],
+) -> None:
+    booking_service.create.side_effect = error
+
+    response = client.post("/api/bookings", json=BODY, headers=AUTH)
+
+    assert response.status_code == status_code
+    assert response.json() == body
 
 
 # --- GET list and GET by id -----------------------------------------------------------------------
