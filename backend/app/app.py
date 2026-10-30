@@ -19,27 +19,12 @@ from app.routes import api_router
 from app.utils.di import get_from_di_container
 from app.utils.exceptions import (
     AppBaseException,
-    ConflictException,
-    ForbiddenException,
     HTTPExceptionWithCode,
-    InvalidRequestException,
-    NotFoundException,
-    ServerException,
-    UnauthenticatedException,
-    UnprocessableEntityException,
+    ValidationFailedException,
+    status_code_for,
 )
 
 logger = logging.getLogger(__name__)
-
-STATUS_BY_EXCEPTION: dict[type[AppBaseException], int] = {
-    NotFoundException: status.HTTP_404_NOT_FOUND,
-    InvalidRequestException: status.HTTP_400_BAD_REQUEST,
-    UnprocessableEntityException: status.HTTP_422_UNPROCESSABLE_ENTITY,
-    UnauthenticatedException: status.HTTP_401_UNAUTHORIZED,
-    ForbiddenException: status.HTTP_403_FORBIDDEN,
-    ConflictException: status.HTTP_409_CONFLICT,
-    ServerException: status.HTTP_500_INTERNAL_SERVER_ERROR,
-}
 
 
 def add_liveness_and_readiness_checks(app: FastAPI) -> None:
@@ -62,10 +47,7 @@ def add_exception_handlers(app: FastAPI, settings: Settings) -> None:
 
     @app.exception_handler(AppBaseException)
     def app_exception_handler(_request: Request, exc: AppBaseException) -> JSONResponse:
-        status_code = next(
-            (code for base, code in STATUS_BY_EXCEPTION.items() if isinstance(exc, base)),
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
+        status_code = status_code_for(exc)
         headers = {"WWW-Authenticate": "Bearer"} if status_code == 401 else None
         return JSONResponse(
             status_code=status_code, content=exc.response_content(), headers=headers
@@ -101,11 +83,7 @@ def add_exception_handlers(app: FastAPI, settings: Settings) -> None:
             field_errors.setdefault(field, error["msg"])
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={
-                "detail": "Validation failed",
-                "code": "validation_error",
-                "fieldErrors": field_errors,
-            },
+            content=ValidationFailedException(field_errors).response_content(),
         )
 
     # fastapi's default exception handler doesn't send CORS headers

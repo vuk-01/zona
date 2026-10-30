@@ -39,7 +39,7 @@ Dependency direction: utils/database/config -> domain -> app, never the other wa
 - `app/deps.py`: `get_di_entity(IService)`, `get_current_user` (401 without a token), `get_optional_user`
 - `app/config/settings.py`: `Settings` / `DBSettings` from the environment and `.env`
 - `app/database/`: `Base`, `SessionFactory` (`ISessionFactory`), `DBAPIRouter` + `db_session_handler`, `load_all_models()`
-- `app/utils/`: `di.py`, `exceptions.py`, `schemas.py` (`CamelCaseModel`, `CamelCaseResponseModel`, `UtcDatetime`), `pagination.py` (`Page[T]`, `paginate`), `logging.py`
+- `app/utils/`: `di.py`, `exceptions.py`, `openapi.py` (`ErrorResponseSchema`, `error_responses`), `schemas.py` (`CamelCaseModel`, `CamelCaseResponseModel`, `UtcDatetime`), `pagination.py` (`Page[T]`, `paginate`), `logging.py`
 - `app/auth/`: register/login/me, `password.py` (bcrypt), `services/auth.py` (JWT HS256), `schemas/auth.py` (`CurrentUser`)
 - `app/users/models/user.py`, `app/listings/` (reference domain), `app/seed.py`
 - `alembic/versions/`: one migration per schema change, generated with `poetry run makemigrations`

@@ -23,10 +23,10 @@
 | Status | When                                           | Body                                                                                                                                     |
 | ------ | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | 401    | missing token / invalid token / wrong password | `{"detail": "Authentication required", "code": "not_authenticated"}` / `"invalid_token"` / `"invalid_credentials"`                       |
-| 403    | signed in, but not the owner                   | `{"detail": "Only the owner can change this listing", "code": "not_listing_owner"}`                                                      |
-| 404    | record does not exist                          | `{"detail": "Listing not found", "code": "listing_not_found"}`                                                                           |
+| 403    | signed in, but not the owner                   | `{"detail": "Only the host can change this space", "code": "not_space_owner"}`                                                           |
+| 404    | record does not exist                          | `{"detail": "Space not found", "code": "space_not_found"}`                                                                               |
 | 409    | email already registered                       | `{"detail": "Email is already registered", "code": "email_already_registered", "fieldErrors": {"email": "Email is already registered"}}` |
-| 422    | invalid input                                  | `{"detail": "Validation failed", "code": "validation_error", "fieldErrors": {"title": "String should have at least 3 characters"}}`      |
+| 422    | invalid input                                  | `{"detail": "Validation failed", "code": "validation_error", "fieldErrors": {"name": "String should have at least 3 characters"}}`       |
 
 ## User
 
