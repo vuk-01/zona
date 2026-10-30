@@ -1296,6 +1296,30 @@ def test_patch_of_a_booking_changed_meanwhile_is_422(
     assert stored_status(booking_id) == "cancelled"
 
 
+def test_cancel_of_a_booking_confirmed_meanwhile_is_422(
+    client: TestClient,
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The guest cancels while the host's parallel request confirms: the confirm stays.
+
+    A confirmed booking could be cancelled, but not by a request that read it as pending: the
+    guest decided without knowing it was confirmed.
+    """
+    run_first(
+        monkeypatch,
+        "set_status",
+        update(Booking).where(Booking.id == booking_id).values(status=BookingStatus.CONFIRMED),
+    )
+
+    response = change(client, other_auth_headers, booking_id, "cancelled")
+
+    assert response.status_code == 422
+    assert response.json() == invalid_status_change("This booking was confirmed meanwhile")
+    assert stored_status(booking_id) == "confirmed"
+
+
 @pytest.mark.parametrize(
     ("statement_for", "status_code", "body", "left"),
     [
@@ -1403,6 +1427,39 @@ def test_confirm_of_a_booking_deleted_after_the_lock_is_404(
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+
+
+def test_confirm_of_a_booking_cancelled_after_the_lock_is_422(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The guest's cancel lands between the read and the compare-and-set: the re-read finds it.
+
+    On Postgres a cancel does not wait for the space lock; on SQLite it would, so the UPDATE runs
+    in the request's own session, as in the test above. `synchronize_session=False` leaves the
+    loaded booking `pending`, as a parallel request would. The request then fails and rolls back,
+    so the cancel is not in the database afterwards; the answer is what the test checks.
+    """
+    set_status = BookingRepository.set_status
+
+    def cancelled_then_set_status(self: BookingRepository, *args: Any, **kwargs: Any) -> bool:
+        self._session_factory().execute(
+            update(Booking)
+            .where(Booking.id == booking_id)
+            .values(status=BookingStatus.CANCELLED)
+            .execution_options(synchronize_session=False)
+        )
+        return set_status(self, *args, **kwargs)
+
+    monkeypatch.setattr(BookingRepository, "set_status", cancelled_then_set_status)
+
+    response = change(client, host_auth_headers, booking_id, "confirmed")
+
+    assert response.status_code == 422
+    assert response.json() == invalid_status_change("Only a pending booking can be confirmed")
+    assert stored_status(booking_id) == "pending"
 
 
 def test_confirm_of_a_booking_deleted_between_the_participant_check_and_the_lock_is_404(
