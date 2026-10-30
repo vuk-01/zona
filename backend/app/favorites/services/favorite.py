@@ -77,7 +77,14 @@ class FavoriteService(IFavoriteService):
                 user_id=current_user.id, space_id=data.space_id
             )
             if existing is None:
-                raise  # neither a foreign key nor the pair: a rule Pydantic lets through, a bug
+                # The pair refused the INSERT and a parallel DELETE removed it before the read
+                # (READ COMMITTED): insert once more. A second refusal is a bug and re-raises.
+                favorite = self._favorite_repository.add(
+                    Favorite(user_id=current_user.id, space_id=data.space_id)
+                )
+                return FavoriteSaved(
+                    favorite=FavoriteResponseSchema.model_validate(favorite), created=True
+                )
             # Saved already (a second click, or a parallel request): not an error (ADR-021).
             return FavoriteSaved(
                 favorite=FavoriteResponseSchema.model_validate(existing), created=False

@@ -243,6 +243,43 @@ def test_save_while_a_parallel_request_saves_the_same_space_is_200(
     assert favorites_in_db() == 1
 
 
+def test_save_while_a_parallel_request_saves_then_removes_it_is_201(
+    client: TestClient,
+    other_auth_headers: dict[str, str],
+    space_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marko_id = user_id(client, other_auth_headers)
+    add = FavoriteRepository.add
+    get = FavoriteRepository.get
+    calls: list[None] = []
+
+    def parallel_save_then_add(self: FavoriteRepository, favorite: Favorite) -> Favorite:
+        if not calls:  # only the first INSERT is refused; the retry finds the pair gone
+            on_second_connection(insert(Favorite).values(user_id=marko_id, space_id=space_id))
+        calls.append(None)
+        return add(self, favorite)
+
+    def parallel_remove_then_get(
+        self: FavoriteRepository, user_id: int, space_id: int
+    ) -> Favorite | None:
+        # On Postgres a parallel DELETE commits here and READ COMMITTED no longer sees the pair.
+        # SQLite keeps the write lock from the refused INSERT, so a second connection cannot
+        # delete; removing it in the request's own session gives get() the same view.
+        self._session_factory().execute(delete(Favorite))
+        return get(self, user_id=user_id, space_id=space_id)
+
+    monkeypatch.setattr(FavoriteRepository, "add", parallel_save_then_add)
+    monkeypatch.setattr(FavoriteRepository, "get", parallel_remove_then_get)
+
+    response = save(client, other_auth_headers, space_id)
+
+    assert response.status_code == 201
+    assert (response.json()["userId"], response.json()["spaceId"]) == (marko_id, space_id)
+    assert len(calls) == 2
+    assert favorites_in_db() == 1
+
+
 def test_remove_while_a_parallel_request_removed_it_is_still_204(
     client: TestClient,
     other_auth_headers: dict[str, str],

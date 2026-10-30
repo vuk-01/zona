@@ -96,9 +96,25 @@ def test_refused_because_the_pair_exists_returns_it_not_created(
     assert (saved.favorite.user_id, saved.favorite.space_id) == (1, 7)
 
 
-def test_refused_for_no_known_reason_is_not_hidden(service: FavoriteService) -> None:
+def test_refused_with_the_pair_gone_meanwhile_inserts_once_more(
+    service: FavoriteService, favorite_repository: Mock
+) -> None:
+    inserted = Favorite(user_id=1, space_id=7, created_at=datetime(2026, 1, 1, tzinfo=UTC))
+    favorite_repository.add.side_effect = [REFUSED, inserted]
+
+    saved = service.create(data=SAVE_SPACE_7, current_user=create_current_user(1))
+
+    assert saved.created is True
+    assert (saved.favorite.user_id, saved.favorite.space_id) == (1, 7)
+    assert favorite_repository.add.call_count == 2
+
+
+def test_refused_twice_for_no_known_reason_is_not_hidden(
+    service: FavoriteService, favorite_repository: Mock
+) -> None:
     with pytest.raises(IntegrityError):
         service.create(data=SAVE_SPACE_7, current_user=create_current_user(1))
+    assert favorite_repository.add.call_count == 2
 
 
 def test_a_space_the_user_cannot_view_is_never_inserted(
