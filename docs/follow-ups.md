@@ -31,6 +31,19 @@ reference domain. Remove it once favorites and bookings are done, in this order,
 downgrade brings back an empty table); users and spaces are not touched. Everyone who pulls `main`
 should back up `data/app.db` first.
 
+## Frontend: connect favorites to the backend
+
+The backend has `GET/POST/DELETE /api/favorites` and `GET /api/spaces?favoriteOf=` (branch
+`feat/favorites`); the frontend still uses the mock. When the frontend is connected:
+
+- `frontend/src/features/favorites/api/favorites-api.ts`: `list`, `create` and `remove` take a
+  `userId`; the real API takes the user from the token, so the parameter goes. `list` reads `items`
+  from the paginated answer.
+- `create` answers `201` or `200` (already saved); both are success. `remove` is `204` either way.
+- `frontend/src/features/spaces/api/spaces-api.ts`: `favoriteOf` comes back newest saved first from the
+  backend; a `403 not_own_favorites` or `401` means the page asked with the wrong id or no token.
+- `frontend/src/lib/favorite.ts` and the rows in `frontend/src/lib/mock-db.ts` go with the mock.
+
 ## From the users review (left out of `backend-users` on purpose)
 
 - Frontend: the `auth-api.ts` mock that forces `mode: guest`, and the 80-character `city` limit in the
