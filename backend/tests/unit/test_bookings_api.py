@@ -29,6 +29,8 @@ from app.bookings.schemas.booking import (
     BookingResponseSchema,
     BookingReturnedStatus,
     BookingSpaceSchema,
+    PopularDaysSchema,
+    PopularTimesResponseSchema,
 )
 from app.spaces.exceptions.space import SpaceNotFoundException
 from app.utils.pagination import Page
@@ -507,3 +509,99 @@ def test_patch_or_delete_without_token_is_401(
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required", "code": "not_authenticated"}
     assert not booking_service.method_calls
+
+
+# --- GET /api/bookings/popular-times ---
+
+POPULAR = PopularTimesResponseSchema(
+    days=PopularDaysSchema(
+        mon=[0, 10, 22, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100],
+        tue=None,
+        wed=None,
+        thu=None,
+        fri=None,
+        sat=None,
+        sun=None,
+    )
+)
+
+
+def test_popular_times_is_public_and_not_caught_by_the_booking_id_route(
+    client: TestClient, booking_service: Mock
+) -> None:
+    booking_service.popular_times.return_value = POPULAR
+
+    response = client.get("/api/bookings/popular-times?spaceId=7")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["firstHour"] == 8
+    assert body["days"]["mon"] == [0, 10, 22, 50, 0, 0, 0, 0, 0, 0, 0, 0, 0, 100]
+    assert set(body["days"]) == {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+    assert body["days"]["tue"] is None
+    assert booking_service.popular_times.call_args.kwargs == {"space_id": 7, "current_user": None}
+    booking_service.get.assert_not_called()
+
+
+def test_popular_times_passes_the_signed_in_user(client: TestClient, booking_service: Mock) -> None:
+    booking_service.popular_times.return_value = POPULAR
+
+    response = client.get("/api/bookings/popular-times?spaceId=7", headers=AUTH)
+
+    assert response.status_code == 200
+    assert booking_service.popular_times.call_args.kwargs["current_user"].id == 1
+
+
+def test_popular_times_without_enough_history_is_200_null(
+    client: TestClient, booking_service: Mock
+) -> None:
+    booking_service.popular_times.return_value = None
+
+    response = client.get("/api/bookings/popular-times?spaceId=7")
+
+    assert response.status_code == 200
+    assert response.content == b"null"
+
+
+def test_popular_times_with_an_invalid_token_is_401(
+    client: TestClient, booking_service: Mock, auth_service: Mock
+) -> None:
+    auth_service.get_current_user.side_effect = InvalidTokenException()
+
+    response = client.get("/api/bookings/popular-times?spaceId=7", headers=AUTH)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid or expired token", "code": "invalid_token"}
+    booking_service.popular_times.assert_not_called()
+
+
+# One exception today (an unknown space or someone else's draft); the next one goes in this list.
+@pytest.mark.parametrize(
+    ("error", "status_code", "body"),
+    [(SpaceNotFoundException(), 404, {"detail": "Space not found", "code": "space_not_found"})],
+)
+def test_popular_times_maps_the_service_errors(
+    client: TestClient,
+    booking_service: Mock,
+    error: Exception,
+    status_code: int,
+    body: dict[str, Any],
+) -> None:
+    booking_service.popular_times.side_effect = error
+
+    response = client.get("/api/bookings/popular-times?spaceId=7")
+
+    assert response.status_code == status_code
+    assert response.json() == body
+
+
+@pytest.mark.parametrize("query", ["", "?spaceId=abc", "?spaceId=0", "?spaceId=2147483648"])
+def test_popular_times_without_a_valid_space_id_is_422(
+    client: TestClient, booking_service: Mock, query: str
+) -> None:
+    response = client.get(f"/api/bookings/popular-times{query}")
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "validation_error"
+    assert set(response.json()["fieldErrors"]) == {"spaceId"}
+    booking_service.popular_times.assert_not_called()

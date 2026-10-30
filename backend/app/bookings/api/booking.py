@@ -26,10 +26,17 @@ from app.bookings.schemas.booking import (
     BookingReturnedStatus,
     BookingUpdateRequestSchema,
     IsoDate,
+    PopularTimesResponseSchema,
 )
 from app.bookings.services.booking import IBookingService
 from app.database.session_handler import DBAPIRouter
-from app.deps import CURRENT_USER_ERRORS, get_current_user, get_di_entity
+from app.deps import (
+    CURRENT_USER_ERRORS,
+    OPTIONAL_USER_ERRORS,
+    get_current_user,
+    get_di_entity,
+    get_optional_user,
+)
 from app.spaces.exceptions.space import SpaceNotFoundException
 from app.utils.exceptions import ValidationFailedException
 from app.utils.openapi import error_responses
@@ -50,6 +57,9 @@ _INVALID_ID_OR_STATUS = ValidationFailedException(
         "booking_id": "Input should be a valid integer, unable to parse string as an integer",
         "status": "Input should be 'confirmed', 'declined' or 'cancelled'",
     }
+)
+_INVALID_SPACE_ID = ValidationFailedException(
+    {"spaceId": "Input should be a valid integer, unable to parse string as an integer"}
 )
 _INVALID_BODY = ValidationFailedException(
     {"startTime": "String should match pattern '^([01][0-9]|2[0-3]):[0-5][0-9]$'"}
@@ -93,6 +103,26 @@ def get_bookings(
     return booking_service.list(
         filters=filters, pagination_params=pagination_params, current_user=current_user
     )
+
+
+# Above /{booking_id}: FastAPI takes the first route that matches, and "popular-times" would
+# otherwise be parsed as a booking id.
+@router.get(
+    path="/popular-times",
+    summary="Popular times of a space",
+    description=(
+        "Public. How booked the space usually is per weekday and local hour 08:00-21:00, 0-100, "
+        "from the confirmed bookings of the last 8 weeks; `null` for a closed day. The whole "
+        "answer is `null` while the space is younger than 14 days. 404 for someone else's draft."
+    ),
+    responses=error_responses(*OPTIONAL_USER_ERRORS, SpaceNotFoundException(), _INVALID_SPACE_ID),
+)
+def get_popular_times(
+    space_id: Annotated[int, Query(alias="spaceId", ge=1, le=MAX_ID)],
+    booking_service: Annotated[IBookingService, Depends(get_di_entity(IBookingService))],
+    current_user: Annotated[CurrentUser | None, Depends(get_optional_user)],
+) -> PopularTimesResponseSchema | None:
+    return booking_service.popular_times(space_id=space_id, current_user=current_user)
 
 
 @router.get(

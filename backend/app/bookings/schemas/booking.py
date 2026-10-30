@@ -107,3 +107,25 @@ class BookingResponseSchema(CamelCaseResponseModel):
     total_price: float
     status: BookingReturnedStatus
     created_at: UtcDatetime
+
+
+# Popular times cover the local hours 08:00-21:00, one value per hour (docs/entities.md).
+POPULAR_FIRST_HOUR = 8
+POPULAR_HOURS = 14
+
+
+class PopularDaysSchema(CamelCaseResponseModel):
+    """0-100 per hour from `firstHour`; `null` for a day the space is closed."""
+
+    mon: list[int] | None
+    tue: list[int] | None
+    wed: list[int] | None
+    thu: list[int] | None
+    fri: list[int] | None
+    sat: list[int] | None
+    sun: list[int] | None
+
+
+class PopularTimesResponseSchema(CamelCaseResponseModel):
+    first_hour: int = POPULAR_FIRST_HOUR
+    days: PopularDaysSchema

@@ -5,7 +5,7 @@ The repositories, the space service and the clock are mocks or fixed.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from unittest.mock import Mock, create_autospec
 
@@ -709,3 +709,156 @@ def test_a_lost_delete_reads_the_status_again(
         service.delete(3, GUEST)
 
     booking_repository.get_status.assert_called_once_with(booking_repository.get_by_id.return_value)
+
+
+# --- popular times ---------------------------------------------------------------------------------
+
+# NOW is Wednesday 2026-10-28 10:00 in Podgorica: the window is the 8 weeks before today,
+# 2026-09-02 to 2026-10-27, so every weekday has 8 dates (and the clocks went back on 2026-10-25).
+MONDAYS = [date(2026, 9, 7) + timedelta(weeks=week) for week in range(8)]
+TEN = 10 - 8  # the index of 10:00 in a day's values
+
+
+def test_popular_times_checks_the_space_through_the_space_service(
+    service: BookingService, space_service: Mock, booking_repository: Mock
+) -> None:
+    space_service.get.side_effect = SpaceNotFoundException()
+
+    with pytest.raises(SpaceNotFoundException):
+        service.popular_times(space_id=7, current_user=None)
+
+    assert space_service.get.call_args.kwargs == {"space_id": 7, "current_user": None}
+    booking_repository.confirmed_per_date_and_hour.assert_not_called()
+
+
+def test_popular_times_averages_the_last_8_weeks_before_today(
+    service: BookingService, booking_repository: Mock
+) -> None:
+    booking_repository.confirmed_per_date_and_hour.return_value = {}
+
+    service.popular_times(space_id=7, current_user=None)
+
+    assert booking_repository.confirmed_per_date_and_hour.call_args.kwargs == {
+        "space_id": 7,
+        "first_day": date(2026, 9, 2),
+        "last_day": date(2026, 10, 27),
+    }
+
+
+def test_popular_times_today_is_the_local_date(
+    booking_repository: Mock,
+    space_service: Mock,
+    space_repository: Mock,
+    user_repository: Mock,
+) -> None:
+    # 00:30 in Podgorica is still the previous day in UTC.
+    service = BookingService(
+        booking_repository=booking_repository,
+        space_service=space_service,
+        space_repository=space_repository,
+        user_repository=user_repository,
+        clock=FixedClock(datetime(2026, 10, 27, 23, 30, tzinfo=UTC)),
+    )
+    booking_repository.confirmed_per_date_and_hour.return_value = {}
+
+    service.popular_times(space_id=7, current_user=None)
+
+    assert booking_repository.confirmed_per_date_and_hour.call_args.kwargs["last_day"] == date(
+        2026, 10, 27
+    )
+
+
+def test_popular_times_is_taken_units_over_units_averaged_and_rounded_half_up(
+    service: BookingService, space_service: Mock, booking_repository: Mock
+) -> None:
+    space_service.get.return_value = space(deskCount=4)
+    # 4 + 2 + 1 desks of 4 over 8 Mondays: 7 / 32 = 21.875 %.
+    booking_repository.confirmed_per_date_and_hour.return_value = {
+        (MONDAYS[0], 10): 4,
+        (MONDAYS[3], 10): 2,
+        (MONDAYS[7], 10): 1,
+    }
+
+    result = service.popular_times(space_id=7, current_user=None)
+
+    assert result is not None
+    assert result.first_hour == 8
+    assert result.days.mon is not None
+    assert len(result.days.mon) == 14
+    assert result.days.mon[TEN] == 22
+    assert sum(result.days.mon) == 22
+    assert result.days.tue == [0] * 14
+
+
+def test_popular_times_rounds_half_up_not_half_to_even(
+    service: BookingService, space_service: Mock, booking_repository: Mock
+) -> None:
+    # A whole space is one unit: one booked Monday of 8 is 12.5 %, round() would say 12.
+    space_service.get.return_value = space(category="meeting-room", deskCount=None)
+    booking_repository.confirmed_per_date_and_hour.return_value = {(MONDAYS[0], 10): 1}
+
+    result = service.popular_times(space_id=7, current_user=None)
+
+    assert result is not None
+    assert result.days.mon is not None
+    assert result.days.mon[TEN] == 13
+
+
+def test_popular_times_never_go_above_100(
+    service: BookingService, space_service: Mock, booking_repository: Mock
+) -> None:
+    # More confirmed bookings than desks: deskCount was lowered after they were confirmed.
+    space_service.get.return_value = space(deskCount=2)
+    booking_repository.confirmed_per_date_and_hour.return_value = {
+        (monday, 10): 5 for monday in MONDAYS
+    }
+
+    result = service.popular_times(space_id=7, current_user=None)
+
+    assert result is not None
+    assert result.days.mon is not None
+    assert result.days.mon[TEN] == 100
+
+
+def test_popular_times_is_null_on_a_closed_day_and_0_outside_the_opening_hours(
+    service: BookingService, booking_repository: Mock
+) -> None:
+    # Open 08:00-20:00 Monday to Friday; bookings at 20:00 from when the space closed later.
+    booking_repository.confirmed_per_date_and_hour.return_value = {
+        (monday, 20): 20 for monday in MONDAYS
+    }
+
+    result = service.popular_times(space_id=7, current_user=None)
+
+    assert result is not None
+    assert result.days.sat is None
+    assert result.days.sun is None
+    assert result.days.mon == [0] * 14
+
+
+def test_popular_times_is_none_for_a_space_younger_than_14_days(
+    service: BookingService, space_service: Mock, booking_repository: Mock
+) -> None:
+    young = space().model_copy(update={"created_at": datetime(2026, 10, 14, 10, 0, tzinfo=UTC)})
+    space_service.get.return_value = young
+
+    assert service.popular_times(space_id=7, current_user=None) is None
+    booking_repository.confirmed_per_date_and_hour.assert_not_called()
+
+
+def test_popular_times_of_a_space_exactly_14_days_old_starts_the_day_after_it_was_created(
+    service: BookingService, space_service: Mock, booking_repository: Mock
+) -> None:
+    # Created 2026-10-14 11:00 in Podgorica: the window is 2026-10-15 to 2026-10-27, two Mondays.
+    created = space().model_copy(update={"created_at": datetime(2026, 10, 14, 9, 0, tzinfo=UTC)})
+    space_service.get.return_value = created.model_copy(update={"desk_count": 1})
+    booking_repository.confirmed_per_date_and_hour.return_value = {(date(2026, 10, 19), 10): 1}
+
+    result = service.popular_times(space_id=7, current_user=None)
+
+    assert booking_repository.confirmed_per_date_and_hour.call_args.kwargs["first_day"] == date(
+        2026, 10, 15
+    )
+    assert result is not None
+    assert result.days.mon is not None
+    assert result.days.mon[TEN] == 50
