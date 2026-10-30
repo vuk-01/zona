@@ -165,7 +165,7 @@ A space a user saved with the heart. Code: backend `backend/app/favorites/`; fro
 | spaceId   | number | yes      | the saved space; only a space the user can view (`listed`, or their own draft) |
 | createdAt | date   | yes      | assigned by the backend                                                        |
 
-There is no separate id: a user saves a space at most once, so `userId` + `spaceId` is the key (unique in the database).
+The API has no id for a favorite: a user saves a space at most once, so `userId` + `spaceId` identifies it (unique in the database). The table's own `id` only orders favorites saved in the same second and is never returned.
 
 **Idempotent:** saving a space that is already saved answers `200` with the favorite unchanged, and removing one that is not saved answers `204`; neither is an error, also when two requests do it at the same time.
 
