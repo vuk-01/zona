@@ -80,7 +80,7 @@ Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palett
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `background`                             | sky-blue page background                                                                                      |
 | `foreground`                             | navy text                                                                                                     |
-| `card`, `popover`                        | white cards and dialogs; in dark mode the lightest surface, so cards stand out                                |
+| `card`, `popover`                        | white cards and dialogs; in dark mode lighter than the page, and dialogs (`popover`) one step above cards     |
 | `sheet`                                  | phones: the content sheet under the top bar; white, in dark mode between page and cards                       |
 | `primary`                                | main CTA (Book, Checkout), active tab, selected bar, links                                                    |
 | `secondary`                              | pale blue pills: price pill ("€4–8 /hr"), selected list row, mode switch button                               |
@@ -88,15 +88,15 @@ Tokens live in `src/index.css`, light in `:root` and dark in `.dark`. The palett
 | `accent`                                 | hover backgrounds only (shadcn uses it this way), pale blue                                                   |
 | `highlight`                              | pink: **only** for discounts ("−30%") and the "Popular" badge                                                 |
 | `success`                                | green: availability ("23 desks available", "Open now")                                                        |
-| `warning`                                | amber: **only** the "Pending" booking badge (waiting for the host); 5:1 on `card`, 7.9:1 in dark              |
-| `favorite`                               | red: **only** the favorite heart (its outline on hover, filled once saved); 4.8:1 on `card`, 5.1:1 in dark    |
+| `warning`                                | amber: **only** the "Pending" booking badge (waiting for the host); 5:1 on `card`, 7.5:1 in dark              |
+| `favorite`                               | red: **only** the favorite heart (its outline on hover, filled once saved); 4.8:1 on `card`, 5.2:1 in dark    |
 | `destructive` / `destructive-foreground` | errors, cancel booking, delete / text on a `destructive` button (white light, navy dark)                      |
 | `border` / `input`                       | dividers and card borders / input borders (stronger, 3:1 against `card`)                                      |
 | `sidebar-*`                              | navy navigation: tab bar on phones, side menu on desktop; `sidebar-primary` = the active item's icon and line |
 | `chart-1` / `chart-2`                    | Popular time: selected (busy) hour / other hours                                                              |
 | `shadow-soft`                            | floating elements (sheets, popovers, the booking bar) and buttons and chips on hover                          |
 | `shadow-lift`                            | a clickable card on hover (space card, booking card, New on Zona); deeper in dark mode                        |
-| `overlay`                                | dims the page behind dialogs (navy at 50%, black at 60% in dark)                                              |
+| `overlay`                                | dims the page behind dialogs (navy at 50%, a deep navy at 60% in dark)                                        |
 
 All text/background pairs are at least 4.5:1 in both themes. Check this again after changing a
 color token.
@@ -464,12 +464,18 @@ dialog: it keeps a short 150ms fade, so it does not pop in and out (`ui/dialog.t
 Both themes from day one. The `dark` class on `<html>` turns it on. Every page is checked in both
 themes.
 
-- **Surfaces step up in lightness**, so cards always stand out from what they sit on: page
-  `background` (L 0.155) < phone `sheet` (0.195) < navigation `sidebar` (0.225) < `card` (0.275). Card
-  on sheet is 1.23:1 and card on page 1.31:1 (before, card and sheet were the same color), with a
-  visible `border` (L 0.39).
-- Text is brighter (`foreground` L 0.975, `muted-foreground` 0.8: 8:1 on a card), and the blue
-  `primary` (L 0.72) and the `secondary` price pill are more vivid, so the important parts stand out.
+- **A soft navy, not near-black.** The page `background` is L 0.21 (before 0.155, which read as almost
+  black and was tiring). Chosen over a grey-blue "dim" variant in a prototype (branch
+  `prototype/dark-theme`).
+- **Surfaces step up in lightness**, so every layer stands out from what it sits on: page `background`
+  (L 0.21) < phone `sheet` (0.235) < navigation `sidebar` (0.26) < `card` (0.31) < dialogs and menus
+  (`popover`, 0.33). Card on sheet is 1.26:1, card on page 1.34:1 and a dialog on the page 1.45:1, with
+  a visible `border` (L 0.43).
+- Text: `foreground` L 0.965 (12:1 on a card), `muted-foreground` 0.82 (7.6:1 on a card, 7:1 in a
+  dialog). The blue `primary` keeps the light theme's hue with less chroma (L 0.70, C 0.13), so it does
+  not glare: 7.1:1 for the label on a primary button, 4.6:1 as link text in a dialog (the lowest pair).
+  Status colors (`success`, `highlight`, `warning`, `favorite`, `destructive`) are a little lighter
+  and calmer than before, all at least 4.5:1 where they are text.
 - The **navigation** (side menu and tab bar) is a navy between the page and the cards, never the page
   color, with a `sidebar-border` line toward the content.
 

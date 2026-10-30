@@ -64,53 +64,54 @@
   --font-body: 'Poppins', ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Dark surfaces step up in lightness: page (L 0.155) < phone sheet (0.195) < navigation (0.225, with
-   a border) < cards (0.275), so cards always stand out from what they sit on. Every text pair is at
-   least 4.5:1 (DESIGN.md "Dark mode"). */
+/* Dark surfaces step up in lightness: page (L 0.21, a soft navy, not near-black) < phone sheet (0.235) <
+   navigation (0.26, with a border) < cards (0.31) < dialogs and menus (0.33), so every layer stands out
+   from what it sits on. Every text pair is at least 4.5:1 (DESIGN.md "Dark mode"). */
 .dark {
   color-scheme: dark;
-  --background: oklch(0.155 0.035 268);
-  --foreground: oklch(0.975 0.008 262);
-  --card: oklch(0.275 0.052 267);
-  --card-foreground: oklch(0.975 0.008 262);
-  --sheet: oklch(0.195 0.042 268);
-  --popover: oklch(0.275 0.052 267);
-  --popover-foreground: oklch(0.975 0.008 262);
-  --primary: oklch(0.72 0.16 260);
+  --background: oklch(0.21 0.04 268);
+  --foreground: oklch(0.965 0.01 262);
+  --card: oklch(0.31 0.055 267);
+  --card-foreground: oklch(0.965 0.01 262);
+  --sheet: oklch(0.235 0.045 268);
+  --popover: oklch(0.33 0.055 267);
+  --popover-foreground: oklch(0.965 0.01 262);
+  /* the light theme's blue with less chroma, so it does not glare on navy */
+  --primary: oklch(0.7 0.13 260);
   --primary-foreground: oklch(0.17 0.05 268);
-  --secondary: oklch(0.35 0.08 264);
+  --secondary: oklch(0.39 0.08 264);
   --secondary-foreground: oklch(0.97 0.02 262);
-  --muted: oklch(0.32 0.05 266);
-  --muted-foreground: oklch(0.8 0.03 262);
-  --accent: oklch(0.33 0.06 265);
+  --muted: oklch(0.36 0.05 266);
+  --muted-foreground: oklch(0.82 0.03 262);
+  --accent: oklch(0.37 0.06 265);
   --accent-foreground: oklch(0.97 0.02 262);
-  --highlight: oklch(0.7 0.17 360);
+  --highlight: oklch(0.74 0.15 360);
   --highlight-foreground: oklch(0.18 0.05 268);
-  --success: oklch(0.77 0.15 152);
+  --success: oklch(0.79 0.14 152);
   --success-foreground: oklch(0.18 0.05 268);
-  /* 7.9:1 on the dark card */
-  --warning: oklch(0.8 0.14 80);
-  /* 5.1:1 on the dark card */
-  --favorite: oklch(0.7 0.19 18);
-  --destructive: oklch(0.68 0.19 25);
+  /* 7.5:1 on the dark card */
+  --warning: oklch(0.82 0.13 80);
+  /* 5.2:1 on the dark card */
+  --favorite: oklch(0.74 0.17 18);
+  --destructive: oklch(0.72 0.17 25);
   --destructive-foreground: oklch(0.18 0.05 268);
-  --border: oklch(0.39 0.05 266);
-  --input: oklch(0.6 0.05 266);
-  --ring: oklch(0.72 0.16 260);
+  --border: oklch(0.43 0.05 266);
+  --input: oklch(0.62 0.05 266);
+  --ring: oklch(0.7 0.13 260);
   /* navy between the page and the cards; sidebar-border outlines it toward the content */
-  --sidebar: oklch(0.225 0.055 268);
-  --sidebar-foreground: oklch(0.975 0.008 262);
-  --sidebar-primary: oklch(0.72 0.16 260);
+  --sidebar: oklch(0.26 0.055 268);
+  --sidebar-foreground: oklch(0.965 0.01 262);
+  --sidebar-primary: oklch(0.7 0.13 260);
   --sidebar-primary-foreground: oklch(0.17 0.05 268);
-  --sidebar-accent: oklch(0.3 0.06 268);
-  --sidebar-accent-foreground: oklch(0.975 0.008 262);
-  --sidebar-border: oklch(0.33 0.05 268);
+  --sidebar-accent: oklch(0.33 0.06 268);
+  --sidebar-accent-foreground: oklch(0.965 0.01 262);
+  --sidebar-border: oklch(0.36 0.05 268);
   /* L 0.66: inside the dark-mode band for chart marks (dataviz validator), ≥3:1 on the dark card */
   --chart-1: oklch(0.66 0.17 262);
-  --chart-2: oklch(0.4 0.065 266);
-  --shadow-color: oklch(0 0 0 / 0.3);
-  --lift-color: oklch(0 0 0 / 0.55);
-  --overlay: oklch(0 0 0 / 0.6);
+  --chart-2: oklch(0.43 0.06 266);
+  --shadow-color: oklch(0.1 0.03 268 / 0.35);
+  --lift-color: oklch(0.1 0.03 268 / 0.6);
+  --overlay: oklch(0.1 0.03 268 / 0.6);
 }
 
 @theme inline {
