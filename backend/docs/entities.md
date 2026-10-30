@@ -2,9 +2,10 @@
 
 > This file is the contract between the frontend and the backend.
 > For each entity: fields with types, relations, who is allowed to do what, and the routes.
-> The backend code lives in `app/<name>/` (`models/`, `schemas/`, `repositories/`, `services/`, `api/`, `exceptions/`,
-> `routes.py`). The frontend repository carries a copy of this file; its entity type is `src/features/<name>/types.ts`
-> and its API functions `src/features/<name>/api/<name>-api.ts`. A change here is a change there, in the same PR.
+> The backend code lives in `backend/app/<name>/` (`models/`, `schemas/`, `repositories/`, `services/`, `api/`,
+> `exceptions/`, `routes.py`); the frontend's entity type is `frontend/src/features/<name>/types.ts` and its API
+> functions `frontend/src/features/<name>/api/<name>-api.ts`. This file has two identical copies, `docs/entities.md`
+> at the repo root and `backend/docs/entities.md`: a change here goes into both copies and the frontend, in the same PR.
 
 ## Conventions
 
