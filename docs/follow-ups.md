@@ -157,6 +157,22 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
 - **`not_booking_participant` says "see" on `PATCH` and `DELETE`.** "Only the guest or the host can see
   this booking" is written for `GET`. Optional wording change in the code and both copies of
   `entities.md` (ADR-005).
+- **`spaces` and `users` reuse the id of a deleted last row too.** Only `bookings` got
+  `sqlite_autoincrement` (migration `1a1aed7865e4`, ADR-024). `spaces` and `users` are also named by
+  id in requests (`PATCH`/`DELETE /api/spaces/:id`, `/api/users/:id`) and lose rows, so a request from
+  a stale page can reach a new space or account that got the deleted one's id. The ownership checks
+  keep it to the owner's own rows, but a host who deletes their last space and creates another can,
+  from an old tab, edit or delete the new one. Postgres is not affected. **Their rebuild is not safe
+  the way the `bookings` one was:** other tables point at them (`bookings.space_id` and
+  `favorites.space_id` → `spaces`; `spaces.host_id`, `bookings.guest_id`, `favorites.user_id` and
+  `listings.owner_id` → `users`, all `ON DELETE CASCADE`). The batch rebuild drops the old table; with
+  `PRAGMA foreign_keys=ON` that drop is an implicit `DELETE` of every row and cascades into those
+  tables (all bookings and favorites gone), and whether it is on depends on the connection
+  (`SessionFactory` turns it on, `alembic/env.py` does not today). A safe version needs SQLite's
+  documented table-rebuild procedure: `PRAGMA foreign_keys=OFF` outside the transaction, rebuild with
+  the ids kept, `PRAGMA foreign_key_check` before commit, then on again; tried on a copy of a
+  database with rows in every child table and counted before and after. Decide whether the
+  stale-tab case is worth that, or whether the frontend handles it (ADR-024, ADR-003, ADR-004).
 
 ## From the favorites review (left out of `feat/favorites` on purpose)
 
