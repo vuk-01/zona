@@ -31,11 +31,6 @@ reference domain. Remove it once favorites and bookings are done, in this order,
 downgrade brings back an empty table); users and spaces are not touched. Everyone who pulls `main`
 should back up `data/app.db` first.
 
-Until then, the reference domain still has the bug fixed in users and spaces: a listing deleted while
-its `PATCH` or `DELETE` runs answers `500` or `204` instead of `404` (`db.delete()` only warns, and
-`update` never flushes). A new domain copied from it must use the spaces version
-(`DELETE ... RETURNING id`, `StaleDataError` → `404`).
-
 ## From the users review (left out of `backend-users` on purpose)
 
 - Frontend: the `auth-api.ts` mock that forces `mode: guest`, and the 80-character `city` limit in the
