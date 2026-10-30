@@ -38,3 +38,15 @@ into an error, but only for what a test actually triggers; spaces and listings h
 - bcrypt reads at most 72 bytes, not 72 characters: a password with non-ASCII letters can pass the
   length check and still be cut.
 - `alembic/env.py` breaks when `DATABASE_URL` contains `%`.
+
+## Backend: API docs and the error shape
+
+- **`/docs` hides all but one `422` example per route.** `error_responses` in
+  `backend/app/utils/openapi.py` stores examples as `examples[error.code]`, and every
+  `ValidationFailedException` has `code="validation_error"`, so the last one overwrites the others.
+  `PATCH /api/users/{user_id}` lists `_INVALID_ID` and `_INVALID_BODY` but `/docs` shows only the
+  `name` example. Proposal: key each example by the code plus the `fieldErrors` names
+  (e.g. `validation_error:user_id`), so both appear in the examples menu.
+- **An invalid id answers `fieldErrors` with a snake_case key** (`user_id`, `space_id`), while the
+  rest of the API is camelCase (`avatarUrl`, `pricePerHour`). The path parameter name reaches the
+  error as it is; the unit tests for an invalid id assert `{"user_id"}` today.
