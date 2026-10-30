@@ -3,26 +3,38 @@
 Open items found while working on something else. Each one is a separate small PR; remove the entry
 in the PR that fixes it.
 
-## Backend: a record deleted while its PATCH or DELETE runs
+## Backend: remove `app/listings/` after bookings
 
-Found while fixing users (branch `backend-users`). If a row disappears between the read and the write
-(a parallel request deleted it), SQLAlchemy does not answer the way the contract expects:
+`backend/app/listings/` (the starter example) stays for now: the agent instructions use it as the
+reference domain. Remove it once favorites and bookings are done, in this order, one commit each:
 
-- `UPDATE` that matches no rows raises `StaleDataError` on flush.
-- `session.delete()` that matches no rows only emits an `SAWarning` (the mapper has no
-  `version_id_col`), so the endpoint answers `204` as if it had deleted something.
+1. **Move the instructions to a more complete domain** (`app/spaces/` or bookings), copying excerpts
+   from the real code (`anti-patterns.md` says its RIGHT halves are copied from the reference domain):
+   - `backend/.claude/skills/backend-patterns/SKILL.md` (89 mentions), `.claude/rules/anti-patterns.md`
+     (54), `.claude/skills/test-endpoint/SKILL.md` (23), `.claude/skills/check-n1/SKILL.md` (8)
+   - `backend/CLAUDE.md` lines 14 and 44, `.claude/commands/new-entity.md` line 11
+   - example names in `.claude/rules/backend-api.md`, `backend-tests.md`, `backend-db.md` and
+     `.claude/frequent-mistakes.md` line 21; ADR-015 keeps `IListingService` (ADR texts are history)
+2. **Code:** delete `backend/app/listings/` (5 routes under `/api/listings`), its router in
+   `app/routes.py`, the `listings` relationship in `app/users/models/user.py`, the comment in
+   `app/users/repositories/user.py`, `test_listings_api.py`, `test_listings.py`, the `listing_service`
+   and `listing_id` fixtures and `delete(Listing)` in `clean_tables`, and `DEMO_LISTINGS` in `app/seed.py`.
+3. **Migration:** back up the local DB first (`app-prije-listings.db`), then
+   `poetry run makemigrations "drop listings"` and read it: `upgrade` drops `ix_listings_owner_id`
+   and the table, `downgrade` recreates an empty table as in `7e6cf7ecb4d9`. On SQLite no other table is
+   rebuilt (nothing points at `listings`), so no foreign-key guard is needed. Then `migrate`,
+   `alembic check`, and an online upgrade on a copy of the DB.
+4. **Docs:** the "Starter example" section in both `entities.md` copies, `backend/README.md` (seed line,
+   the `app/listings/` tree, the `makemigrations` example, line 85), the seed description in `manage.py`.
 
-Users and spaces are fixed: `PATCH` maps `StaleDataError` to `404`, and `DELETE` uses
-`DELETE ... RETURNING id` and answers `404` when nothing was deleted. Tests delete the row over a second
-connection mid-request (`tests/integration/test_users.py`, `test_spaces.py`). Since then pytest turns
-every `SAWarning` into an error, but only for what a test actually triggers; listings has no such test.
+**For the PR description:** `migrate` deletes the `listings` table and its rows for good (the
+downgrade brings back an empty table); users and spaces are not touched. Everyone who pulls `main`
+should back up `data/app.db` first.
 
-| Domain   | Where                                                     | DELETE of a vanished row | PATCH of a vanished row                                                                              |
-| -------- | --------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------- |
-| listings | `backend/app/listings/repositories/listing.py` (`delete`) | `204` instead of `404`   | `update` never flushes, so `StaleDataError` raises at `commit()` in `session_handler` and is a `500` |
-
-- **listings** is the starter example and is removed with a migration once spaces works
-  (`entities.md`), so it probably needs no fix.
+Until then, the reference domain still has the bug fixed in users and spaces: a listing deleted while
+its `PATCH` or `DELETE` runs answers `500` or `204` instead of `404` (`db.delete()` only warns, and
+`update` never flushes). A new domain copied from it must use the spaces version
+(`DELETE ... RETURNING id`, `StaleDataError` → `404`).
 
 ## From the users review (left out of `backend-users` on purpose)
 

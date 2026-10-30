@@ -181,4 +181,4 @@ The cards on the Favorites page come from `GET /api/spaces?favoriteOf=<own id>&s
 
 ## Starter example
 
-`app/listings/` is the starter's example and is not part of this contract. It is removed, with a migration, once `spaces` works.
+`backend/app/listings/` is the starter's example and is not part of this contract; the frontend never calls it. It stays as the reference domain that the agent instructions (`/new-entity`, the skills and rules in `backend/.claude/`) point to, and is removed, with a migration, after bookings is done and the instructions have moved to a more complete domain.
