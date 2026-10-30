@@ -191,11 +191,27 @@ def test_patch_with_invalid_field_is_422(
     user_service.update.assert_not_called()
 
 
+@pytest.mark.parametrize("user_id", ["abc", "0", str(2**31)])
+def test_patch_with_invalid_id_is_422(client: TestClient, user_service: Mock, user_id: str) -> None:
+    response = client.patch(f"/api/users/{user_id}", json={"name": "Ana"}, headers=AUTH)
+
+    assert response.status_code == 422
+    assert set(response.json()["fieldErrors"]) == {"user_id"}
+    user_service.update.assert_not_called()
+
+
 @pytest.mark.parametrize(
-    ("error", "status_code", "code"),
+    ("error", "status_code", "body"),
     [
-        (NotAccountOwnerException(), 403, "not_account_owner"),
-        (UserNotFoundException(), 404, "user_not_found"),
+        (
+            NotAccountOwnerException(),
+            403,
+            {
+                "detail": "Only the account owner can change this account",
+                "code": "not_account_owner",
+            },
+        ),
+        (UserNotFoundException(), 404, {"detail": "User not found", "code": "user_not_found"}),
     ],
 )
 def test_patch_maps_service_errors(
@@ -203,14 +219,14 @@ def test_patch_maps_service_errors(
     user_service: Mock,
     error: Exception,
     status_code: int,
-    code: str,
+    body: dict[str, str],
 ) -> None:
     user_service.update.side_effect = error
 
     response = client.patch("/api/users/2", json={"name": "Ana"}, headers=AUTH)
 
     assert response.status_code == status_code
-    assert response.json()["code"] == code
+    assert response.json() == body
 
 
 def test_delete_returns_204_without_body(client: TestClient, user_service: Mock) -> None:
@@ -227,6 +243,17 @@ def test_delete_without_token_is_401(client: TestClient, user_service: Mock) -> 
 
     assert response.status_code == 401
     assert response.json()["code"] == "not_authenticated"
+    user_service.delete.assert_not_called()
+
+
+@pytest.mark.parametrize("user_id", ["abc", "0", str(2**31)])
+def test_delete_with_invalid_id_is_422(
+    client: TestClient, user_service: Mock, user_id: str
+) -> None:
+    response = client.delete(f"/api/users/{user_id}", headers=AUTH)
+
+    assert response.status_code == 422
+    assert set(response.json()["fieldErrors"]) == {"user_id"}
     user_service.delete.assert_not_called()
 
 

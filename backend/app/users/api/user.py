@@ -85,6 +85,7 @@ def get_user(
         *CURRENT_USER_ERRORS,
         NotAccountOwnerException(),
         UserNotFoundException(),
+        _INVALID_ID,
         _INVALID_BODY,
     ),
 )

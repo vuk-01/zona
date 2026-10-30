@@ -37,20 +37,20 @@ Code: backend `app/users/` and `app/auth/`; frontend `src/lib/user.ts`, `src/fea
 | id        | number                         | yes      | assigned by the backend                                                                                           |
 | name      | string, 2–60 characters        | yes      | trimmed                                                                                                           |
 | email     | string, valid email            | yes      | unique, stored lowercase; returned only to the user themselves                                                    |
-| avatarUrl | http(s) URL, at most 500 characters, or `null` | yes      | `null` after register; the app then shows the user's initials; a `PATCH` with `null` removes the photo           |
+| avatarUrl | http(s) URL, at most 500 characters, or `null` | yes      | trimmed; `null` after register; the app then shows the user's initials; a `PATCH` with `null` removes the photo           |
 | city      | string, at most 80 characters  | yes      | trimmed; `""` after register                                                                                      |
 | bio       | string, at most 200 characters | yes      | trimmed; `""` after register                                                                                      |
 | isHost    | boolean                        | yes      | `false` on register; becomes `true` the first time the user switches to host mode and stays `true`                |
 | mode      | `guest` \| `host`              | yes      | `guest` on register; remembered across logins; `host` only when `isHost` is `true` (a database constraint); returned only to the user themselves |
 | createdAt | date                           | yes      | assigned by the backend                                                                                           |
 
-The password (8–72 characters) is sent only on register and login; it is stored as a bcrypt hash and never returned.
+The password is sent only on register (8–72 characters) and login (1–72 characters); it is stored as a bcrypt hash and never returned.
 
 **Public profile:** `PublicUser` is `User` without `email` and `mode`. Other people only ever get `PublicUser`.
 
 **Guest and host mode:** one account, two modes, no role choice at register. `PATCH /api/users/:id {mode: "host"}` sets `mode: host` and `isHost: true`; `{mode: "guest"}` sets `mode: guest` and keeps `isHost`. The mode is remembered across logins: login returns the mode the user chose last. The mode never changes what the user owns: a host in guest mode keeps their spaces.
 
-**Profile edits:** `PATCH` changes only the fields that are sent; `{}` answers `200` with the user unchanged. `null` is allowed only for `avatarUrl`; `null` for `name`, `city`, `bio` or `mode` answers `422`. An account deleted while its `PATCH` or `DELETE` runs answers `404 user_not_found`.
+**Profile edits:** `PATCH` changes only the fields that are sent; other keys (`email`, `id`, anything unknown) are ignored; `{}` answers `200` with the user unchanged. `null` is allowed only for `avatarUrl`; `null` for `name`, `city`, `bio` or `mode` answers `422`. An account deleted while its `PATCH` or `DELETE` runs answers `404 user_not_found`.
 
 **Logout:** there is no backend route; the frontend deletes the token.
 
@@ -61,12 +61,12 @@ The password (8–72 characters) is sent only on register and login; it is store
 | Route                                        | Auth | Body                                               | Response                                                                                      |
 | -------------------------------------------- | ---- | -------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `POST /api/auth/register`                    | no   | `{name, email, password}`                          | `201 {token, user}`, `409 email_already_registered`, `422`                                    |
-| `POST /api/auth/login`                       | no   | `{email, password}`                                | `200 {token, user}` with the stored mode (the last one used), `401 invalid_credentials` ("Wrong email or password") |
+| `POST /api/auth/login`                       | no   | `{email, password}`                                | `200 {token, user}` with the stored mode (the last one used), `401 invalid_credentials` ("Wrong email or password"), `422` |
 | `GET /api/auth/me`                           | yes  |                                                    | `200` user, `401`                                                                             |
 | `GET /api/users?search=&isHost=&page=&size=` | no   |                                                    | `200 {total, items, pages}` of `PublicUser`, newest first; `search` (at most 80 characters) matches the name, case-insensitive (on SQLite only ASCII letters fold); `isHost` is `true` or `false`; `401 invalid_token`; `422` |
 | `GET /api/users/:id`                         | no   |                                                    | `200` `PublicUser`, `401 invalid_token`, `404 user_not_found` ("User not found"), `422` for an invalid id |
-| `PATCH /api/users/:id`                       | self | any subset of `{name, avatarUrl, city, bio, mode}` | `200` user, `401`, `403 not_account_owner` ("Only the account owner can change this account"), `404`, `422` |
-| `DELETE /api/users/:id`                      | self |                                                    | `204`, `401`, `403 not_account_owner`, `404`; afterwards the token answers `401 invalid_token` |
+| `PATCH /api/users/:id`                       | self | any subset of `{name, avatarUrl, city, bio, mode}` | `200` user, `401`, `403 not_account_owner` ("Only the account owner can change this account"), `404`, `422` for an invalid id or field |
+| `DELETE /api/users/:id`                      | self |                                                    | `204`, `401`, `403 not_account_owner`, `404`, `422` for an invalid id; afterwards the token answers `401 invalid_token` |
 
 ## Space
 
