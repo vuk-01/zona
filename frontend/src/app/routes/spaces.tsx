@@ -11,9 +11,10 @@ import { SpacesList } from '@/features/spaces/components/spaces-list'
 import { useCategoryStats } from '@/features/spaces/hooks/use-category-stats'
 import { useSpaceFilters } from '@/features/spaces/hooks/use-space-filters'
 
-// Explore: every listed space, filtered by search (name or city), category and price per hour.
-// All filters live in the URL, e.g. /spaces?category=desk from Home. The hero panel holds the filters,
-// and on large screens the selected category's spotlight on its right.
+// Explore: every listed space, filtered by search (a city from the list, or text that matches a name or
+// city), category and price per hour. All filters live in the URL, e.g. /spaces?city=Podgorica from
+// Home's search. The hero panel holds the filters, and on large screens the selected category's
+// spotlight on its right; the active search shows as removable chips above the results.
 export function Spaces() {
   const filters = useSpaceFilters()
   const [filtersOpen, setFiltersOpen] = useState(filters.price !== undefined || filters.filtersRequested)
@@ -26,7 +27,7 @@ export function Spaces() {
         <PageTitle>Explore spaces</PageTitle>
         <div className="flex flex-col gap-4">
           <SpaceSearch
-            defaultValue={filters.search}
+            defaultValue={filters.searchValue}
             onSearch={filters.setSearch}
             filtersId="space-filters"
             filtersOpen={filtersOpen}
@@ -43,6 +44,7 @@ export function Spaces() {
         filters={filters.filters}
         showCount
         onClearFilters={filters.hasFilters ? filters.clear : undefined}
+        chips={filters.chips}
         cardAction={(space) => <FavoriteHeart space={space} />}
       />
     </section>

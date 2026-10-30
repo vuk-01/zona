@@ -1,6 +1,5 @@
 import { MapPin, MapPinOff, Search } from 'lucide-react'
 import { type KeyboardEvent, useId, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -62,42 +61,53 @@ function filterCities(cities: CitySuggestion[], query: string): CityRow[] {
 // the pin primary and nudge the name right. shrink-0: in the scrolling list the rows keep their height
 // instead of squeezing together.
 const optionClass =
-  'group flex h-11 shrink-0 items-center gap-3 rounded-full px-4 outline-none transition-colors aria-selected:bg-accent aria-selected:text-accent-foreground md:h-10'
+  'group flex h-11 w-full shrink-0 cursor-pointer items-center gap-3 rounded-full px-4 text-left outline-none transition-colors aria-selected:bg-accent aria-selected:text-accent-foreground md:h-10'
 
-// Explore's city filter (connected later)
-const cityHref = (city: string) => `/spaces?${new URLSearchParams({ city })}`
+// What is in the field: free text (a space's name or a city), or a city picked from the list. Editing a
+// picked city turns it back into free text.
+export type SearchValue = { text: string; city: string | null }
 
-// Typing makes the best match active; an empty field has none, so Enter on the untouched list goes nowhere
-const firstRow = (text: string) => (text.trim() ? 0 : -1)
+type SearchSuggestionsProps = {
+  value: SearchValue
+  onValueChange: (value: SearchValue) => void
+  // The number of spaces next to each city. Off until the counts come from the backend; the mock's are
+  // made up.
+  showCount?: boolean
+  className?: string
+}
 
-// Search pill with city suggestions (docs/ref/search-reference.png, cities only). A click or focus opens
-// every city with spaces under the field, most spaces first, and the list scrolls after six. Typing
-// filters it (starts with the term first, then contains it; case and accents do not matter) and bolds
-// the matching part. ↑/↓ move, Enter or a click opens that city on Explore, Esc or a click outside
-// closes. The list is portaled, so it also opens fully inside the hero panel (overflow-hidden), and it
-// is as wide as the field: full width on phones.
-export function SearchSuggestions() {
-  const navigate = useNavigate()
+// The search pill with city suggestions (docs/ref/search-reference.png, cities only), for a search form.
+// A click or focus opens every city with spaces under the field, most spaces first, and the list scrolls
+// after six. Typing filters it (starts with the term first, then contains it; case and accents do not
+// matter) and bolds the matching part. Picking a city (click, or ↑/↓ and Enter) only fills it in; Enter
+// with no city marked submits the form. Esc or a click outside closes the list. The list is portaled, so
+// it also opens fully inside the hero panel (overflow-hidden), and it is as wide as the field.
+export function SearchSuggestions({
+  value,
+  onValueChange,
+  showCount = false,
+  className,
+}: SearchSuggestionsProps) {
   const listId = useId()
   const headingId = useId()
   const anchorRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const [value, setValue] = useState('')
   const [open, setOpen] = useState(false)
+  // Nothing is marked until ↑/↓ or the pointer pick a row, so Enter searches what was typed
   const [active, setActive] = useState(-1)
   const { data, isPending, isError, isFetching, refetch } = useCitySuggestions()
 
-  const rows = filterCities(data ?? [], value)
+  const rows = filterCities(data ?? [], value.text)
   const hasOptions = !isPending && !isError && rows.length > 0
   const activeIndex = Math.min(active, rows.length - 1)
   const activeRow = open && hasOptions && activeIndex >= 0 ? rows[activeIndex] : undefined
   const optionId = (index: number) => `${listId}-option-${index}`
-  const emptyText = value.trim() ? NO_CITY : NO_CITIES_YET
+  const emptyText = value.text.trim() ? NO_CITY : NO_CITIES_YET
 
   const openList = () => {
     if (open) return
     setOpen(true)
-    setActive(firstRow(value))
+    setActive(-1)
   }
 
   const moveTo = (index: number) => {
@@ -106,10 +116,10 @@ export function SearchSuggestions() {
     listRef.current?.children.item(index)?.scrollIntoView({ block: 'nearest' })
   }
 
-  const choose = (city: string) => {
-    setValue(city)
+  const pick = (city: string) => {
+    onValueChange({ text: city, city })
     setOpen(false)
-    navigate(cityHref(city))
+    setActive(-1)
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -132,10 +142,13 @@ export function SearchSuggestions() {
         break
       }
       case 'Enter':
-        if (!open) break
-        event.preventDefault()
-        if (isError) void refetch()
-        else if (activeRow) choose(activeRow.name)
+        // A marked city is filled in; otherwise Enter submits the form, like the Search button
+        if (activeRow) {
+          event.preventDefault()
+          pick(activeRow.name)
+        } else {
+          setOpen(false)
+        }
         break
       case 'Escape':
         // Without preventDefault, Chrome also empties a search field on Esc
@@ -150,7 +163,7 @@ export function SearchSuggestions() {
   const status = !open || isPending || isError ? '' : hasOptions ? citiesCount(rows.length) : emptyText
 
   return (
-    <div className="w-full max-w-2xl">
+    <div className={className}>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverAnchor asChild>
           <div ref={anchorRef} className="group relative">
@@ -161,24 +174,25 @@ export function SearchSuggestions() {
             <Input
               type="search"
               role="combobox"
-              aria-label="Search by city"
+              aria-label="Search by city or space name"
               aria-autocomplete="list"
               aria-expanded={open}
               aria-controls={open && hasOptions ? listId : undefined}
               aria-activedescendant={activeRow ? optionId(activeIndex) : undefined}
-              placeholder="Search by city"
+              // Short enough for a phone, next to the filter and Search buttons; the label says it in full
+              placeholder="City or space"
               autoComplete="off"
               spellCheck={false}
-              value={value}
+              value={value.text}
               onChange={(event) => {
-                setValue(event.target.value)
-                setActive(firstRow(event.target.value))
+                onValueChange({ text: event.target.value, city: null })
+                setActive(-1)
                 setOpen(true)
                 // A new term starts the list from the top
                 listRef.current?.scrollTo({ top: 0 })
               }}
               onFocus={openList}
-              // The field already has focus after Esc, so a click opens the list again
+              // The field already has focus after Esc or a pick, so a click opens the list again
               onClick={openList}
               onKeyDown={onKeyDown}
               className="h-12 rounded-full bg-muted pr-4 pl-12 transition-[color,background-color,border-color,box-shadow] duration-200 hover:border-primary focus-visible:bg-card focus-visible:ring-ring"
@@ -212,6 +226,7 @@ export function SearchSuggestions() {
                 Cities failed to load.
               </p>
               <Button
+                type="button"
                 variant="outline"
                 className="h-11 rounded-full focus-visible:ring-ring md:h-9"
                 disabled={isFetching}
@@ -244,15 +259,15 @@ export function SearchSuggestions() {
                 className="flex max-h-78 min-h-0 flex-col gap-1 overflow-y-auto overscroll-contain md:max-h-71"
               >
                 {rows.map((city, index) => (
-                  <Link
+                  <button
                     key={city.name}
+                    type="button"
                     id={optionId(index)}
                     role="option"
                     aria-selected={index === activeIndex}
                     tabIndex={-1}
-                    to={cityHref(city.name)}
                     onMouseMove={() => setActive(index)}
-                    onClick={() => setOpen(false)}
+                    onClick={() => pick(city.name)}
                     className={optionClass}
                   >
                     <MapPin
@@ -273,10 +288,12 @@ export function SearchSuggestions() {
                         city.name
                       )}
                     </span>
-                    <span className="shrink-0 text-sm text-muted-foreground tabular-nums group-aria-selected:text-accent-foreground">
-                      {spacesCount(city.count)}
-                    </span>
-                  </Link>
+                    {showCount && (
+                      <span className="shrink-0 text-sm text-muted-foreground tabular-nums group-aria-selected:text-accent-foreground">
+                        {spacesCount(city.count)}
+                      </span>
+                    )}
+                  </button>
                 ))}
               </div>
             </>

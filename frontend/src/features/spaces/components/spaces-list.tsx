@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 import { useSpaces } from '../api/use-spaces'
 import type { Space, SpaceFilters } from '../types'
+import { type FilterChip, SearchFilterChip } from './search-filter-chip'
 import { SpaceCard } from './space-card'
 
 // One column on phones (cards go down the page), 2 at md, 3 at lg.
@@ -48,6 +49,8 @@ type SpacesListProps = {
   showCount?: boolean
   // When filters are on, the empty state offers "Clear filters" (Explore)
   onClearFilters?: () => void
+  // The active search as removable chips above the results, also over the empty state (Explore)
+  chips?: FilterChip[]
   // Top right on every card's photo, e.g. the favorite heart (the route passes it in)
   cardAction?: (space: Space) => ReactNode
   // Only these ids, on top of the filters (Favorites: the favorites as they are right now). A card whose
@@ -64,6 +67,7 @@ export function SpacesList({
   limit,
   showCount = false,
   onClearFilters,
+  chips = [],
   cardAction,
   only,
   empty,
@@ -185,6 +189,14 @@ export function SpacesList({
       <p role="status" className="sr-only">
         {isLoading || error ? '' : visibleCount ? `${spacesFound(visibleCount)} found` : 'No spaces found'}
       </p>
+      {chips.length > 0 && (
+        <div role="group" aria-label="Active search" className="mb-4 flex flex-wrap gap-2">
+          {chips.map((chip) => (
+            // The chip goes away with its filter, so focus moves to the results, like after "Clear filters"
+            <SearchFilterChip key={chip.key} chip={chip} onRemoved={() => resultsRef.current?.focus()} />
+          ))}
+        </div>
+      )}
       {content()}
     </div>
   )

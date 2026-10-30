@@ -172,9 +172,17 @@ replace them.
   an aside (Home, Explore), a `chart-2` ring in the bottom-left corner. On phones it is the top of the sheet, edge to edge, so it is
   always the page's first element. On `lg` an aside can sit on its right (20rem): **New on Zona** on
   Home, the **category spotlight** on Explore.
-- **Search**: `muted` pill input with a `Search` icon, next to it a round outline filter button. The pill
-  outlines `primary` on hover and turns `card` with a `primary` icon while typing; the filter button stays
-  `secondary` with a `primary` border while the filters are open.
+- **Search**: `muted` pill input with a `Search` icon, next to it a round outline filter button and a `primary`
+  "Search" button (round with only the icon on phones, where the field needs the room). The pill outlines
+  `primary` on hover and turns `card` with a `primary` icon while typing; the filter button stays `secondary`
+  with a `primary` border while the filters are open. A click in the field opens the city list under it (a
+  floating card like the time select's, "Cities" title, pill rows with a `MapPin`, scrolls after six); typing
+  filters it and bolds the matching part. Picking a city only fills the field; Search or Enter runs it
+  (`/spaces?city=` for a picked city, `/spaces?q=` for typed text). Code:
+  `features/spaces/components/space-search.tsx` and `search-suggestions.tsx`.
+- **Search chips** (Explore): the active search above the results, "Podgorica ✕" or "“hub” ✕", as a selected
+  chip (`secondary`, `primary` border, `secondary-foreground` label) that is one button; a click removes that
+  filter and moves focus to the results.
 - **Categories**: illustration + label per category (All, Desk, Meeting room, Office, Event hall), and the
   number of spaces as a small round badge on each illustration (`primary` on the selected one). The
   numbers follow the search and price filters, never the category itself. The selected one sits in a
