@@ -40,8 +40,11 @@ class ListingRepository(IListingRepository):
 
     def add(self, listing: Listing) -> Listing:
         db = self._session_factory()
-        db.add(listing)
-        db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
+        # A SAVEPOINT: when the database refuses the row, only the savepoint rolls back and the
+        # session stays usable, so the service can still look up the owner.
+        with db.begin_nested():
+            db.add(listing)
+            db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
         return listing
 
     def save(self, listing: Listing) -> Listing:
