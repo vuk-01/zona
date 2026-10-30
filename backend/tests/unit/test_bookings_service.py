@@ -378,7 +378,7 @@ def test_status_change_follows_the_flow(
 
     if error is None:
         service.update(3, change_to(change), HOST)
-        booking_repository.set_status.assert_called_once_with(3, expected=stored, new=change)
+        booking_repository.set_status.assert_called_once_with(booking, new=change)
         return
     with pytest.raises(InvalidStatusChangeException) as raised:
         service.update(3, change_to(change), HOST)
@@ -427,7 +427,9 @@ def test_confirm_checks_who_takes_part_then_locks_before_the_booking_is_read(
     booking_repository.confirmed_per_hour.assert_called_once_with(
         space_id=7, day=date(2026, 11, 4), exclude_id=3
     )
-    booking_repository.set_status.assert_called_once_with(3, expected="pending", new="confirmed")
+    booking_repository.set_status.assert_called_once_with(
+        booking_repository.get_by_id.return_value, new="confirmed"
+    )
 
 
 def test_confirm_of_a_booking_gone_before_the_lock_is_404(
@@ -529,7 +531,9 @@ def test_confirm_with_a_desk_left_in_every_hour_sets_confirmed(
 
     service.update(3, change_to("confirmed"), HOST)
 
-    booking_repository.set_status.assert_called_once_with(3, expected="pending", new="confirmed")
+    booking_repository.set_status.assert_called_once_with(
+        booking_repository.get_by_id.return_value, new="confirmed"
+    )
 
 
 @pytest.mark.parametrize("user", [GUEST, HOST])
@@ -541,7 +545,9 @@ def test_the_guest_and_the_host_can_cancel(
 
     service.update(3, change_to("cancelled"), user)
 
-    booking_repository.set_status.assert_called_once_with(3, expected="pending", new="cancelled")
+    booking_repository.set_status.assert_called_once_with(
+        booking_repository.get_by_id.return_value, new="cancelled"
+    )
 
 
 def test_someone_else_cannot_change_or_delete(
@@ -587,7 +593,7 @@ def test_a_lost_compare_and_set_reads_the_status_again(
     else:
         with pytest.raises(error):
             service.update(3, change_to(change), HOST)
-    booking_repository.get_status.assert_called_once_with(3)
+    booking_repository.get_status.assert_called_once_with(booking_repository.get_by_id.return_value)
 
 
 def test_delete_by_the_guest_while_pending(
@@ -598,7 +604,9 @@ def test_delete_by_the_guest_while_pending(
 
     service.delete(3, GUEST)
 
-    booking_repository.delete_pending.assert_called_once_with(3)
+    booking_repository.delete_pending.assert_called_once_with(
+        booking_repository.get_by_id.return_value
+    )
     booking_repository.get_status.assert_not_called()
 
 
@@ -644,4 +652,4 @@ def test_a_lost_delete_reads_the_status_again(
     with pytest.raises(error):
         service.delete(3, GUEST)
 
-    booking_repository.get_status.assert_called_once_with(3)
+    booking_repository.get_status.assert_called_once_with(booking_repository.get_by_id.return_value)

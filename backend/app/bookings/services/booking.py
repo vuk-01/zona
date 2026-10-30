@@ -146,8 +146,8 @@ class BookingService(IBookingService):
             )
         # Compare-and-set; declining and cancelling take no room, so they run without the lock.
         # It also guards confirm: on Postgres a parallel cancel does not wait for the space lock.
-        if not self._booking_repository.set_status(booking_id, expected=booking.status, new=change):
-            self._raise_lost_race(booking_id, change)
+        if not self._booking_repository.set_status(booking, new=change):
+            self._raise_lost_race(booking, change)
         # The UPDATE also set the new status on `booking` in the session.
         return _to_response(booking, now)
 
@@ -157,9 +157,9 @@ class BookingService(IBookingService):
             raise NotBookingGuestException
         if _returned_status(booking, self._clock.now()) != BookingReturnedStatus.PENDING:
             raise InvalidStatusChangeException.only_from(_PENDING, "deleted")
-        if not self._booking_repository.delete_pending(booking_id):
+        if not self._booking_repository.delete_pending(booking):
             # Deleted or changed by a parallel request after the read: read again, never assume.
-            if self._booking_repository.get_status(booking_id) is None:
+            if self._booking_repository.get_status(booking) is None:
                 raise BookingNotFoundException
             raise InvalidStatusChangeException.only_from(_PENDING, "deleted")
 
@@ -171,9 +171,9 @@ class BookingService(IBookingService):
             raise NotBookingParticipantException
         return booking
 
-    def _raise_lost_race(self, booking_id: int, change: BookingStatus) -> NoReturn:
+    def _raise_lost_race(self, booking: Booking, change: BookingStatus) -> NoReturn:
         """The compare-and-set changed no row: the booking was deleted or changed after the read."""
-        status = self._booking_repository.get_status(booking_id)
+        status = self._booking_repository.get_status(booking)
         if status is None:
             raise BookingNotFoundException
         raise _status_change_error(

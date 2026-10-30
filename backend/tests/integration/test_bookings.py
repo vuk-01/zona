@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 from httpx import Response
-from sqlalchemy import delete, event, func, select, update
+from sqlalchemy import delete, event, func, insert, select, update
 
 from app.bookings.models.booking import Booking, BookingStatus
 from app.bookings.repositories.booking import BookingRepository
@@ -1214,12 +1214,13 @@ def test_delete_without_token_is_401(client: TestClient, booking_id: int) -> Non
 # --- PATCH and DELETE: the row changes between the read and the compare-and-set ----------------
 
 
-def run_first(monkeypatch: pytest.MonkeyPatch, method: str, statement: Any) -> None:
-    """Runs `statement` on a second connection right before `BookingRepository.<method>`."""
+def run_first(monkeypatch: pytest.MonkeyPatch, method: str, *statements: Any) -> None:
+    """Runs `statements` on a second connection right before `BookingRepository.<method>`."""
     original = getattr(BookingRepository, method)
 
     def parallel_then_original(self: BookingRepository, *args: Any, **kwargs: Any) -> Any:
-        on_second_connection(statement)
+        for statement in statements:
+            on_second_connection(statement)
         return original(self, *args, **kwargs)
 
     monkeypatch.setattr(BookingRepository, method, parallel_then_original)
@@ -1294,6 +1295,54 @@ def test_delete_of_a_booking_deleted_or_changed_meanwhile(
     assert response.status_code == status_code
     assert response.json() == body
     assert stored_status(booking_id) == left
+
+
+@pytest.mark.parametrize("method", ["set_status", "delete_pending"])
+@pytest.mark.parametrize("taken_by", ["another guest", "another space"])
+def test_cancel_or_delete_never_reaches_a_new_booking_with_the_same_id(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    taken_by: str,
+) -> None:
+    """Marko's booking goes, and a new one gets its id before his cancel or delete writes.
+
+    SQLite gives a new row the id of the deleted last row (no AUTOINCREMENT), so the write must
+    match the booking that was read, not whichever row has the id now (ADR-024). The new row is
+    inserted with that id directly, so the test does the same on Postgres, whose ids never repeat.
+    """
+    original = booking_rows()[0]
+    if taken_by == "another guest":
+        guest_id = user_id(client, register(client, "jovana@example.com"))
+        space_id = original.space_id
+    else:
+        guest_id = original.guest_id
+        space_id = new_space(client, host_auth_headers)
+    same_id = insert(Booking).values(
+        id=booking_id,
+        space_id=space_id,
+        guest_id=guest_id,
+        date=original.date,
+        start_hour=original.start_hour,
+        end_hour=original.end_hour,
+        total_price=original.total_price,
+        status=BookingStatus.PENDING,
+        ends_at=original.ends_at,
+    )
+    run_first(monkeypatch, method, delete(Booking).where(Booking.id == booking_id), same_id)
+
+    if method == "set_status":
+        response = change(client, other_auth_headers, booking_id, "cancelled")
+    else:
+        response = client.delete(f"/api/bookings/{booking_id}", headers=other_auth_headers)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+    left = [(row.id, row.guest_id, row.space_id, row.status) for row in booking_rows()]
+    assert left == [(booking_id, guest_id, space_id, "pending")]
 
 
 def test_confirm_of_a_booking_deleted_after_the_lock_is_404(
