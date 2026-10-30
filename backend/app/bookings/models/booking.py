@@ -49,6 +49,10 @@ class Booking(Base):
         CheckConstraint(f"status IN ({_STATUS_LIST})", name="status_known"),
         # The overlap count reads one space on one date.
         Index(None, "space_id", "date"),
+        # Without AUTOINCREMENT SQLite gives a new row the id of the deleted last row, so a request
+        # that names a booking by its id could reach another booking. Postgres sequences never
+        # repeat an id and ignore this option (ADR-024).
+        {"sqlite_autoincrement": True},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

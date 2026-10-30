@@ -167,9 +167,10 @@ class BookingRepository(IBookingRepository):
 def _same_booking(booking: Booking) -> tuple[ColumnElement[bool], ...]:
     """The row that was read, not whichever row has its id now.
 
-    SQLite gives a new row the id of the deleted last row (no AUTOINCREMENT), so a booking deleted
-    after the read can come back as someone else's under the same id; `guest_id` and `space_id`
-    never change, so together with the id they name the booking that was read (ADR-024).
+    `bookings` never hands out an id twice (`sqlite_autoincrement`, ADR-024); this match also covers
+    a row that comes back under the same id some other way (an insert with an explicit id).
+    `guest_id` and `space_id` never change, so together with the id they name the booking that was
+    read.
     """
     return (
         Booking.id == booking.id,

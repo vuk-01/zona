@@ -1369,9 +1369,9 @@ def test_cancel_or_delete_never_reaches_a_new_booking_with_the_same_id(
 ) -> None:
     """Marko's booking goes, and a new one gets its id before his cancel or delete writes.
 
-    SQLite gives a new row the id of the deleted last row (no AUTOINCREMENT), so the write must
-    match the booking that was read, not whichever row has the id now (ADR-024). The new row is
-    inserted with that id directly, so the test does the same on Postgres, whose ids never repeat.
+    Ids no longer repeat on their own (`sqlite_autoincrement`, ADR-024), but the write still
+    matches the booking that was read, not whichever row has the id now. The new row is inserted
+    with that id directly, so the test does the same on SQLite and on Postgres.
     """
     original = booking_rows()[0]
     if taken_by == "another guest":
@@ -1402,6 +1402,100 @@ def test_cancel_or_delete_never_reaches_a_new_booking_with_the_same_id(
     assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
     left = [(row.id, row.guest_id, row.space_id, row.status) for row in booking_rows()]
     assert left == [(booking_id, guest_id, space_id, "pending")]
+
+
+def test_a_new_booking_never_gets_the_id_of_the_deleted_last_booking(
+    client: TestClient, other_auth_headers: dict[str, str], booking_id: int, space_id: int
+) -> None:
+    """Without AUTOINCREMENT SQLite gives a new row `max(id) + 1`, the id just deleted (ADR-024)."""
+    deleted = client.delete(f"/api/bookings/{booking_id}", headers=other_auth_headers)
+    assert deleted.status_code == 204, deleted.text
+
+    response = book(client, other_auth_headers, space_id)
+
+    assert response.status_code == 201, response.text
+    assert response.json()["id"] > booking_id
+
+
+def booked_again(original: Booking) -> Any:
+    """The same guest books the same slot of the same space again; the database picks the id."""
+    return insert(Booking).values(
+        space_id=original.space_id,
+        guest_id=original.guest_id,
+        date=original.date,
+        start_hour=original.start_hour,
+        end_hour=original.end_hour,
+        total_price=original.total_price,
+        status=BookingStatus.PENDING,
+        ends_at=original.ends_at,
+    )
+
+
+@pytest.mark.parametrize("method", ["set_status", "delete_pending"])
+def test_decline_or_delete_never_reaches_the_same_guests_new_booking_of_the_same_space(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+) -> None:
+    """Marko deletes his booking and books the same space again before Ana's decline (or his own
+    delete in another tab) writes.
+
+    `guest_id` and `space_id` are the same, so only a new id tells the two bookings apart: without
+    AUTOINCREMENT the new booking got the deleted one's id and the write changed it (ADR-024).
+    """
+    original = booking_rows()[0]
+    run_first(
+        monkeypatch, method, delete(Booking).where(Booking.id == booking_id), booked_again(original)
+    )
+
+    if method == "set_status":
+        response = change(client, host_auth_headers, booking_id, "declined")
+    else:
+        response = client.delete(f"/api/bookings/{booking_id}", headers=other_auth_headers)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+    (new,) = booking_rows()
+    assert new.id > booking_id
+    assert (new.guest_id, new.space_id, new.status) == (
+        original.guest_id,
+        original.space_id,
+        "pending",
+    )
+
+
+def test_confirm_never_reaches_the_same_guests_new_booking_made_before_the_lock(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    booking_id: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The participant check passes, then Marko deletes his booking and books the same space again
+    before Ana's confirm takes the lock.
+
+    The lock and the read after it go by the id: without AUTOINCREMENT the new booking had that id,
+    and Ana confirmed a booking she never saw (ADR-024).
+    """
+    original = booking_rows()[0]
+    lock_for_booking = SpaceRepository.lock_for_booking
+
+    def booked_again_then_lock(self: SpaceRepository, *args: Any, **kwargs: Any) -> int | None:
+        on_second_connection(delete(Booking).where(Booking.id == booking_id))
+        on_second_connection(booked_again(original))
+        return lock_for_booking(self, *args, **kwargs)
+
+    monkeypatch.setattr(SpaceRepository, "lock_for_booking", booked_again_then_lock)
+
+    response = change(client, host_auth_headers, booking_id, "confirmed")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Booking not found", "code": "booking_not_found"}
+    (new,) = booking_rows()
+    assert new.id > booking_id
+    assert new.status == "pending"
 
 
 def test_confirm_of_a_booking_deleted_after_the_lock_is_404(
