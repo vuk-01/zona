@@ -43,7 +43,7 @@ def test_create_for_an_owner_deleted_meanwhile_is_invalid_token(
     service: ListingService, listing_repository: Mock, user_repository: Mock
 ) -> None:
     listing_repository.add.side_effect = IntegrityError("INSERT", {}, Exception("FOREIGN KEY"))
-    user_repository.get_by_id.return_value = None
+    user_repository.exists.return_value = False
 
     with pytest.raises(InvalidTokenException):
         service.create(data=NEW_LISTING, current_user=create_current_user(1))
@@ -53,7 +53,7 @@ def test_create_refused_while_the_owner_exists_is_not_hidden(
     service: ListingService, listing_repository: Mock, user_repository: Mock
 ) -> None:
     listing_repository.add.side_effect = IntegrityError("INSERT", {}, Exception("CHECK"))
-    user_repository.get_by_id.return_value = Mock()
+    user_repository.exists.return_value = True
 
     with pytest.raises(IntegrityError):
         service.create(data=NEW_LISTING, current_user=create_current_user(1))
