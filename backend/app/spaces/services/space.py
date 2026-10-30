@@ -115,7 +115,9 @@ class SpaceService(ISpaceService):
     def delete(self, space_id: int, current_user: CurrentUser) -> None:
         space = self._get_owned_or_raise(space_id, current_user)
         # The bookings feature adds 409 space_has_active_bookings here.
-        self._space_repository.delete(space)
+        if not self._space_repository.delete(space.id):
+            # Deleted by a parallel request after it was read.
+            raise SpaceNotFoundException
 
     def _get_visible_or_raise(self, space_id: int, current_user: CurrentUser | None) -> Space:
         space = self._space_repository.get_by_id(space_id)

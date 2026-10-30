@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from app.database.session_factory import ISessionFactory
@@ -23,7 +23,7 @@ class ISpaceRepository(Protocol):
 
     def save(self, space: Space) -> Space: ...
 
-    def delete(self, space: Space) -> None: ...
+    def delete(self, space_id: int) -> bool: ...
 
 
 @inject(alias=ISpaceRepository)
@@ -62,10 +62,15 @@ class SpaceRepository(ISpaceRepository):
         db.flush()
         return space
 
-    def delete(self, space: Space) -> None:
+    def delete(self, space_id: int) -> bool:
+        """False when the row was already gone (deleted by a parallel request)."""
         db = self._session_factory()
-        db.delete(space)
-        db.flush()
+        # A DELETE statement, not db.delete(space): without a version column the ORM only warns
+        # when the row is already gone, so the returned id is the only way to tell.
+        deleted_id = db.execute(
+            delete(Space).where(Space.id == space_id).returning(Space.id)
+        ).scalar_one_or_none()
+        return deleted_id is not None
 
 
 def _visible_to(query: Select[Space], viewer_id: int | None) -> Select[Space]:
