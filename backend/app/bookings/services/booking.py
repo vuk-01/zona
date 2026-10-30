@@ -23,6 +23,8 @@ from app.bookings.exceptions.booking import (
 from app.bookings.models.booking import Booking, BookingStatus
 from app.bookings.repositories.booking import IBookingRepository
 from app.bookings.schemas.booking import (
+    POPULAR_FIRST_HOUR,
+    POPULAR_HOURS,
     BookingCreateRequestSchema,
     BookingGuestSchema,
     BookingListFilters,
@@ -30,6 +32,8 @@ from app.bookings.schemas.booking import (
     BookingReturnedStatus,
     BookingSpaceSchema,
     BookingUpdateRequestSchema,
+    PopularDaysSchema,
+    PopularTimesResponseSchema,
 )
 from app.spaces.exceptions.space import SpaceNotFoundException
 from app.spaces.repositories.space import ISpaceRepository
@@ -48,6 +52,10 @@ from app.utils.pagination import Page, PaginationParams
 
 # How far ahead a guest can book: a date at most this many days after today (docs/entities.md).
 BOOKING_DAYS_AHEAD = 365
+# Popular times: a space younger than this has no popular times yet, and the average covers at
+# most the last 8 weeks (docs/entities.md).
+POPULAR_MIN_AGE = timedelta(days=14)
+POPULAR_WINDOW_DAYS = 56
 
 
 class IBookingService(Protocol):
@@ -69,6 +77,10 @@ class IBookingService(Protocol):
     def create(
         self, data: BookingCreateRequestSchema, current_user: CurrentUser
     ) -> BookingResponseSchema: ...
+
+    def popular_times(
+        self, space_id: int, current_user: CurrentUser | None
+    ) -> PopularTimesResponseSchema | None: ...
 
 
 @inject(alias=IBookingService)
@@ -253,6 +265,21 @@ class BookingService(IBookingService):
             if taken.get(hour, 0) >= units:
                 raise SlotFullException.at(_hh_mm(hour), has_desks=desk_count is not None)
 
+    def popular_times(
+        self, space_id: int, current_user: CurrentUser | None
+    ) -> PopularTimesResponseSchema | None:
+        # Only a space the user can view: 404 for an unknown id or someone else's draft.
+        space = self._space_service.get(space_id=space_id, current_user=current_user)
+        now = self._clock.now()
+        # Not enough history yet: an absolute 14 days, both moments in UTC.
+        if now - space.created_at < POPULAR_MIN_AGE:
+            return None
+        first_day, last_day = _popular_window(space.created_at, now)
+        taken = self._booking_repository.confirmed_per_date_and_hour(
+            space_id=space.id, first_day=first_day, last_day=last_day
+        )
+        return PopularTimesResponseSchema(days=_popular_days(space, taken, first_day, last_day))
+
 
 def _raise_if_outside_booking_window(day: date, now: datetime) -> None:
     """From today to `BOOKING_DAYS_AHEAD` days ahead, today being the date in Podgorica now."""
@@ -302,6 +329,61 @@ def _hour(time: str) -> int:
 
 def _hh_mm(hour: int) -> str:
     return f"{hour:02d}:00"
+
+
+def _popular_window(created_at: datetime, now: datetime) -> tuple[date, date]:
+    """The local dates popular times average over: yesterday back to 8 weeks, only whole days.
+
+    Today is left out (its hours have not all passed) and so is the day the space was created
+    (its earlier hours could not be booked). Dates, not datetimes: a DST change inside the window
+    does not move it (ADR-022).
+    """
+    today = now.astimezone(LOCAL_TIMEZONE).date()
+    created = created_at.astimezone(LOCAL_TIMEZONE).date()
+    first_day = max(today - timedelta(days=POPULAR_WINDOW_DAYS), created + timedelta(days=1))
+    return first_day, today - timedelta(days=1)
+
+
+def _popular_days(
+    space: SpaceResponseSchema,
+    taken: dict[tuple[date, int], int],
+    first_day: date,
+    last_day: date,
+) -> PopularDaysSchema:
+    """Per weekday and hour: taken units / units, averaged over that weekday's dates, 0-100."""
+    # A database CHECK keeps desk_count NULL for every category but desk.
+    units = space.desk_count or 1
+    dates_by_weekday: dict[str, list[date]] = {weekday: [] for weekday in WEEKDAYS}
+    day = first_day
+    while day <= last_day:
+        dates_by_weekday[WEEKDAYS[day.weekday()]].append(day)
+        day += timedelta(days=1)
+
+    days: dict[str, list[int] | None] = {}
+    for weekday, dates in dates_by_weekday.items():
+        # The current opening hours decide, as on the space page.
+        hours = getattr(space.opening_hours, weekday)
+        if hours is None:
+            days[weekday] = None
+            continue
+        values = []
+        for hour in range(POPULAR_FIRST_HOUR, POPULAR_FIRST_HOUR + POPULAR_HOURS):
+            if not _hour(hours.open) <= hour < _hour(hours.close):
+                values.append(0)
+                continue
+            # Capped at the units: a lowered deskCount must not show more than 100.
+            booked = sum(min(taken.get((d, hour), 0), units) for d in dates)
+            values.append(_percent(booked, units * len(dates)))
+        days[weekday] = values
+    return PopularDaysSchema.model_validate(days)
+
+
+def _percent(part: int, whole: int) -> int:
+    """`100 * part / whole` rounded half up, in integers: 12.5 -> 13, as the frontend's Math.round.
+
+    Not round(): it rounds half to even (round(12.5) == 12).
+    """
+    return (200 * part + whole) // (2 * whole)
 
 
 # The statuses each change may start from (docs/entities.md, status flow).
