@@ -27,11 +27,9 @@ from app.spaces.schemas.space import (
     SpaceUpdateRequestSchema,
 )
 from app.users.repositories.user import IUserRepository
-from app.utils.clock import LOCAL_TIMEZONE, IClock
+from app.utils.clock import LOCAL_TIMEZONE, WEEKDAYS, IClock
 from app.utils.di import inject
 from app.utils.pagination import Page, PaginationParams
-
-_WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
 class ISpaceService(Protocol):
@@ -197,7 +195,7 @@ def _available_desks(space: Space, now: datetime) -> int | None:
 
 
 def _is_open(opening_hours: OpeningHours, now: datetime) -> bool:
-    hours = opening_hours.get(_WEEKDAYS[now.weekday()])
+    hours = opening_hours.get(WEEKDAYS[now.weekday()])
     if hours is None:
         return False
     # Whole hours as "HH:00" compare as strings; "24:00" closes after "23:00".

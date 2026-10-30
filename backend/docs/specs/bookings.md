@@ -52,8 +52,11 @@ Relations: Space 1–N Booking, User 1–N Booking (guest), `passive_deletes`; d
 POST checks, in order: space visible (`ISpaceService.get`) → not own → slot (whole hours, start < end, inside the
 weekday's opening hours, every hour exists that day) → start strictly after now → overlap (advisory) → INSERT in a
 SAVEPOINT; IntegrityError (ADR-019): `not IUserRepository.exists(guest)` → `401 invalid_token`, then
-`not ISpaceRepository.exists(space)` → `404`, else re-raise. `exists()`, not `get_by_id()`: `ISpaceService.get`
-already put the space in the identity map, and `db.get` would answer from it.
+`not ISpaceRepository.exists(space)` → `404`, else re-raise. `exists()`, not `get_by_id()`, by the project's rule
+since the favorites review (a query every time, never an answer from the identity map). On POST `get_by_id()`
+would happen to work: `ISpaceService.get` returns a schema, and the session holds unchanged rows only weakly, so
+the space has left the identity map by then. The mid-request tests prove that each branch must exist: without
+it a deleted space or guest answers `500`.
 Confirm: `ISpaceRepository.lock_for_booking(booking_id)` as the first statement (it finds the space through a
 subquery on `bookings`, so nothing is read before the lock) → read → roles → transition → count confirmed
 per hour (without itself) → compare-and-set on status. A slot is refused only when an hour in `[start, end)` does not

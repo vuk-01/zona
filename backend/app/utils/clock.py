@@ -8,6 +8,8 @@ from app.utils.di import inject
 
 # Opening hours and booking slots are in the local time of the city the app serves (ADR-022).
 LOCAL_TIMEZONE = ZoneInfo("Europe/Podgorica")
+# The keys of a space's opening hours, indexed by `date.weekday()` (Monday is 0).
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
 
 
 class IClock(Protocol):
