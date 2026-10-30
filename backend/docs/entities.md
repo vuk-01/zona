@@ -31,7 +31,7 @@
 
 ## User
 
-Code: backend `app/users/` and `app/auth/`; frontend `src/lib/user.ts`, `src/features/auth/`, `src/features/users/`.
+Code: backend `backend/app/users/` and `backend/app/auth/`; frontend `frontend/src/lib/user.ts`, `frontend/src/features/auth/`, `frontend/src/features/users/`.
 
 | Field     | Type                           | Required | Notes                                                                                                             |
 | --------- | ------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -71,7 +71,7 @@ The password is sent only on register (8–72 characters) and login (1–72 char
 
 ## Space
 
-A space a host rents out by the hour. Code: backend `app/spaces/`; frontend `src/features/spaces/`.
+A space a host rents out by the hour. Code: backend `backend/app/spaces/`; frontend `frontend/src/features/spaces/`.
 
 | Field          | Type                                                             | Required                    | Notes                                                                                                                                                                                           |
 | -------------- | ---------------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -114,7 +114,7 @@ List filters: `search` (at most 80 characters) matches the name or the city, cas
 
 ## Booking
 
-A guest books a space for one date and a time slot in whole hours. Code: backend `app/bookings/`; frontend `src/features/bookings/`, `src/lib/booking.ts`.
+A guest books a space for one date and a time slot in whole hours. Code: backend `backend/app/bookings/`; frontend `frontend/src/features/bookings/`, `frontend/src/lib/booking.ts`.
 
 | Field      | Type                                                                             | Required | Notes                                                                            |
 | ---------- | -------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
@@ -157,7 +157,7 @@ The rule is checked on create and again on confirm. A full slot returns `409 slo
 
 ## Favorite
 
-A space a user saved with the heart. Code: backend `app/favorites/`; frontend `src/features/favorites/`, `src/lib/favorite.ts`.
+A space a user saved with the heart. Code: backend `backend/app/favorites/`; frontend `frontend/src/features/favorites/`, `frontend/src/lib/favorite.ts`.
 
 | Field     | Type   | Required | Notes                                                                          |
 | --------- | ------ | -------- | ------------------------------------------------------------------------------ |
