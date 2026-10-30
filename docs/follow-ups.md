@@ -66,6 +66,11 @@ still uses the mock. When the frontend is connected:
 
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
+- **Bookings PR 2: remove the temporary sentence in `entities.md`.** The Booking "Built so far" note
+  (line 164 in both copies) says that `/api/bookings/availability` and `/popular-times` match
+  `GET /api/bookings/:id` and fail as an invalid id. When PR 2 registers both routes before
+  `/{booking_id}` in `backend/app/bookings/api/booking.py`, delete that sentence from both copies in
+  the same PR.
 - **`PATCH /api/spaces` against confirmed bookings.** A lower `deskCount`, a change of category or
   new opening hours can leave confirmed bookings that no longer fit. The check takes
   `ISpaceRepository.lock(space_id)` as its first statement, the lock `DELETE /api/spaces` takes in
