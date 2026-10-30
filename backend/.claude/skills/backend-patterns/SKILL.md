@@ -256,7 +256,8 @@ except IntegrityError as e:
 
 Catch `IntegrityError` only for a rule the input cannot check, and answer by the rule that refused (ADR-019):
 
-- a UNIQUE column → `409` with `fieldErrors` (above);
+- a UNIQUE column → `409` with `fieldErrors` (above), or `200` with the existing row when the contract makes the
+  `POST` idempotent (favorites; ADR-021);
 - a foreign key to the signed-in user on `POST` (`owner_id`, `host_id`) → `401 invalid_token` (`create` in §5);
 - a foreign key to another row named in the request (`spaceId` on a favorite or a booking) → `404` for that entity:
 
@@ -272,7 +273,8 @@ except IntegrityError as e:
 For a foreign key, `add` runs inside `db.begin_nested()` so the session stays usable for the lookup, and the
 service reaches the other domain through its Protocol (`IUserRepository`, `ISpaceRepository`). Every `CHECK`
 and `NOT NULL` gets a Pydantic twin instead; never a catch-all `409` "please try again". A row deleted while
-its `PATCH` or `DELETE` runs is a `404`: `StaleDataError` from `save()`, or `False` from `delete()`.
+its `PATCH` or `DELETE` runs is a `404`: `StaleDataError` from `save()`, or `False` from `delete()`; an idempotent
+`DELETE` answers `204` either way (ADR-021).
 
 ## 8. Tests: unit (service mocked) and integration (real database)
 
