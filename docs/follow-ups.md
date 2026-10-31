@@ -74,6 +74,28 @@ still uses the mock. When the frontend is connected:
   for a slot before it is sent; `availability` in `bookings-api.ts` (mock, same shape) becomes a
   `fetch` of that route.
 
+## Frontend: Delete account on Profile
+
+`useDeleteAccount` (`frontend/src/features/users/api/use-users.ts`) calls `DELETE /api/users/:id`,
+then clears the token and the signed-in user, but no screen calls it yet.
+
+- A "Delete account" button on Profile with an `AlertDialog` confirmation, and a section for it in
+  `frontend/DESIGN.md`, modeled on "Delete confirmation" (what happens, that it can't be undone,
+  Cancel + `bg-destructive` "Delete").
+- After a `204` the page goes to `/` before the user is cleared, like `useLogout`: clearing first
+  would let `RequireAuth` send the user to `/login?redirect=/profile`.
+- **Not checked by hand yet:** the hook's logic is covered by `use-users.test.ts`
+  (`deleteAccountOptions`), but the flow from the UI (click → hook → signed out → navigation) can
+  only be checked once the button exists.
+
+## Frontend: `RequireAuth` when the backend is down
+
+When `GET /api/auth/me` fails with an error that is not a 401 (backend down, `5xx`, no network),
+`useCurrentUser` has no data, so `RequireAuth`
+(`frontend/src/features/auth/components/require-auth.tsx`) sends a signed-in user to `/login`
+although the token is still there. It should tell "no user" (`null`) apart from "don't know whether
+there is a user" (an error): for example an error state with "Try again" instead of the redirect.
+
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
 - **Confirm after the space became a draft.** The contract does not say what happens; today the host
