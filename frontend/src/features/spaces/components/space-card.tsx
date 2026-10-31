@@ -10,9 +10,10 @@ import { SpacePrice } from './space-price'
 
 const WEEKDAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 
+// null when the space is closed all day
 function todayHours(space: Space) {
   const hours = space.openingHours[WEEKDAYS[new Date().getDay()]]
-  return hours ? `${hours.open}–${hours.close}` : 'Closed today'
+  return hours ? `${hours.open}–${hours.close}` : null
 }
 
 // Green only for real availability (DESIGN.md); everything else is meta text.
@@ -45,6 +46,7 @@ type SpaceCardProps = {
 export function SpaceCard({ space, action }: SpaceCardProps) {
   const perDesk = bookingUnit(space.category) === 'desk'
   const desks = deskAvailability(space.availableDesks)
+  const hours = todayHours(space)
 
   return (
     // relative: the stretched link and the sr-only text are positioned against the card, not the page
@@ -73,15 +75,24 @@ export function SpaceCard({ space, action }: SpaceCardProps) {
           <span className="flex items-center gap-2 whitespace-nowrap text-muted-foreground">
             <Clock className="size-4 shrink-0" aria-hidden="true" />
             <span>
-              <span className="sr-only">Open today </span>
-              {todayHours(space)}
+              {hours ? (
+                <>
+                  <span className="sr-only">Open today </span>
+                  {hours}
+                </>
+              ) : (
+                'Closed today'
+              )}
             </span>
           </span>
+          {/* On a closed day "Closed now" would only repeat "Closed today" */}
           {perDesk ? (
-            <span className={availabilityVariants({ tone: desks.tone })}>
-              <Armchair className="size-4 shrink-0" aria-hidden="true" />
-              {desks.text}
-            </span>
+            hours && (
+              <span className={availabilityVariants({ tone: desks.tone })}>
+                <Armchair className="size-4 shrink-0" aria-hidden="true" />
+                {desks.text}
+              </span>
+            )
           ) : (
             <span className={availabilityVariants({ tone: 'muted' })}>
               <Users className="size-4 shrink-0" aria-hidden="true" />
