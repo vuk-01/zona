@@ -211,12 +211,14 @@ export function BookingsList({ view, userId, title }: BookingsListProps) {
         {title}
         {state === 'loading' && <Skeleton className="h-9 w-56 rounded-full" />}
         {state === 'ready' && (
-          // Phones: the row scrolls sideways, edge to edge of the panel; py-1 leaves room for the focus ring
+          // Phones: the row scrolls sideways, edge to edge of the panel; py-1 leaves room for the focus ring.
+          // overflow-x also clips vertically, so the list grows to its triggers (shadcn's h-9 is replaced
+          // under the same group variant, or a plain h-auto loses to it) and nothing scrolls up and down.
           <div className="-mx-4 -my-1 overflow-x-auto px-4 py-1 motion-safe:scroll-smooth md:mx-0 md:overflow-visible md:px-0">
             <TabsList
               ref={setTabList}
               variant="line"
-              className="relative h-auto gap-6 border-b pb-0"
+              className="relative gap-6 border-b py-0 group-data-[orientation=horizontal]/tabs:h-auto"
               aria-label={copy.label}
             >
               {underline && (
