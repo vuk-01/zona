@@ -137,9 +137,16 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
               <Input
                 id="profile-city"
                 autoComplete="address-level2"
+                aria-invalid={errors.city ? true : undefined}
+                aria-describedby={errors.city ? 'profile-city-error' : undefined}
                 className="h-12 rounded-full bg-muted px-4 focus-visible:ring-ring"
                 {...register('city')}
               />
+              {errors.city && (
+                <p id="profile-city-error" className="px-4 text-sm text-destructive">
+                  {errors.city.message}
+                </p>
+              )}
             </div>
           </div>
           <div className="grid gap-2">

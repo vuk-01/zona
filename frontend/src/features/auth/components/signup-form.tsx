@@ -21,7 +21,7 @@ const signupSchema = z.object({
     .min(2, 'Use at least 2 characters')
     .max(60, 'Use at most 60 characters'),
   email: z.string().trim().min(1, 'Enter your email').pipe(z.email('Enter a valid email')),
-  password: z.string().min(8, 'Use at least 8 characters'),
+  password: z.string().min(8, 'Use at least 8 characters').max(72, 'Use at most 72 characters'),
 })
 
 type SignupValues = z.infer<typeof signupSchema>

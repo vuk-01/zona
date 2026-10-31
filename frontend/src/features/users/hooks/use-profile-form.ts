@@ -6,14 +6,14 @@ import type { User } from '@/lib/user'
 
 export const BIO_MAX_LENGTH = 200
 
-// The same limits as normalize() in users-api.ts, so the form shows them before the request is sent
+// The same limits as the backend (docs/entities.md), so the form shows them before the request is sent
 const profileFormSchema = z.object({
   name: z
     .string()
     .trim()
     .min(2, 'Enter your name, at least 2 characters')
     .max(60, 'Keep your name under 60 characters'),
-  city: z.string().trim(),
+  city: z.string().trim().max(80, 'Keep your city under 80 characters'),
   bio: z.string().trim().max(BIO_MAX_LENGTH, `Keep your bio under ${BIO_MAX_LENGTH} characters`),
 })
 

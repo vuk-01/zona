@@ -16,7 +16,7 @@ import { StackedAuthField } from './stacked-auth-field'
 
 const loginSchema = z.object({
   email: z.string().trim().min(1, 'Enter your email').pipe(z.email('Enter a valid email')),
-  password: z.string().min(1, 'Enter your password'),
+  password: z.string().min(1, 'Enter your password').max(72, 'Use at most 72 characters'),
 })
 
 type LoginValues = z.infer<typeof loginSchema>
