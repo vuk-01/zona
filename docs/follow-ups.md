@@ -52,9 +52,12 @@ a list grows past that.
   page while `pages` says there are more, or give the hearts a check per visible space.
 - **My bookings and Reservations.** `BookingsList` (`features/bookings/components/bookings-list.tsx`)
   reads one page of 500 (`GET /bookings?guestId=` or `?hostId=`) and splits it into the tabs on the
-  client. Past 500 bookings the oldest are missing from Past and the tab counts stop at 500 (the
-  Reservations badge in `app/app-shell.tsx` reads `total`, so it stays right). Either read every page
-  while `pages` says there are more, or one request per tab with a `status` filter and its `total`.
+  client. The backend sorts earliest first (`order_by(Booking.date, Booking.start_hour, Booking.id)`
+  in `backend/app/bookings/repositories/booking.py:77`), so past 500 bookings the first page cuts off
+  the latest ones: Upcoming and Pending lose future bookings, Past stays full, and the tab counts stop
+  at 500 (the Reservations badge in `app/app-shell.tsx` reads `total`, so it stays right). Fix: one
+  request per tab with a `status` filter and its `total`, so each tab gets its own page and count and
+  the future bookings are never cut off by the past ones.
 - **Two `/spaces` requests on Home.** The list asks for the default page (50) and the stats for 500,
   and `pagination` is part of the query key, so the same filters run twice. Let the list read the
   first `limit` cards from the stats query, or give both the same size.

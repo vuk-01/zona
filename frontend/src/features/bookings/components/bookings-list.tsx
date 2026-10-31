@@ -135,8 +135,9 @@ const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-
 // stays in place in every state, so the title never remounts. The tab underline slides to the open tab,
 // and the cards fade in, one after another along a row.
 export function BookingsList({ view, userId, title }: BookingsListProps) {
-  // Every booking at once, so the tabs can split and count them; past MAX_PAGE_SIZE the oldest are left
-  // out (docs/follow-ups.md, "lists capped at 500").
+  // Every booking at once, so the tabs can split and count them. The backend sorts earliest first, so
+  // past MAX_PAGE_SIZE the latest ones, Upcoming and Pending, are left out, not the past ones
+  // (docs/follow-ups.md, "lists capped at 500").
   const {
     data: page,
     isLoading,
