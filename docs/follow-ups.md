@@ -35,9 +35,24 @@ should back up `data/app.db` first.
 
 `GET /api/spaces` returns 50 spaces per page by default (`{total, items, pages}`). Explore shows the
 first page and counts all matches from `total` (`spaces-list.tsx`), so past 50 spaces the rest cannot
-be reached. Add a "Load more" button (`useInfiniteQuery` with `page`) under the grid. The bookings
-join, the category stats and My spaces ask for the largest page, 500 (`MAX_PAGE_SIZE` in
-`src/lib/api-client.ts`); they need more pages once a list grows past that.
+be reached; until then the count says "Showing 50 of 120 spaces". Add a "Load more" button
+(`useInfiniteQuery` with `page`) under the grid. The bookings join, the category stats and My spaces
+ask for the largest page, 500 (`MAX_PAGE_SIZE` in `src/lib/api-client.ts`); they need more pages once
+a list grows past that.
+
+## Frontend: lists capped at 500 and a second spaces query on Home
+
+- **Category stats.** `useCategoryStats` (`features/spaces/hooks/use-category-stats.ts`) counts the
+  categories, "open now" and the newest space from one page of 500. Past 500 listed spaces every
+  number stops there, and Explore's list (`total`) and the hero panel disagree. Either a stats route
+  on the backend (counts per category in one query) or the counts from `total` of one
+  `size=1` request per category.
+- **Favorites.** `favoritesApi.list` reads one page of 500 and drops `total`: a user's 501st saved
+  space never shows a filled heart, and clicking it sends a `POST` that changes nothing. Read every
+  page while `pages` says there are more, or give the hearts a check per visible space.
+- **Two `/spaces` requests on Home.** The list asks for the default page (50) and the stats for 500,
+  and `pagination` is part of the query key, so the same filters run twice. Let the list read the
+  first `limit` cards from the stats query, or give both the same size.
 
 ## Frontend: connect bookings to the backend
 
@@ -63,6 +78,13 @@ still uses the mock. When the frontend is connected:
   give it the same two checks, and map `booking_too_far_ahead` to `InvalidBookingError` on `date`.
   The date picker allows 60 days (`BOOKABLE_DAYS` in `hooks/use-booking-slot.ts`), so the UI never
   reaches the limit today; decide whether the picker stays at 60 or follows the backend's 365.
+- **PR 4 of the wiring plan: the space on a booking card.** My bookings and Reservations
+  (`app/routes/bookings.tsx`, `host-reservations.tsx`) join each booking to a space from
+  `GET /spaces?size=500`. That list never has other people's drafts, so a booking on a space whose host
+  turned it into a draft loses its photo and details (and past 500 spaces some are missing anyway).
+  Use the `space` summary the booking answer already carries (`{id, name, address, hostId}`); for the
+  photo, add the cover image to that summary on the backend (`GET /spaces/:id` is a 404 for someone
+  else's draft too, so fetching it by id does not help).
 - **Since bookings PR 2:** `GET /api/bookings/availability` answers `{available, freeDesks, message}`
   for a slot before it is sent; `availability` in `bookings-api.ts` (mock, same shape) becomes a
   `fetch` of that route.
