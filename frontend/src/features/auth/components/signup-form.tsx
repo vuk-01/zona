@@ -45,7 +45,8 @@ type SignupFormProps = {
 export function SignupForm({ onSignedUp, onLogIn, appearance }: SignupFormProps) {
   const { search } = useRedirectTarget()
   const signup = useSignup()
-  // An email that is taken (409 email_already_registered) shows under the email field instead
+  // A server error that has no field in this form (no network, a 5xx). A taken email
+  // (409 email_already_registered) is the exception: it comes with fieldErrors.email and shows under that field
   const [formError, setFormError] = useState<string | null>(null)
   const isStacked = appearance === 'stacked'
   const Field = isStacked ? StackedAuthField : AuthField

@@ -12,9 +12,9 @@ const profileFormSchema = z.object({
     .string()
     .trim()
     .min(2, 'Enter your name, at least 2 characters')
-    .max(60, 'Keep your name under 60 characters'),
+    .max(60, 'Use at most 60 characters'),
   city: z.string().trim().max(80, 'Use at most 80 characters'),
-  bio: z.string().trim().max(BIO_MAX_LENGTH, `Keep your bio under ${BIO_MAX_LENGTH} characters`),
+  bio: z.string().trim().max(BIO_MAX_LENGTH, `Use at most ${BIO_MAX_LENGTH} characters`),
 })
 
 export type ProfileFormValues = z.infer<typeof profileFormSchema>
