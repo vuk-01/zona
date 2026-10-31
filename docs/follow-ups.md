@@ -97,8 +97,11 @@ then clears the token and the signed-in user, but no screen calls it yet.
 - A "Delete account" button on Profile with an `AlertDialog` confirmation, and a section for it in
   `frontend/DESIGN.md`, modeled on "Delete confirmation" (what happens, that it can't be undone,
   Cancel + `bg-destructive` "Delete").
-- After a `204` the page goes to `/` before the user is cleared, like `useLogout`: clearing first
-  would let `RequireAuth` send the user to `/login?redirect=/profile`.
+- `useDeleteAccount` gets `onDeleted?: () => void` (and `deleteAccountOptions(queryClient, onDeleted)`),
+  called first in `onSuccess`, like `onLoggedOut` in `useLogout`; the button passes the navigation to
+  `/`. An `onSuccess` given to `mutate()` is not enough: it runs only after the hook's own `onSuccess`,
+  when the user is already cleared, so `RequireAuth` would send them to `/login?redirect=/profile`.
+  `use-users.test.ts` checks the order (`onDeleted` runs while the user is still in the cache).
 - **Not checked by hand yet:** the hook's logic is covered by `use-users.test.ts`
   (`deleteAccountOptions`), but the flow from the UI (click → hook → signed out → navigation) can
   only be checked once the button exists.
@@ -123,10 +126,14 @@ answer the user.
   which sets only `retry`), so it is TanStack Query's default `0`: the user is stale right after
   `setQueryData`, and every new observer refetches it on mount (`refetchOnMount` default `true`), unless
   a fetch is already running (then it joins that one).
-- `useSetCurrentUser` (login, sign-up, logout) calls `setQueryData(currentUserQueryKey, user)` with the
-  user from the answer and then `invalidateQueries({ queryKey: ['auth'] })`, which refetches the active
-  `['auth', 'me']` once more. That is one of the three, and it fetches what the cache already holds. On
-  logout it sends nothing (`me` without a token makes no request).
+- `useSetCurrentUser` (login and sign-up) calls `setQueryData(currentUserQueryKey, user)` with the
+  user from the answer and then invalidates `['auth']`, `['spaces']`, `['favorites']` and `['bookings']`;
+  the `['auth']` part refetches the active `['auth', 'me']` once more. That is one of the three, and it
+  fetches what the cache already holds.
+- `useLogout` does not use it: it navigates (`onLoggedOut`), cancels the `/auth/me` in flight,
+  `setQueryData(currentUserQueryKey, null)`, removes the private lists (`['favorites']`, `['bookings']`),
+  clears the token and refetches `['spaces']`. Its `/auth/me` refetches after that send nothing (`me`
+  without a token makes no request).
 - `useCurrentUser` is read in 13 places: `app/app-shell.tsx`, `app/favorite-heart.tsx` (one per space
   card, so it mounts only once the spaces list has loaded), the routes `bookings`, `favorites`,
   `host-reservations`, `host-space-edit`, `host-space-new`, `host-spaces`, `profile`, `space-detail`,
@@ -149,32 +156,38 @@ login). Also unchecked: whether React `StrictMode` (`src/main.tsx`, development 
 3. Both 1 and 2.
 4. A global `staleTime` on the `QueryClient`: affects every list too, so it is a wider decision.
 
-## Frontend: logout from /favorites sends one request without a token
+## Frontend: a session that expires refetches the private lists without a token
 
-Logging out from `/`, or deleting the account, sends no request without a token (fixed in PR 2,
-`useLogout` in `features/auth/api/use-auth.ts`). Logging out from `/favorites` still sends one
-`GET /api/favorites?size=500` without `Authorization`, answered `401 not_authenticated` (one
-"Failed to load resource" in the console). The user still ends up logged out on `/`.
+For Ivana (`frontend/src/app/providers.tsx`, `onSessionExpired`). `expireSession` clears the token
+first, and `resetQueries()` then refetches the active `['favorites', userId]` right away, with the old
+key, before the next render has no user: probably one `401 not_authenticated` (not checked in the
+browser). Logging out avoids it with `removeQueries` (`useLogout` in
+`frontend/src/features/auth/api/use-auth.ts`).
 
-What the request log shows (checked by hand, a `fetch` logger in the page):
-- `onLoggedOut` navigates to `/` with `flushSync`, and Home mounts. `useCurrentUser` has
-  `staleTime` 0, so the mount refetches `GET /api/auth/me`, still **with** the token (200), and puts the
-  user back into the cache. The hearts then mount with that user, and their favorites query runs after
-  the token is gone.
-- Tried in PR 2 and reverted: clearing the user and removing `['favorites']`/`['bookings']` **before**
-  `onLoggedOut()`. The `/auth/me` refetch on mount still runs with the token and brings the user back,
-  so the request without a token stays.
-- Not checked: whether the hearts' observers subscribe in effects after `onSuccess` has finished (that
-  would be why removing the query first does not help).
+Proposal: `removeQueries` for `['favorites']` and `['bookings']` before `resetQueries()`. The
+`setQueryData(currentUserQueryKey, null)` there is redundant: `resetQueries()` right after it puts the
+signed-in user back to its initial state, and `me` without a token then answers `null`.
 
-Options (not decided):
-1. A `staleTime` for `useCurrentUser` (see "extra `GET /api/auth/me` after login and sign-up" above):
-   no `/auth/me` refetch on mount, so the user cannot come back during logout.
-2. Clear the token first and accept the redirect risk, with a different way to keep `RequireAuth` from
-   sending a deliberate log out to `/login?redirect=…` (e.g. a "logging out" flag it reads).
-3. Let the favorites query run only while there is a token (a check in `use-favorites.ts`, in the
-   favorites feature).
+## Frontend: `useLogout` has no test
 
+`deleteAccountOptions` in `frontend/src/features/users/api/use-users.ts` is tested without React
+(`use-users.test.ts`); `useLogout` (`frontend/src/features/auth/api/use-auth.ts`), whose order matters
+just as much, has no test. Move its options out into `logoutOptions(queryClient, onLoggedOut)` the same
+way and test the case where a `GET /api/auth/me` sent with the token answers after the logout: the user
+must stay `null` (the `cancelQueries` from PR 2) and no request goes out without the token.
+
+## Docs: the mock users in README.md and frontend/CLAUDE.md
+
+Since PR 2 sign-in and profiles use the API, and `src/lib/mock-db.ts` has no users any more. Two texts
+still say otherwise:
+- `README.md`, around lines 44–47: the demo accounts are "still the frontend's mock", with the password
+  `zona1234`.
+- `frontend/CLAUDE.md`, around line 34: `api-client.ts` is used by "spaces and favorites; the others are
+  still a mock".
+
+Update both once the whole wiring is in: in PR 4, or in the PR `feat/frontend-wiring → main`.
+
+## From the PR 2 UI review (left out of `feat/frontend-auth-users` on purpose)
 
 - **Error text contrast in the login dialog, light theme.** The dialog's forms sit on `background`
   (`oklch(0.965 0.018 255)`), and light `destructive` (`oklch(0.58 0.2 27)`) on it is **4.27:1** for
