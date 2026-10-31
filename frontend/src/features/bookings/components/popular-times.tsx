@@ -191,7 +191,11 @@ export function PopularTimes({ spaceId, openingHours }: PopularTimesProps) {
                 }}
               >
                 <span className="font-semibold text-foreground">
-                  {values[selected] === 0 ? 'Quiet' : `${values[selected]}%`}
+                  {values[selected] > 0
+                    ? `${values[selected]}%`
+                    : isOpenAt(openingHours[day], hourAt(selected))
+                      ? 'Quiet'
+                      : 'Closed'}
                 </span>
                 <span className="text-muted-foreground">at {formatHour(hourAt(selected))}</span>
               </div>
