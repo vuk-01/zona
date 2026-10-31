@@ -1,6 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  type QueryClient,
+  mutationOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 
-import { NotFoundError } from '@/lib/mock-db'
+import { clearToken } from '@/lib/auth-token'
 import { type UserMode, currentUserQueryKey } from '@/lib/user'
 
 import type { ProfileChanges, UserFilters } from '../types'
@@ -9,16 +15,15 @@ import { usersApi } from './users-api'
 export function useUsers(filters: UserFilters = {}) {
   return useQuery({
     queryKey: ['users', filters],
-    queryFn: () => usersApi.list(filters),
+    queryFn: ({ signal }) => usersApi.list(filters, signal),
   })
 }
 
+// A missing profile (404) is not tried again: the global retry in src/app/providers.tsx skips it.
 export function useUser(id: number) {
   return useQuery({
     queryKey: ['users', id],
-    queryFn: () => usersApi.get(id),
-    // A missing profile stays missing; only retry other errors (the default is 3 tries).
-    retry: (failureCount, error) => !(error instanceof NotFoundError) && failureCount < 3,
+    queryFn: ({ signal }) => usersApi.get(id, signal),
   })
 }
 
@@ -55,10 +60,19 @@ export function useSwitchMode(onSwitched?: (mode: UserMode) => void | Promise<vo
   })
 }
 
-export function useDeleteAccount() {
-  const refresh = useRefreshUsers()
-  return useMutation({
+// After a DELETE the token answers 401 invalid_token, so the session ends here: no token, no signed-in
+// user, and every list loads again (the user's spaces, bookings and favorites are gone with the
+// account). Outside the hook so use-users.test.ts can run it without React.
+export const deleteAccountOptions = (queryClient: QueryClient) =>
+  mutationOptions({
     mutationFn: (id: number) => usersApi.remove(id),
-    onSuccess: refresh,
+    onSuccess: () => {
+      clearToken()
+      queryClient.setQueryData(currentUserQueryKey, null)
+      return queryClient.invalidateQueries()
+    },
   })
+
+export function useDeleteAccount() {
+  return useMutation(deleteAccountOptions(useQueryClient()))
 }

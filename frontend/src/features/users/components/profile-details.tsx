@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { applyFieldErrors } from '@/lib/form-errors'
 import type { User } from '@/lib/user'
 
 import { useUpdateProfile } from '../api/use-users'
@@ -49,6 +50,8 @@ type ProfileDetailsProps = {
 export function ProfileDetails({ user }: ProfileDetailsProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  // A server error that has no field in this form (zod checks the same limits first)
+  const [formError, setFormError] = useState<string | null>(null)
   const editRef = useRef<HTMLButtonElement>(null)
   const updateProfile = useUpdateProfile()
   const form = useProfileForm(user)
@@ -56,6 +59,7 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
     register,
     handleSubmit,
     control,
+    setError,
     formState: { errors },
   } = form
   const bio = useWatch({ control, name: 'bio' })
@@ -64,6 +68,7 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
     form.reset(toProfileFormValues(user))
     updateProfile.reset()
     setNotice(null)
+    setFormError(null)
     // flushSync: the fields are on the page before the first one takes focus
     flushSync(() => setIsEditing(true))
     form.setFocus('name')
@@ -74,7 +79,8 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
     editRef.current?.focus()
   }
 
-  const onSubmit = handleSubmit((changes) =>
+  const onSubmit = handleSubmit((changes) => {
+    setFormError(null)
     updateProfile.mutate(
       { id: user.id, changes },
       {
@@ -83,9 +89,10 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
           setNotice('Your profile was saved.')
           stopEditing()
         },
+        onError: (error) => setFormError(applyFieldErrors(error, setError, ['name', 'city', 'bio'])),
       },
-    ),
-  )
+    )
+  })
 
   const details = [
     { label: 'Name', value: user.name },
@@ -174,7 +181,7 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
             </div>
           </div>
 
-          {updateProfile.error && <FormAlert message={updateProfile.error.message} />}
+          {formError && <FormAlert message={formError} />}
 
           <div className="flex flex-col gap-3 md:flex-row">
             <Button type="submit" size="lg" disabled={updateProfile.isPending} className={buttonClass}>
