@@ -18,7 +18,7 @@ const RULES = [
   [/^(?:poetry\s+(?:(?:-C|--directory|-P|--project)(?:=|\s+)\S+\s+)?run\s+)?alembic\s+downgrade\b/,'alembic downgrade drops tables and columns with their data; ask the user first (rules/backend-db.md)'],
   [/^docker(?:\s+compose|-compose)\s+down\b(?:.*\s)?(?:-v|--volumes|-[a-zA-Z]*v[a-zA-Z]*)(?:\s|$)/, 'docker compose down -v deletes the database volume; ask the user first'],
   [/^docker\s+volume\s+(?:rm|prune)\b/, 'deleting Docker volumes deletes data; ask the user first'],
-  [/^(?:cat|less|more|head|tail|bat|type|Get-Content|strings)\s+(?:-\S+\s+)*\S*\.env(?!\.example)(?:\.\w+)?(?:\s|$)/, '.env holds secrets and is never printed; read .env.example instead (rules/safety.md)'],
+  [/^(?:cat|less|more|head|tail|bat|type|Get-Content|strings)\s+(?:\S+\s+)*\S*\.env(?!\.example)(?:\.\w+)?(?:\s|$)/,'.env holds secrets and is never printed; read .env.example instead (rules/safety.md)'],
   [/^(?:uv\s+add|uv\s+pip\s+install|pip3?\s+install|poetry\s+(?:(?:-C|--directory|-P|--project)(?:=|\s+)\S+\s+)?add)\b/,'a new backend dependency needs approval: name the package, why it is needed and the alternative, then let the user run `poetry add <package>` themselves (rules/safety.md, ADR-013)'],
 ]
 
