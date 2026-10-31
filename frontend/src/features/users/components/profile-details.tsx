@@ -60,7 +60,7 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
     handleSubmit,
     control,
     setError,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = form
   const bio = useWatch({ control, name: 'bio' })
 
@@ -192,7 +192,14 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
           {formError && <FormAlert message={formError} />}
 
           <div className="flex flex-col gap-3 md:flex-row">
-            <Button type="submit" size="lg" disabled={updateProfile.isPending} className={buttonClass}>
+            {/* Nothing to send until a value differs from the one Edit started with (form.reset above):
+                changing a field back disables it again */}
+            <Button
+              type="submit"
+              size="lg"
+              disabled={!isDirty || updateProfile.isPending}
+              className={buttonClass}
+            >
               {updateProfile.isPending && <Loader2 className="animate-spin" aria-hidden="true" />}
               {updateProfile.isPending ? 'Saving…' : 'Save'}
             </Button>
