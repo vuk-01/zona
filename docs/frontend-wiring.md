@@ -236,7 +236,7 @@ FE = changes in the frontend; C = needs a change in the contract or the backend.
 | 34d | Popular times | synthetic curves | `GET /bookings/popular-times`, `null` under 14 days | `fetch` | no | 4 |
 | 34e | Status now | `statusNow` in the browser's time zone | the backend returns `finished`/`expired`, Europe/Podgorica | drop `statusNow` | no | 4 |
 | 34f | Booking errors | `InvalidBookingError`, `SlotUnavailableError`, own messages | `invalid_slot`, `booking_in_past`, `booking_too_far_ahead`, `slot_full`, `cannot_book_own_space`, `not_booking_*` | `ApiError` and `fieldErrors` | no | 4 |
-| 34g | Date window | `BOOKABLE_DAYS = 60`, only past dates checked | today to +365 days | stays 60 (open question) | no | 4 |
+| 34g | Date window | `BOOKABLE_DAYS = 60`, only past dates checked | today to +365 days | stays 60 (decision 8) | no | 4 |
 | 34h | Pending badge | `pending.length` | paginated | `pending.total` | no | 4 |
 
 ## Testing
@@ -348,8 +348,9 @@ exist only on the integration branch.
 5. Vitest only for the HTTP client.
 6. Explore: 50 plus `total`; "Load more" is a follow-up in `docs/follow-ups.md`.
 7. `pnpm dev:api`: yes (PR 1).
+8. The date picker stays at 60 days (`BOOKABLE_DAYS` in `use-booking-slot.ts`), so the UI never gets
+   `booking_too_far_ahead`; the backend's 365 days stay the hard limit (PR 4).
 
 ## Open questions
 
-1. **Date picker: 60 or 365 days** (`BOOKABLE_DAYS` in `use-booking-slot.ts`; follow-ups asks for a
-   decision)? Recommendation: stay at 60, so the UI never gets `booking_too_far_ahead`. Daca decides in PR 4.
+None open. The date picker (60 or 365 days) was decided in PR 4: decision 8.

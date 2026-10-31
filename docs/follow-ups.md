@@ -36,8 +36,8 @@ should back up `data/app.db` first.
 `GET /api/spaces` returns 50 spaces per page by default (`{total, items, pages}`). Explore shows the
 first page and counts all matches from `total` (`spaces-list.tsx`), so past 50 spaces the rest cannot
 be reached; until then the count says "Showing 50 of 120 spaces". Add a "Load more" button
-(`useInfiniteQuery` with `page`) under the grid. The bookings join, the category stats and My spaces
-ask for the largest page, 500 (`MAX_PAGE_SIZE` in `src/lib/api-client.ts`); they need more pages once
+(`useInfiniteQuery` with `page`) under the grid. My bookings and Reservations, the category stats and My
+spaces ask for the largest page, 500 (`MAX_PAGE_SIZE` in `src/lib/api-client.ts`); they need more pages once
 a list grows past that.
 
 ## Frontend: lists capped at 500 and a second spaces query on Home
@@ -50,44 +50,24 @@ a list grows past that.
 - **Favorites.** `favoritesApi.list` reads one page of 500 and drops `total`: a user's 501st saved
   space never shows a filled heart, and clicking it sends a `POST` that changes nothing. Read every
   page while `pages` says there are more, or give the hearts a check per visible space.
+- **My bookings and Reservations.** `BookingsList` (`features/bookings/components/bookings-list.tsx`)
+  reads one page of 500 (`GET /bookings?guestId=` or `?hostId=`) and splits it into the tabs on the
+  client. Past 500 bookings the oldest are missing from Past and the tab counts stop at 500 (the
+  Reservations badge in `app/app-shell.tsx` reads `total`, so it stays right). Either read every page
+  while `pages` says there are more, or one request per tab with a `status` filter and its `total`.
 - **Two `/spaces` requests on Home.** The list asks for the default page (50) and the stats for 500,
   and `pagination` is part of the query key, so the same filters run twice. Let the list read the
   first `limit` cards from the stats query, or give both the same size.
 
-## Frontend: connect bookings to the backend
+## Frontend: check once PR 2 (auth and users) is in
 
-The backend has `GET/POST/PATCH/DELETE /api/bookings` (branch `feat/bookings`, PR 1); the frontend
-still uses the mock. When the frontend is connected:
-
-- `frontend/src/features/bookings/api/bookings-api.ts`: a real `fetch` for every route; `list` reads
-  `items` from the paginated answer.
-- Until then the mock follows the contract: a `PATCH` to the status the booking already has answers
-  `422 invalid_status_change` (not idempotent), and `create` answers `422 booking_in_past` for a start
-  that is not strictly after now.
-- The status buttons (`components/reservation-actions.tsx`, `components/booking-card.tsx`) are disabled
-  while their mutation is pending, so a double click does not send the same change twice.
-- Local time is Europe/Podgorica, not the browser's zone: `statusNow` in `frontend/src/lib/booking.ts`,
-  `localToday` in `bookings-api.ts` (`Intl.DateTimeFormat` without `timeZone` today) and
-  `hooks/use-booking-slot.ts`.
-- `422 invalid_slot` and `422 booking_in_past` map to `InvalidBookingError`, with `fieldErrors` on
-  the field at fault.
-- **Booking window.** The backend takes a `date` from today to 365 days ahead (Podgorica) and answers
-  `422 booking_too_far_ahead` ("Pick a date within the next 365 days", `fieldErrors.date`) after that,
-  and `booking_in_past` for a date before today before any slot check. The mock's `create` in
-  `bookings-api.ts` checks only the past (with its own message, "Pick today or a later date"):
-  give it the same two checks, and map `booking_too_far_ahead` to `InvalidBookingError` on `date`.
-  The date picker allows 60 days (`BOOKABLE_DAYS` in `hooks/use-booking-slot.ts`), so the UI never
-  reaches the limit today; decide whether the picker stays at 60 or follows the backend's 365.
-- **PR 4 of the wiring plan: the space on a booking card.** My bookings and Reservations
-  (`app/routes/bookings.tsx`, `host-reservations.tsx`) join each booking to a space from
-  `GET /spaces?size=500`. That list never has other people's drafts, so a booking on a space whose host
-  turned it into a draft loses its photo and details (and past 500 spaces some are missing anyway).
-  Use the `space` summary the booking answer already carries (`{id, name, address, hostId}`); for the
-  photo, add the cover image to that summary on the backend (`GET /spaces/:id` is a 404 for someone
-  else's draft too, so fetching it by id does not help).
-- **Since bookings PR 2:** `GET /api/bookings/availability` answers `{available, freeDesks, message}`
-  for a slot before it is sent; `availability` in `bookings-api.ts` (mock, same shape) becomes a
-  `fetch` of that route.
+- **The booking form may focus the field at fault twice.** `booking-form.tsx` focuses the first slot
+  field with an error (or the alert) in its own `useEffect` on `errors`. Today `applyFieldErrors`
+  (`src/lib/form-errors.ts`) gets a local `setError` that only collects messages, so nothing else
+  moves focus. If PR 2 makes `applyFieldErrors` pass `shouldFocus`, or the form moves its slot into
+  react-hook-form, focus would be set twice. Book a slot that the backend refuses with a
+  `fieldErrors` entry (`booking_in_past`, a date past 365 days) as a signed-in demo guest and check
+  that focus lands once, on the right field; keep one of the two.
 
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
@@ -121,14 +101,6 @@ still uses the mock. When the frontend is connected:
 The second review (2026-10-30) was APPROVED with 2 MEDIUM and 7 LOW. Only the SQLite id reuse was
 fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
 
-- **The mock does not follow the contract yet, although "Frontend: connect bookings to the backend"
-  above says it does.** `frontend/src/features/bookings/api/bookings-api.ts` returns the booking
-  unchanged for a `PATCH` to the status it already has (contract: `422 invalid_status_change`,
-  "Confirmed bookings cannot be confirmed again"), and `create` checks only the date, not a start
-  earlier today (contract: `422 booking_in_past`, "Pick a time that has not started yet"). The mock
-  also sets `createdAt` to a date only (`.slice(0, 10)`) and uses its own messages ("Pick a whole hour,
-  for example 10:00", "The end time must be after the start time", "`<Label>` bookings cannot be
-  changed"). Either fix the mock or reword that paragraph as an open to-do (ADR-018, ADR-002).
 - **`PATCH` and `DELETE` error-mapping tests assert only `code`.** `test_patch_maps_the_service_errors`
   and `test_delete_maps_the_service_errors` in `backend/tests/unit/test_bookings_api.py` should assert
   the full `{"detail", "code"}` body, as the `POST` test does; the integration tests for
@@ -232,18 +204,8 @@ These stay open:
   and the space's fields; `_to_response` also counts the confirmed bookings of the current hour, one
   `SELECT` too many per request. Options: a `get_visible` on the Protocol that returns the space
   without the computed fields, or a flag; keep the 404 for someone else's draft in one place (ADR-020).
-- **Frontend wiring also covers `frontend/src/features/spaces/api/spaces-api.ts`.** `list` sends
-  `hostId` and gets `bookingCounts` only when it is the signed-in user's own id (left out of the
-  response otherwise, so the type is optional); `remove` handles `409 space_has_active_bookings`
-  (the count: the item above). Add both to "Frontend: connect bookings to the backend".
-
 ## From bookings PR 3 (left out of `feat/bookings-popular-times` on purpose)
 
-- **Popular time picks "today" and "now" in the browser's time zone.** `PopularTimes` in
-  `frontend/src/features/bookings/components/popular-times.tsx` opens on `new Date().getDay()` and
-  highlights `new Date().getHours()`; the backend's days and hours are Podgorica time. A visitor in
-  another time zone sees the wrong day or hour selected. Take both from the Podgorica clock, as the
-  booking form should too.
 - **Product decision: popular times can be differenced on a small N.** The window grows by one known
   date a day from day 14 up to 56 days, and for a whole space (`units = 1`) a value moves in steps
   of 12.5 % or more. Anyone who asks every day can subtract yesterday's answer from today's and get
