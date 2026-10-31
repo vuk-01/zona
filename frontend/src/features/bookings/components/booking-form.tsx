@@ -1,16 +1,18 @@
 import { CircleAlert, CircleCheck, Loader2 } from 'lucide-react'
-import { useEffect, useRef, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import type { UseFormSetError } from 'react-hook-form'
 import { Link } from 'react-router'
 
 import { TimeSelect } from '@/components/form/time-select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { BookingGuest } from '@/lib/booking'
+import { errorMessage } from '@/lib/api-client'
+import { applyFieldErrors } from '@/lib/form-errors'
 
 import { useCreateBooking, useSlotAvailability } from '../api/use-bookings'
 import { formatHour, useBookingSlot } from '../hooks/use-booking-slot'
-import type { BookableSpace } from '../types'
+import type { BookableSpace, BookingGuest, NewBooking } from '../types'
 
 const euros = new Intl.NumberFormat('en-IE', {
   style: 'currency',
@@ -31,6 +33,26 @@ const fieldClass =
 
 const hourOption = (hour: number) => ({ value: String(hour), label: formatHour(hour) })
 
+// The fields the backend's fieldErrors name (invalid_slot, booking_in_past, booking_too_far_ahead,
+// validation_error), and the element each one shows under.
+type SlotFields = { date: string; startTime: string; endTime: string }
+const SLOT_FIELDS = ['date', 'startTime', 'endTime'] as const
+const FIELD_IDS: Record<keyof SlotFields, string> = {
+  date: 'booking-date',
+  startTime: 'booking-from',
+  endTime: 'booking-to',
+}
+
+const slotKey = ({ date, startTime, endTime }: NewBooking) => `${date} ${startTime}–${endTime}`
+
+// A refused booking: messages under the fields, and the detail for the alert when some error has no
+// field (slot_full, cannot_book_own_space). Kept for the slot it was about; picking another hides it.
+type BookingErrors = {
+  slot: string
+  fields: Partial<SlotFields>
+  detail: string | null
+}
+
 type BookingFormProps = {
   space: BookableSpace
   // The signed-in user; null for a visitor (Book then opens the login dialog), undefined while it loads
@@ -43,9 +65,21 @@ type BookingFormProps = {
 // On phones "Book" sits in a bar fixed above the bottom navigation.
 export function BookingForm({ space, user, onLogin }: BookingFormProps) {
   const slot = useBookingSlot(space)
-  const availability = useSlotAvailability(slot.slot, space)
+  const availability = useSlotAvailability(slot.slot)
   const createBooking = useCreateBooking()
   const resultRef = useRef<HTMLDivElement>(null)
+  const [errors, setErrors] = useState<BookingErrors | null>(null)
+  const shownErrors = errors && slot.slot && errors.slot === slotKey(slot.slot) ? errors : null
+  const fieldError = (field: keyof SlotFields) => shownErrors?.fields[field]
+  const describedBy = (field: keyof SlotFields) =>
+    fieldError(field) ? `${FIELD_IDS[field]}-error` : undefined
+  // The backend's message for one field, under it; the field points here with aria-describedby
+  const fieldErrorText = (field: keyof SlotFields) =>
+    fieldError(field) && (
+      <p id={describedBy(field)} className="px-4 text-sm text-destructive">
+        {fieldError(field)}
+      </p>
+    )
 
   const isDesk = space.category === 'desk'
   const isOwnSpace = user != null && space.host.id === user.id
@@ -54,10 +88,33 @@ export function BookingForm({ space, user, onLogin }: BookingFormProps) {
   const canBook = slot.slot !== null && isFree && !isOwnSpace && !createBooking.isPending
   // A visitor can press it while the slot is free; it opens the login dialog first
 
-  // The Book button goes away (success) or a message appears (error): move focus there
+  // The Book button goes away (success): move focus there
   useEffect(() => {
-    if (createBooking.isSuccess || createBooking.isError) resultRef.current?.focus()
-  }, [createBooking.isSuccess, createBooking.isError])
+    if (createBooking.isSuccess) resultRef.current?.focus()
+  }, [createBooking.isSuccess])
+
+  // A refused booking: focus the first field at fault, or the alert when no field is
+  useEffect(() => {
+    if (!errors) return
+    const field = SLOT_FIELDS.find((name) => errors.fields[name])
+    if (field) document.getElementById(FIELD_IDS[field])?.focus()
+    else resultRef.current?.focus()
+  }, [errors])
+
+  function book(input: NewBooking) {
+    setErrors(null)
+    createBooking.mutate(input, {
+      onError: (error) => {
+        const fields: Partial<SlotFields> = {}
+        // The form keeps the slot in the URL, not in react-hook-form, so the field errors go to state
+        const setError: UseFormSetError<SlotFields> = (name, { message }) => {
+          if (name === 'date' || name === 'startTime' || name === 'endTime') fields[name] = message
+        }
+        const detail = applyFieldErrors(error, setError, SLOT_FIELDS)
+        setErrors({ slot: slotKey(input), fields, detail })
+      },
+    })
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -67,12 +124,12 @@ export function BookingForm({ space, user, onLogin }: BookingFormProps) {
       // unless the space turns out to be theirs (the form then says so).
       const picked = slot.slot
       onLogin((guest) => {
-        if (space.host.id !== guest.id) createBooking.mutate({ input: picked, space, guest })
+        if (space.host.id !== guest.id) book(picked)
       })
       return
     }
     if (!user || !canBook) return
-    createBooking.mutate({ input: slot.slot, space, guest: user })
+    book(slot.slot)
   }
 
   if (createBooking.isSuccess) {
@@ -139,8 +196,11 @@ export function BookingForm({ space, user, onLogin }: BookingFormProps) {
             max={slot.maxDate}
             value={slot.date}
             onChange={(event) => slot.setDate(event.target.value)}
+            aria-invalid={fieldError('date') ? true : undefined}
+            aria-describedby={describedBy('date')}
             className={`${fieldClass} shadow-none`}
           />
+          {fieldErrorText('date')}
         </div>
 
         {slot.closedReason ? (
@@ -154,8 +214,11 @@ export function BookingForm({ space, user, onLogin }: BookingFormProps) {
                 value={String(slot.from ?? '')}
                 onValueChange={(value) => slot.setFrom(Number(value))}
                 options={slot.fromOptions.map(hourOption)}
+                aria-invalid={fieldError('startTime') ? true : undefined}
+                aria-describedby={describedBy('startTime')}
                 className="h-12 bg-card md:h-12"
               />
+              {fieldErrorText('startTime')}
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="booking-to">To</Label>
@@ -164,8 +227,11 @@ export function BookingForm({ space, user, onLogin }: BookingFormProps) {
                 value={String(slot.to ?? '')}
                 onValueChange={(value) => slot.setTo(Number(value))}
                 options={slot.toOptions.map(hourOption)}
+                aria-invalid={fieldError('endTime') ? true : undefined}
+                aria-describedby={describedBy('endTime')}
                 className="h-12 bg-card md:h-12"
               />
+              {fieldErrorText('endTime')}
             </div>
           </div>
         )}
@@ -182,7 +248,7 @@ export function BookingForm({ space, user, onLogin }: BookingFormProps) {
             </span>
           )}
           {slot.slot && !isOwnSpace && availability.error && (
-            <span className="text-destructive">{availability.error.message}</span>
+            <span className="text-destructive">{errorMessage(availability.error)}</span>
           )}
           {slot.slot && !isOwnSpace && availability.data && (
             <span className={isFree ? 'text-success' : 'text-destructive'}>
@@ -212,7 +278,7 @@ export function BookingForm({ space, user, onLogin }: BookingFormProps) {
         </dl>
       )}
 
-      {createBooking.isError && (
+      {shownErrors?.detail && (
         <div
           ref={resultRef}
           tabIndex={-1}
@@ -220,7 +286,7 @@ export function BookingForm({ space, user, onLogin }: BookingFormProps) {
           className="flex items-start gap-2 rounded-lg border border-destructive p-3 text-sm text-destructive outline-none"
         >
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          {createBooking.error.message}
+          {shownErrors.detail}
         </div>
       )}
 

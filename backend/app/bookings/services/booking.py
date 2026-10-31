@@ -496,7 +496,13 @@ def _to_response(booking: Booking, now: datetime) -> BookingResponseSchema:
     return BookingResponseSchema(
         id=booking.id,
         space_id=booking.space_id,
-        space=BookingSpaceSchema.model_validate(booking.space),
+        space=BookingSpaceSchema(
+            id=booking.space.id,
+            name=booking.space.name,
+            address=booking.space.address,
+            host_id=booking.space.host_id,
+            image_url=booking.space.images[0] if booking.space.images else None,
+        ),
         guest=BookingGuestSchema.model_validate(booking.guest),
         date=booking.date,
         start_time=_hh_mm(booking.start_hour),

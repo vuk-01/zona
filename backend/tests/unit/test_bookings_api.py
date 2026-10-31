@@ -55,7 +55,13 @@ QUERY: dict[str, str | int] = {
 BOOKING = BookingResponseSchema(
     id=3,
     space_id=7,
-    space=BookingSpaceSchema(id=7, name="Glass Room", address="Njegoševa 1", host_id=2),
+    space=BookingSpaceSchema(
+        id=7,
+        name="Glass Room",
+        address="Njegoševa 1",
+        host_id=2,
+        image_url="https://example.com/glass.jpg",
+    ),
     guest=BookingGuestSchema(id=1, name="Marko", avatar_url=None),
     date=date(2026, 11, 4),
     start_time="10:00",
@@ -67,7 +73,13 @@ BOOKING = BookingResponseSchema(
 BOOKING_JSON = {
     "id": 3,
     "spaceId": 7,
-    "space": {"id": 7, "name": "Glass Room", "address": "Njegoševa 1", "hostId": 2},
+    "space": {
+        "id": 7,
+        "name": "Glass Room",
+        "address": "Njegoševa 1",
+        "hostId": 2,
+        "imageUrl": "https://example.com/glass.jpg",
+    },
     "guest": {"id": 1, "name": "Marko", "avatarUrl": None},
     "date": "2026-11-04",
     "startTime": "10:00",

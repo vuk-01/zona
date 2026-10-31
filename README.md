@@ -10,7 +10,7 @@ One account switches between guest and host mode, and the app is built phone fir
 - Tailwind CSS v4 and shadcn/ui
 - React Router and TanStack Query
 - React Hook Form and Zod for forms
-- pnpm workspace (monorepo): the frontend in `frontend/`, the backend (FastAPI, SQLite or Postgres) in `backend/`, see `backend/README.md`; until the frontend is connected to the API, its data lives in an in-memory mock
+- pnpm workspace (monorepo): the frontend in `frontend/`, the backend (FastAPI, SQLite or Postgres) in `backend/`, see `backend/README.md`; spaces, favorites and bookings come from the API, auth and users are still an in-memory mock
 
 ## Getting started
 
@@ -41,21 +41,28 @@ saves logging in again. The frontend moves from the mock to the API step by step
 
 ## Demo users
 
-Spaces and favorites come from the backend's demo data, `poetry run seed` (see `backend/README.md`).
-The accounts below are still the frontend's mock (`frontend/src/lib/mock-db.ts`, reset on every page
-reload) until sign-in moves to the API; the table follows the seed once it has these accounts. Every
-account uses the password `zona1234`.
+Spaces, favorites and bookings come from the backend's demo data, `poetry run seed` (the accounts
+below arrive with PR 0, branch `feat/seed-demo`; details in `backend/README.md`). **Local development
+only:** the passwords are public. Every `@zona.app` account has the password `zona1234`;
+`demo@example.com` has `demo1234`. Until sign-in moves to the API (PR 2 in `docs/frontend-wiring.md`),
+the frontend signs in against its own mock users (`frontend/src/lib/mock-db.ts`, reset on every page
+reload). Their ids do not match the seed (the seed's `demo@example.com` is id 1, so every `@zona.app`
+account is one higher there), so bookings and favorites work end to end only after PR 2.
 
-| Email | Name | Account |
+| Account | Mode | What it has |
 | --- | --- | --- |
-| `ana@zona.app` | Ana Petrović | Guest, several bookings |
-| `jelena@zona.app` | Jelena Nikolić | Guest, pending and cancelled bookings |
-| `luka@zona.app` | Luka Šćepanović | Guest |
-| `nikola@zona.app` | Nikola Bulatović | Guest, no bookings |
-| `marko@zona.app` | Marko Jovanović | Host of four spaces (desks, office, event loft) |
-| `milica@zona.app` | Milica Vuković | Host of two meeting rooms |
-| `ivana@zona.app` | Ivana Radulović | Host, no spaces yet |
-| `teodora@zona.app` | Teodora Vujošević | Host, signs in in guest mode |
+| `marko@zona.app` | host | Hub Morača (24 desks), Njegoševa (2 desks), Hercegovačka (draft), Event Loft; 3 pending requests |
+| `milica@zona.app` | host | Glass Room, Riverside Boardroom; 2 pending requests |
+| `ivana@zona.app` | host | no spaces |
+| `teodora@zona.app` | guest (`isHost`) | a host in guest mode; favorites and past bookings |
+| `ana@zona.app` | guest | confirmed, cancelled, declined, expired and finished bookings; 3 favorites |
+| `jelena@zona.app` | guest | confirmed, pending, cancelled and finished bookings; 2 favorites |
+| `nikola@zona.app` | guest | a pending booking at Njegoševa, finished bookings; 2 favorites |
+| `luka@zona.app` | guest | today's confirmed desk at Hub Morača, a pending Event Loft request, finished bookings; 1 favorite (Event Loft) |
+| `demo@example.com` | guest | past bookings, 1 favorite, the 3 starter listings |
+
+Booking dates are relative to the day the seed runs; seed a new database for fresh dates (see
+`backend/README.md`).
 
 ## Structure
 

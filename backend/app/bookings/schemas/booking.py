@@ -77,6 +77,8 @@ class BookingSpaceSchema(CamelCaseResponseModel):
     name: str
     address: str
     host_id: int
+    # The space's first image, for the photo on a booking card; null if a row has none.
+    image_url: str | None
 
 
 class BookingGuestSchema(CamelCaseResponseModel):

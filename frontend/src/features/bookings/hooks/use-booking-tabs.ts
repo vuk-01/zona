@@ -1,6 +1,6 @@
 import { useSearchParams } from 'react-router'
 
-import { type Booking, isActive } from '@/lib/booking'
+import { type Booking, isActive } from '../types'
 
 // Who looks at the bookings: a guest at their own (My bookings), or a host at those of their spaces
 // (Reservations).

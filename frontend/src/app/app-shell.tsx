@@ -20,9 +20,14 @@ export function AppShell() {
   const navigate = useNavigate()
   // Logging out goes home; flushSync commits that before the user is cleared (see useLogout)
   const logout = useLogout(() => navigate('/', { flushSync: true }))
-  // Approving or declining refreshes every bookings query, so the count follows at once
+  // Approving or declining refreshes every bookings query, so the count follows at once. Only `total`
+  // is read, so one row is enough.
   const isHosting = user?.mode === 'host'
-  const { data: pending } = useBookings({ hostId: user?.id, status: 'pending' }, { enabled: isHosting })
+  const { data: pending } = useBookings(
+    { hostId: user?.id, status: 'pending' },
+    { size: 1 },
+    { enabled: isHosting },
+  )
 
   const navAccount: NavAccount = isPending
     ? { status: 'loading' }
@@ -44,7 +49,7 @@ export function AppShell() {
       account={<AccountMenu onLogin={() => openLogin()} />}
       navAccount={navAccount}
       badges={
-        isHosting && pending ? { '/host/reservations': { count: pending.length, label: 'pending' } } : {}
+        isHosting && pending ? { '/host/reservations': { count: pending.total, label: 'pending' } } : {}
       }
       onProtectedNav={!isPending && !user ? (to) => openLogin({ redirect: to }) : undefined}
     />
