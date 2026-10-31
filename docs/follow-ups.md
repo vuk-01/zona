@@ -433,3 +433,10 @@ These stay open:
 - The guard planned for `8dbecd30b036` (`if bind is None: return`) would not help: in offline mode
   `op.get_bind()` returns a `MockConnection`, not `None`. If the guard is ever needed, the right
   check is `context.is_offline_mode()`.
+
+## Frontend: a booking detail page
+
+Only the space's name on a booking card is a link (to the space page); the card itself does not open
+anything (`fix/booking-ux`). `GET /api/bookings/:id` already exists for the guest and the host. A
+`/bookings/:id` page could show the whole booking (space, guest, date and hours, total, status and its
+history, the actions), and the card would then link to it.
