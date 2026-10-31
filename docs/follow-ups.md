@@ -134,6 +134,46 @@ login). Also unchecked: whether React `StrictMode` (`src/main.tsx`, development 
 3. Both 1 and 2.
 4. A global `staleTime` on the `QueryClient`: affects every list too, so it is a wider decision.
 
+## From the PR 2 UI review (left out of `feat/frontend-auth-users` on purpose)
+
+- **Error text contrast in the login dialog, light theme.** The dialog's forms sit on `background`
+  (`oklch(0.965 0.018 255)`), and light `destructive` (`oklch(0.58 0.2 27)`) on it is **4.27:1** for
+  14 px text; DESIGN.md "Accessibility" asks for 4.5:1. It affects the field errors
+  (`features/auth/components/stacked-auth-field.tsx`) and `FormAlert` in the dialog, e.g. the 409
+  "Email is already registered" and the 401 "Wrong email or password". On `card` (`/login`, `/signup`,
+  `/profile`) it is 4.75:1, and the dark theme passes everywhere. The token is older than PR 2.
+  Proposal: darken light `--destructive` in `frontend/src/index.css` a little (about L 0.55) and update
+  its note in `frontend/DESIGN.md`.
+- **`FormField` has no optional variant.** It always sets `aria-required="true"`, so the optional City
+  field in `features/users/components/profile-details.tsx` copies its markup by hand (label with
+  "(optional)", the pill input, the error `<p>`). Proposal: an `optional` prop on
+  `frontend/src/components/form/form-field.tsx` that leaves out `aria-required` and adds the
+  "(optional)" span; City then uses `FormField`.
+
+## Backend: the 72-character password limit and bcrypt's 72 bytes
+
+The contract (`docs/entities.md`, User) and the schemas (`backend/app/auth/schemas/auth.py`,
+`max_length=72`) count **characters**; bcrypt reads at most 72 **bytes** of UTF-8. Checked by hand on
+`feat/frontend-auth-users` against the local backend (bcrypt 4.3.0, `pyproject.toml` `^4.3.0`):
+
+- `POST /api/auth/register` with a password of 72 × "š" (144 bytes) → `201`.
+- `POST /api/auth/login` with the same password → `200`.
+- `POST /api/auth/login` with **another** password that has the same first 72 bytes (36 × "š" +
+  36 × "x") → `200`. bcrypt 4.3 silently cuts the input at 72 bytes, so only the first 72 bytes count.
+  The test account was deleted afterwards (`204`).
+- The comment in `backend/app/auth/password.py:5` ("longer input raises in bcrypt >= 4") does not match
+  4.3, which cuts without an error. bcrypt 5 raises `ValueError` for more than 72 bytes; with it,
+  `hash_password` (`password.py:9`) would fail on such a password and register would answer `500`
+  (not checked: 5 is not installed).
+- The frontend (zod `.max(72)` in `login-form.tsx`, `signup-form.tsx`) counts UTF-16 units: an emoji
+  counts as 2, so it can refuse a password the backend accepts.
+
+What it means, without a decision: either the contract and the schemas limit **bytes** (a validator
+on `len(password.encode("utf-8")) <= 72`, the message and `docs/entities.md` say so, and the frontend
+checks the same with `TextEncoder`), or the backend accepts longer passwords and pre-hashes them before
+bcrypt (e.g. SHA-256 → base64), which changes how stored hashes are checked. Either way the comment in
+`password.py` gets fixed, and a test covers a password over 72 bytes.
+
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
 - **Confirm after the space became a draft.** The contract does not say what happens; today the host
