@@ -33,17 +33,18 @@ the password `zona1234`; `demo@example.com` has `demo1234`. The seed refuses to 
 | `milica@zona.app`    | host               | Glass Room, Riverside Boardroom; 2 pending requests                         |
 | `ivana@zona.app`     | host               | no spaces                                                                   |
 | `teodora@zona.app`   | guest (`isHost`)   | a host in guest mode; favorites and past bookings                           |
-| `ana@zona.app`       | guest              | confirmed, cancelled, declined and expired bookings; 3 favorites            |
+| `ana@zona.app`       | guest              | confirmed, cancelled, declined, expired and finished bookings; 3 favorites  |
 | `jelena@zona.app`    | guest              | confirmed, pending, cancelled and finished bookings; 2 favorites            |
-| `nikola@zona.app`    | guest              | a pending booking at Njegoševa; 2 favorites                                 |
-| `luka@zona.app`      | guest              | today's confirmed desk at Hub Morača, a pending Event Loft request          |
+| `nikola@zona.app`    | guest              | a pending booking at Njegoševa, finished bookings; 2 favorites              |
+| `luka@zona.app`      | guest              | today's confirmed desk at Hub Morača, a pending Event Loft request, finished bookings; 1 favorite (Event Loft) |
 | `demo@example.com`   | guest              | past bookings, 1 favorite, the 3 starter listings                           |
 
 Dates are relative to the day the seed runs: the spaces were created 8–10 weeks earlier, past
 confirmed bookings fill the last 8 weeks (so popular times has data), upcoming ones fall in the next
 two weeks, and Luka's confirmed booking at Hub Morača is for the day of the seed, from opening to
 closing (so Hub Morača shows "23 desks available" while it is open; none on a Sunday, when it is
-closed). Two days later "today" has moved, so seed a new database to get it back.
+closed). After Hub Morača closes that day Luka's booking is `finished` and all 24 desks are free
+again, so seed a new database to get it back.
 
 The seed skips what exists (users by email, spaces by host, bookings when Marko already has some).
 It runs as one transaction: a seed that fails halfway rolls back as a whole, so running it again is
