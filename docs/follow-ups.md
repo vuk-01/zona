@@ -72,22 +72,15 @@ a list grows past that.
   `fieldErrors` entry (`booking_in_past`, a date past 365 days) as a signed-in demo guest and check
   that focus lands once, on the right field; keep one of the two.
 
-## Frontend: Delete account on Profile
+## Contract: "Host since" is the sign-up date
 
-`useDeleteAccount` (`frontend/src/features/users/api/use-users.ts`) calls `DELETE /api/users/:id`,
-then clears the token and the signed-in user, but no screen calls it yet.
-
-- A "Delete account" button on Profile with an `AlertDialog` confirmation, and a section for it in
-  `frontend/DESIGN.md`, modeled on "Delete confirmation" (what happens, that it can't be undone,
-  Cancel + `bg-destructive` "Delete").
-- `useDeleteAccount` gets `onDeleted?: () => void` (and `deleteAccountOptions(queryClient, onDeleted)`),
-  called first in `onSuccess`, like `onLoggedOut` in `useLogout`; the button passes the navigation to
-  `/`. An `onSuccess` given to `mutate()` is not enough: it runs only after the hook's own `onSuccess`,
-  when the user is already cleared, so `RequireAuth` would send them to `/login?redirect=/profile`.
-  `use-users.test.ts` checks the order (`onDeleted` runs while the user is still in the cache).
-- **Not checked by hand yet:** the hook's logic is covered by `use-users.test.ts`
-  (`deleteAccountOptions`), but the flow from the UI (click → hook → signed out → navigation) can
-  only be checked once the button exists.
+"Hosted by …" on a space page (`frontend/src/features/users/components/host-card.tsx`) says "Host
+since {month year}" from `createdAt`, the date the account was registered, not the day the user first
+switched to host mode. For a guest who became a host later (Teodora in the seed) it is too early.
+The real date needs a new field in the contract, e.g. `hostSince: date | null` on `User` and
+`PublicUser`, set by the backend the first time `PATCH /api/users/:id {mode: "host"}` makes `isHost`
+true (and a migration that fills it from `createdAt` for existing hosts). Then `host-card.tsx` reads
+`hostSince`; both `entities.md` copies and `frontend/src/lib/user.ts` change in the same PR.
 
 ## Frontend: `RequireAuth` when the backend is down
 
