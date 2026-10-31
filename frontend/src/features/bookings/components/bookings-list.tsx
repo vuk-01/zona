@@ -43,7 +43,11 @@ type BookingsListProps = {
 
 type EmptyCopy = { icon: LucideIcon; title: string; text: string }
 
-const TAB_LABELS: Record<BookingTab, string> = { pending: 'Pending', upcoming: 'Upcoming', past: 'Past' }
+const TAB_LABELS: Record<BookingTab, string> = {
+  pending: 'Pending',
+  upcoming: 'Upcoming',
+  past: 'Past & cancelled',
+}
 
 const exploreSpaces = (
   <Button asChild className={emptyStateAction}>
@@ -130,10 +134,10 @@ const COPY: Record<
 const grid = 'grid gap-6 md:grid-cols-2 lg:grid-cols-3'
 const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300'
 
-// Bookings in tabs with loading, empty and error states: the guest's own (Upcoming, Past) or, for a host,
-// those of their spaces (Pending, Upcoming, Past). The title and the tabs share the hero panel; the panel
-// stays in place in every state, so the title never remounts. The tab underline slides to the open tab,
-// and the cards fade in, one after another along a row.
+// Bookings in tabs with loading, empty and error states: the guest's own (Upcoming, Past & cancelled)
+// or, for a host, those of their spaces (Pending, Upcoming, Past & cancelled). The title and the tabs
+// share the hero panel; the panel stays in place in every state, so the title never remounts. The tab
+// underline slides to the open tab, and the cards fade in, one after another along a row.
 export function BookingsList({ view, userId, title }: BookingsListProps) {
   // Every booking at once, so the tabs can split and count them. The backend sorts earliest first, so
   // past MAX_PAGE_SIZE the latest ones, Upcoming and Pending, are left out, not the past ones
@@ -159,7 +163,9 @@ export function BookingsList({ view, userId, title }: BookingsListProps) {
   const [movedId, setMovedId] = useState<number | null>(null)
 
   const onCancelled = (booking: Booking) => {
-    setAnnouncement(`Your booking at ${booking.space.name} was cancelled. You can find it under Past.`)
+    setAnnouncement(
+      `Your booking at ${booking.space.name} was cancelled. You can find it under Past & cancelled.`,
+    )
     setMovedId(booking.id)
   }
   const onReviewed = (booking: Booking) => setMovedId(booking.id)

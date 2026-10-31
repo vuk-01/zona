@@ -440,3 +440,11 @@ Only the space's name on a booking card is a link (to the space page); the card 
 anything (`fix/booking-ux`). `GET /api/bookings/:id` already exists for the guest and the host. A
 `/bookings/:id` page could show the whole booking (space, guest, date and hours, total, status and its
 history, the actions), and the card would then link to it.
+
+## Frontend: a separate Cancelled tab
+
+My bookings and Reservations put finished, expired, declined and cancelled bookings in one tab,
+"Past & cancelled" (`splitBookings` in `features/bookings/hooks/use-booking-tabs.ts`). A separate
+"Cancelled" tab (cancelled and declined, also for a later date) would leave "Past" with the slots that
+have ended. `GET /api/bookings` already filters by `status`, so this fits the "one request per tab" fix in
+"lists capped at 500" above.

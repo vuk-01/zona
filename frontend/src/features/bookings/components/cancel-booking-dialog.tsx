@@ -20,7 +20,7 @@ import { formatBookingDate } from './format-booking'
 
 type CancelBookingDialogProps = {
   booking: Booking
-  // Called after the cancel. The booking then moves to Past, so the list moves focus.
+  // Called after the cancel. The booking then moves to Past & cancelled, so the list moves focus.
   onCancelled?: (booking: Booking) => void
 }
 
@@ -32,7 +32,7 @@ export function CancelBookingDialog({ booking, onCancelled }: CancelBookingDialo
   const when = `${formatBookingDate(booking.date)}, ${booking.startTime}–${booking.endTime}`
 
   // mutateAsync, not mutate(…, { onSuccess }): this card unmounts as soon as the refetched list moves
-  // the booking to Past, and mutate callbacks are skipped after that.
+  // the booking to Past & cancelled, and mutate callbacks are skipped after that.
   const confirm = async () => {
     if (cancelBooking.isPending) return
     try {
