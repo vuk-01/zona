@@ -6,10 +6,12 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - ".claude/settings.json"
       - ".github/workflows/backend.yml"
   pull_request:
     paths:
       - "backend/**"
+      - ".claude/settings.json"
       - ".github/workflows/backend.yml"
 
 jobs:
@@ -20,6 +22,11 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The guard hooks, wired from backend/.claude/settings.json and the root .claude/settings.json; needs no poetry.
+      - run: node --test .claude/hooks/guards.test.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
