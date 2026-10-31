@@ -4,11 +4,8 @@ Everything goes through the services, so every rule of the API holds for the dem
 relative to the day the seed runs ("today" from `IClock`): spaces were created 8-10 weeks earlier,
 past bookings fall in the last 8 weeks (popular times) and upcoming ones in the next two weeks.
 
-A seed that fails halfway leaves partial data on SQLite: `add()` inserts inside a SAVEPOINT, and
-SQLite treats the release of the outermost savepoint as a COMMIT, so the session handler's rollback
-no longer removes those rows (docs/follow-ups.md, "on SQLite a `POST` commits its row"). The checks
-below (users by email, spaces by host, bookings by Marko's spaces) would then skip what is missing,
-so after a failed seed start from a new database and seed again.
+The whole run is one transaction (`db_session_handler`): a seed that fails halfway rolls back as a
+whole and leaves nothing behind, so running it again after a failure is safe.
 """
 
 from __future__ import annotations

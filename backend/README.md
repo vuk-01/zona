@@ -46,10 +46,10 @@ closing (so Hub Morača shows "23 desks available" while it is open; none on a S
 closed). Two days later "today" has moved, so seed a new database to get it back.
 
 The seed skips what exists (users by email, spaces by host, bookings when Marko already has some).
-Start from a new database (delete `data/app.db`, then `poetry run migrate && poetry run seed`) when you
-want fresh dates, after a seed from before these accounts (its spaces belong to `demo@example.com`),
-and **after a seed that failed halfway**: on SQLite each inserted row is committed right away (the
-SAVEPOINT item in `docs/follow-ups.md`), so a failed run leaves partial data that the next run skips.
+It runs as one transaction: a seed that fails halfway rolls back as a whole, so running it again is
+safe. Start from a new database (delete `data/app.db`, then `poetry run migrate && poetry run seed`)
+when you want fresh dates, or after a seed from before these accounts (its spaces belong to
+`demo@example.com`).
 
 Configuration is read from `.env` (copy `.env.example`); every variable has a working default.
 The frontend dev server proxies `/api` to port 8000, so run both at once.
