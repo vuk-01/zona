@@ -6,8 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 import { usePopularTimes } from '../api/use-bookings'
 import { podgoricaNow } from '../hooks/podgorica-now'
+import { currentHourIndex, isOpenAt } from '../hooks/popular-hour'
 import { formatHour } from '../hooks/use-booking-slot'
-import type { Weekday } from '../types'
+import type { BookableSpace, Weekday } from '../types'
 
 const DAYS: { key: Weekday; short: string; long: string }[] = [
   { key: 'mon', short: 'Mon', long: 'Monday' },
@@ -43,15 +44,19 @@ const barVariants = cva('w-full max-w-6 rounded-t-xs transition-colors', {
   },
 })
 
-const describe = (value: number) => (value === 0 ? 'quiet or closed' : `usually ${value}% booked`)
+// A 0 is "quiet" within the opening hours and "closed" outside them
+const describe = (value: number, open: boolean) =>
+  value > 0 ? `usually ${value}% booked` : open ? 'usually quiet' : 'closed'
 
 type PopularTimesProps = {
   spaceId: number
+  // The space's opening hours: the current hour is marked only while it is open, also when its value is 0
+  openingHours: BookableSpace['openingHours']
 }
 
 // "Popular time": day chips, an hourly bar chart 08:00–22:00 and one line of text.
 // Hover, tap or arrow keys pick an hour, and its value shows in a pill above the bar.
-export function PopularTimes({ spaceId }: PopularTimesProps) {
+export function PopularTimes({ spaceId, openingHours }: PopularTimesProps) {
   const { data, isLoading, error, refetch, isRefetching } = usePopularTimes(spaceId)
   // Today and the current hour in Podgorica, the time zone of the backend's days and hours
   const now = podgoricaNow()
@@ -115,9 +120,13 @@ export function PopularTimes({ spaceId }: PopularTimesProps) {
   const values = data.days[day]
   const hourAt = (index: number) => data.firstHour + index
   const busiest = values ? values.indexOf(Math.max(...values)) : -1
-  // The current hour on today's tab, otherwise the busiest hour
-  const nowIndex = now.hour - data.firstHour
-  const defaultIndex = day === today && values && values[nowIndex] > 0 ? nowIndex : busiest
+  // The current hour on today's tab while the space is open (also when it is usually quiet), otherwise
+  // the busiest hour
+  const nowIndex =
+    day === today && values
+      ? currentHourIndex(data.firstHour, values.length, now.hour, openingHours[day])
+      : null
+  const defaultIndex = nowIndex ?? busiest
   const selected = picked ?? defaultIndex
 
   function pickDay(next: Weekday) {
@@ -182,7 +191,11 @@ export function PopularTimes({ spaceId }: PopularTimesProps) {
                 }}
               >
                 <span className="font-semibold text-foreground">
-                  {values[selected] === 0 ? 'Quiet' : `${values[selected]}%`}
+                  {values[selected] > 0
+                    ? `${values[selected]}%`
+                    : isOpenAt(openingHours[day], hourAt(selected))
+                      ? 'Quiet'
+                      : 'Closed'}
                 </span>
                 <span className="text-muted-foreground">at {formatHour(hourAt(selected))}</span>
               </div>
@@ -204,7 +217,7 @@ export function PopularTimes({ spaceId }: PopularTimesProps) {
                 key={index}
                 type="button"
                 tabIndex={index === selected ? 0 : -1}
-                aria-label={`${formatHour(hourAt(index))}, ${describe(value)}`}
+                aria-label={`${formatHour(hourAt(index))}, ${describe(value, isOpenAt(openingHours[day], hourAt(index)))}`}
                 aria-current={index === selected ? 'true' : undefined}
                 className="flex h-full flex-1 items-end justify-center px-px outline-none focus-visible:rounded-xs focus-visible:ring-[3px] focus-visible:ring-ring"
                 onPointerEnter={() => setPicked(index)}
@@ -214,7 +227,16 @@ export function PopularTimes({ spaceId }: PopularTimesProps) {
               >
                 <span
                   className={barVariants({ selected: index === selected })}
-                  style={{ height: value === 0 ? 0 : `max(${value}%, 4px)` }}
+                  // A quiet (0) hour has no bar, except a 4px stub when it is selected and the space is
+                  // open then, so the marked hour stays visible
+                  style={{
+                    height:
+                      value > 0
+                        ? `max(${value}%, 4px)`
+                        : index === selected && isOpenAt(openingHours[day], hourAt(index))
+                          ? '4px'
+                          : 0,
+                  }}
                 />
               </button>
             ))}

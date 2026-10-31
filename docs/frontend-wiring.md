@@ -287,9 +287,9 @@ curl -s http://localhost:5173/api/spaces | head -c 200
    shows "No desks left at 10:00"; "Book" → `POST 201 pending`; My bookings shows it.
 10. **Confirming through the backend:** log out, log in as Marko → the Reservations badge counts the
     pending ones; Approve → `PATCH 200`; approving one that overlaps a confirmed booking → `409
-    slot_full` in the toast; Decline works; Ana sees the status under Upcoming or Past.
-11. Ana cancels a confirmed booking (`PATCH cancelled`) and deletes a pending one (`DELETE 204`); a
-    confirmed one cannot be deleted.
+    slot_full` in the toast; Decline works; Ana sees the status under Upcoming or Past & cancelled.
+11. Ana cancels both a pending and a confirmed booking with "Cancel booking" (`PATCH cancelled`); both
+    move to Past & cancelled. `DELETE /api/bookings/:id` exists in the backend, but the UI does not use it.
 12. Popular times: a seeded space (a few weeks old) has a chart; a new space shows "not enough data".
 13. Hub Morača during opening hours: "23 desks available", because of today's confirmed seed booking.
 14. Expired token: `localStorage.zona.token = 'x'` in DevTools → reload → Explore works, the user is

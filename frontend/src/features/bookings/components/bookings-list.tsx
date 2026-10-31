@@ -43,7 +43,11 @@ type BookingsListProps = {
 
 type EmptyCopy = { icon: LucideIcon; title: string; text: string }
 
-const TAB_LABELS: Record<BookingTab, string> = { pending: 'Pending', upcoming: 'Upcoming', past: 'Past' }
+const TAB_LABELS: Record<BookingTab, string> = {
+  pending: 'Pending',
+  upcoming: 'Upcoming',
+  past: 'Past & cancelled',
+}
 
 const exploreSpaces = (
   <Button asChild className={emptyStateAction}>
@@ -130,10 +134,10 @@ const COPY: Record<
 const grid = 'grid gap-6 md:grid-cols-2 lg:grid-cols-3'
 const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300'
 
-// Bookings in tabs with loading, empty and error states: the guest's own (Upcoming, Past) or, for a host,
-// those of their spaces (Pending, Upcoming, Past). The title and the tabs share the hero panel; the panel
-// stays in place in every state, so the title never remounts. The tab underline slides to the open tab,
-// and the cards fade in, one after another along a row.
+// Bookings in tabs with loading, empty and error states: the guest's own (Upcoming, Past & cancelled)
+// or, for a host, those of their spaces (Pending, Upcoming, Past & cancelled). The title and the tabs
+// share the hero panel; the panel stays in place in every state, so the title never remounts. The tab
+// underline slides to the open tab, and the cards fade in, one after another along a row.
 export function BookingsList({ view, userId, title }: BookingsListProps) {
   // Every booking at once, so the tabs can split and count them. The backend sorts earliest first, so
   // past MAX_PAGE_SIZE the latest ones, Upcoming and Pending, are left out, not the past ones
@@ -159,7 +163,9 @@ export function BookingsList({ view, userId, title }: BookingsListProps) {
   const [movedId, setMovedId] = useState<number | null>(null)
 
   const onCancelled = (booking: Booking) => {
-    setAnnouncement(`Your booking at ${booking.space.name} was cancelled. You can find it under Past.`)
+    setAnnouncement(
+      `Your booking at ${booking.space.name} was cancelled. You can find it under Past & cancelled.`,
+    )
     setMovedId(booking.id)
   }
   const onReviewed = (booking: Booking) => setMovedId(booking.id)
@@ -176,6 +182,20 @@ export function BookingsList({ view, userId, title }: BookingsListProps) {
     return () => clearTimeout(timer)
   }, [movedOut])
 
+  // Phones: the tab row scrolls sideways (three tabs do not fit at 375px), so the open tab is scrolled into
+  // view, also when the page opens on ?tab=past. Only the row scrolls, never the page; the 16px edge
+  // matches the row's padding.
+  useEffect(() => {
+    const scroller = tabList?.parentElement
+    const active = tabList?.querySelector<HTMLElement>('[data-state="active"]')
+    if (!scroller || !active) return
+    const row = scroller.getBoundingClientRect()
+    const box = active.getBoundingClientRect()
+    const edge = 16
+    if (box.left < row.left + edge) scroller.scrollBy({ left: box.left - row.left - edge })
+    else if (box.right > row.right - edge) scroller.scrollBy({ left: box.right - row.right + edge })
+  }, [tab, tabList])
+
   // Error first: a retry keeps the error block (and the focused "Try again" button) on screen
   const state = error
     ? 'error'
@@ -191,34 +211,39 @@ export function BookingsList({ view, userId, title }: BookingsListProps) {
         {title}
         {state === 'loading' && <Skeleton className="h-9 w-56 rounded-full" />}
         {state === 'ready' && (
-          <TabsList
-            ref={setTabList}
-            variant="line"
-            className="relative h-auto gap-6 border-b pb-0"
-            aria-label={copy.label}
-          >
-            {underline && (
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-primary transition-[translate,width] duration-300 ease-out motion-reduce:transition-none"
-                style={{ translate: `${underline.x}px 0`, width: underline.width }}
-              />
-            )}
-            {VIEW_TABS[view].map((value) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                className="h-11 flex-none rounded-none px-1 pb-3 text-base text-muted-foreground after:hidden hover:text-foreground focus-visible:rounded-sm focus-visible:ring-ring data-[state=active]:font-semibold data-[state=active]:text-primary md:h-9 dark:data-[state=active]:text-primary"
-              >
-                {TAB_LABELS[value]}
-                {/* The card-colored ring outlines the pill where it sits on the panel's pale-blue circle
+          // Phones: the row scrolls sideways, edge to edge of the panel; py-1 leaves room for the focus ring.
+          // overflow-x also clips vertically, so the list grows to its triggers (shadcn's h-9 is replaced
+          // under the same group variant, or a plain h-auto loses to it) and nothing scrolls up and down.
+          <div className="-mx-4 -my-1 overflow-x-auto px-4 py-1 motion-safe:scroll-smooth md:mx-0 md:overflow-visible md:px-0">
+            <TabsList
+              ref={setTabList}
+              variant="line"
+              className="relative gap-6 border-b py-0 group-data-[orientation=horizontal]/tabs:h-auto"
+              aria-label={copy.label}
+            >
+              {underline && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-primary transition-[translate,width] duration-300 ease-out motion-reduce:transition-none"
+                  style={{ translate: `${underline.x}px 0`, width: underline.width }}
+                />
+              )}
+              {VIEW_TABS[view].map((value) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className="h-11 flex-none rounded-none px-1 pb-3 text-base text-muted-foreground after:hidden hover:text-foreground focus-visible:rounded-sm focus-visible:ring-ring data-[state=active]:font-semibold data-[state=active]:text-primary md:h-9 dark:data-[state=active]:text-primary"
+                >
+                  {TAB_LABELS[value]}
+                  {/* The card-colored ring outlines the pill where it sits on the panel's pale-blue circle
                     (phones, three tabs); on the card itself it does not show */}
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground ring-2 ring-card">
-                  {byTab[value].length}
-                </span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground ring-2 ring-card">
+                    {byTab[value].length}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
         )}
       </HeroPanel>
 

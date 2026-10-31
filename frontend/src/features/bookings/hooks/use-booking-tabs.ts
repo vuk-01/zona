@@ -15,9 +15,9 @@ export const VIEW_TABS: Record<BookingView, BookingTab[]> = {
 }
 
 // Guest: Upcoming is everything still pending or confirmed, soonest first (the API sorts by date and
-// time). Host: Pending and Upcoming (confirmed) split that in two. Past: everything else, so finished,
-// expired, declined and every cancelled booking (also one for a later date), newest first. The API
-// already returns the status right now, so a booking whose slot has ended is never active.
+// time). Host: Pending and Upcoming (confirmed) split that in two. Past & cancelled: everything else,
+// so finished, expired, declined and every cancelled booking (also one for a later date), newest first.
+// The API already returns the status right now, so a booking whose slot has ended is never active.
 export function splitBookings(bookings: Booking[], view: BookingView): Record<BookingTab, Booking[]> {
   const past = bookings.filter((b) => !isActive(b.status)).reverse()
   if (view === 'guest') return { pending: [], upcoming: bookings.filter((b) => isActive(b.status)), past }
