@@ -699,6 +699,7 @@ def _seed_bookings(
         booking = booking_repository.get_by_id(booking_id)
         if booking is not None:
             booking.created_at = past_now
+            booking_repository.save(booking)
     upcoming_ids = _book(_upcoming_bookings(today), users, spaces)
     logger.info("Created %s bookings", len(past_ids) + len(upcoming_ids))
 

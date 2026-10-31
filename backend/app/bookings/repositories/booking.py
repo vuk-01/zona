@@ -31,6 +31,8 @@ class IBookingRepository(Protocol):
 
     def add(self, booking: Booking) -> Booking: ...
 
+    def save(self, booking: Booking) -> Booking: ...
+
     def confirmed_per_hour(
         self, space_id: int, day: date, exclude_id: int | None = None
     ) -> dict[int, int]: ...
@@ -116,6 +118,13 @@ class BookingRepository(IBookingRepository):
         with db.begin_nested():
             db.add(booking)
             db.flush()  # assigns id and created_at; the endpoint's session handler commits (ADR-009)
+        return booking
+
+    def save(self, booking: Booking) -> Booking:
+        db = self._session_factory()
+        # Flush now, so a constraint violation or a vanished row (StaleDataError) raises here and
+        # not later inside the session handler's commit.
+        db.flush()
         return booking
 
     def confirmed_per_hour(

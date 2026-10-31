@@ -18,7 +18,7 @@ from app.favorites.models.favorite import Favorite
 from app.seed import SeedRefusedError, seed
 from app.spaces.models.space import Space
 from app.users.models.user import User
-from app.utils.clock import IClock
+from app.utils.clock import IClock, local_hour_to_utc
 from app.utils.di import add_to_di_container, get_from_di_container, remove_from_di_container
 from tests.utils import FixedClock
 
@@ -122,6 +122,24 @@ def test_seed_shows_free_desks_and_popular_times(client: TestClient) -> None:
     response = client.get("/api/bookings/popular-times", params={"spaceId": hub})
     assert response.status_code == 200, response.text
     assert response.json() is not None
+
+
+def test_past_bookings_were_created_before_their_slot() -> None:
+    seed()
+
+    with get_from_di_container(ISessionFactory)() as session:
+        bookings = list(session.scalars(select(Booking)))
+    starts = {
+        booking.id: local_hour_to_utc(booking.date, booking.start_hour) for booking in bookings
+    }
+    # Only the past ones: an upcoming booking's `created_at` is the database's real now, not NOW.
+    past = [booking for booking in bookings if starts[booking.id] < NOW]
+    assert past
+    for booking in past:
+        created_at = booking.created_at
+        if created_at.tzinfo is None:  # SQLite returns it naive, in UTC
+            created_at = created_at.replace(tzinfo=UTC)
+        assert created_at < starts[booking.id], booking.id
 
 
 def test_seed_twice_creates_nothing_new() -> None:
