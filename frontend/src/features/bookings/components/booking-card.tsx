@@ -6,9 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { UserAvatar } from '@/components/user-avatar'
-import { type Booking, isActive } from '@/lib/booking'
 
-import { type BookableSpace, STATUS_LABELS } from '../types'
+import { type Booking, STATUS_LABELS, isActive } from '../types'
 import { CancelBookingDialog } from './cancel-booking-dialog'
 import { bookingHours, formatBookingDate } from './format-booking'
 import { ReservationActions, type ReservationDecision } from './reservation-actions'
@@ -36,8 +35,6 @@ type BookingCardProps = {
   // their spaces, with the guest and, while it is pending, Approve and Decline.
   variant?: 'guest' | 'host'
   onCancelled?: (booking: Booking) => void
-  // host: the booked space, which approving checks the overlap rule against (joined in by the route)
-  space?: BookableSpace
   onReviewed?: (booking: Booking, decision: ReservationDecision) => void
 }
 
@@ -49,7 +46,6 @@ export function BookingCard({
   imageUrl,
   variant = 'guest',
   onCancelled,
-  space,
   onReviewed,
 }: BookingCardProps) {
   const hours = bookingHours(booking.startTime, booking.endTime)
@@ -121,7 +117,7 @@ export function BookingCard({
         )}
         {variant === 'host' && booking.status === 'pending' && (
           <div className="relative z-10">
-            <ReservationActions booking={booking} space={space} onReviewed={onReviewed} />
+            <ReservationActions booking={booking} onReviewed={onReviewed} />
           </div>
         )}
       </CardContent>

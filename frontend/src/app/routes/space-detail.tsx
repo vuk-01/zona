@@ -99,7 +99,7 @@ export function SpaceDetail() {
           </h2>
           <OpeningHours hours={space.openingHours} />
         </section>
-        <PopularTimes space={space} />
+        <PopularTimes spaceId={space.id} />
         <section aria-labelledby="host-heading" className="flex flex-col gap-3">
           <h2 id="host-heading" className="text-lg font-semibold">
             Your host

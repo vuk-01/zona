@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 import { usePopularTimes } from '../api/use-bookings'
 import { formatHour } from '../hooks/use-booking-slot'
-import type { BookableSpace, Weekday } from '../types'
+import type { Weekday } from '../types'
 
 const DAYS: { key: Weekday; short: string; long: string }[] = [
   { key: 'mon', short: 'Mon', long: 'Monday' },
@@ -46,13 +46,13 @@ const barVariants = cva('w-full max-w-6 rounded-t-xs transition-colors', {
 const describe = (value: number) => (value === 0 ? 'quiet or closed' : `usually ${value}% booked`)
 
 type PopularTimesProps = {
-  space: BookableSpace
+  spaceId: number
 }
 
 // "Popular time": day chips, an hourly bar chart 08:00–22:00 and one line of text.
 // Hover, tap or arrow keys pick an hour, and its value shows in a pill above the bar.
-export function PopularTimes({ space }: PopularTimesProps) {
-  const { data, isLoading, error, refetch, isRefetching } = usePopularTimes(space)
+export function PopularTimes({ spaceId }: PopularTimesProps) {
+  const { data, isLoading, error, refetch, isRefetching } = usePopularTimes(spaceId)
   const today = BY_JS_DAY[new Date().getDay()]
   const [day, setDay] = useState<Weekday>(today)
   const [picked, setPicked] = useState<number | null>(null)

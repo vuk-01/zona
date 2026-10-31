@@ -6,11 +6,10 @@ import { TimeSelect } from '@/components/form/time-select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { BookingGuest } from '@/lib/booking'
 
 import { useCreateBooking, useSlotAvailability } from '../api/use-bookings'
 import { formatHour, useBookingSlot } from '../hooks/use-booking-slot'
-import type { BookableSpace } from '../types'
+import type { BookableSpace, BookingGuest } from '../types'
 
 const euros = new Intl.NumberFormat('en-IE', {
   style: 'currency',
@@ -43,7 +42,7 @@ type BookingFormProps = {
 // On phones "Book" sits in a bar fixed above the bottom navigation.
 export function BookingForm({ space, user, onLogin }: BookingFormProps) {
   const slot = useBookingSlot(space)
-  const availability = useSlotAvailability(slot.slot, space)
+  const availability = useSlotAvailability(slot.slot)
   const createBooking = useCreateBooking()
   const resultRef = useRef<HTMLDivElement>(null)
 
@@ -67,12 +66,12 @@ export function BookingForm({ space, user, onLogin }: BookingFormProps) {
       // unless the space turns out to be theirs (the form then says so).
       const picked = slot.slot
       onLogin((guest) => {
-        if (space.host.id !== guest.id) createBooking.mutate({ input: picked, space, guest })
+        if (space.host.id !== guest.id) createBooking.mutate(picked)
       })
       return
     }
     if (!user || !canBook) return
-    createBooking.mutate({ input: slot.slot, space, guest: user })
+    createBooking.mutate(slot.slot)
   }
 
   if (createBooking.isSuccess) {

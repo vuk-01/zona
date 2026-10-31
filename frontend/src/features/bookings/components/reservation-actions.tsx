@@ -2,10 +2,9 @@ import { Check, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
-import type { Booking } from '@/lib/booking'
 
 import { useConfirmBooking } from '../api/use-bookings'
-import type { BookableSpace } from '../types'
+import type { Booking } from '../types'
 import { DeclineBookingDialog } from './decline-booking-dialog'
 import { formatBookingDate } from './format-booking'
 
@@ -14,8 +13,6 @@ export type ReservationDecision = 'confirmed' | 'declined'
 
 type ReservationActionsProps = {
   booking: Booking
-  // Approving checks the overlap rule against the space; undefined while the host's spaces load
-  space?: BookableSpace
   // Called after either action. The booking then leaves Pending, so the list moves focus.
   onReviewed?: (booking: Booking, decision: ReservationDecision) => void
 }
@@ -23,7 +20,7 @@ type ReservationActionsProps = {
 // Approve and Decline for the host on a pending booking (in place of the guest's "Cancel booking").
 // Approve needs no confirmation: it can still be cancelled later. Decline asks first, since it is final.
 // Both end with a toast; an approve that fails (e.g. the slot filled up meanwhile) says why in one.
-export function ReservationActions({ booking, space, onReviewed }: ReservationActionsProps) {
+export function ReservationActions({ booking, onReviewed }: ReservationActionsProps) {
   const confirmBooking = useConfirmBooking()
   const when = `${formatBookingDate(booking.date)}, ${booking.startTime}–${booking.endTime}`
   const summary = `${booking.guest.name} · ${booking.space.name}, ${when}`
@@ -32,8 +29,7 @@ export function ReservationActions({ booking, space, onReviewed }: ReservationAc
   const approve = async () => {
     if (confirmBooking.isPending) return
     try {
-      if (!space) throw new Error('Your spaces are still loading. Please try again.')
-      await confirmBooking.mutateAsync({ id: booking.id, space })
+      await confirmBooking.mutateAsync(booking.id)
       toast.success('Booking confirmed', { description: summary })
       onReviewed?.(booking, 'confirmed')
     } catch (error) {

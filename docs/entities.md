@@ -112,7 +112,7 @@ List filters: `search` (at most 80 characters) matches the name or the city, cas
 
 ## Booking
 
-A guest books a space for one date and a time slot in whole hours. Code: backend `backend/app/bookings/`; frontend `frontend/src/features/bookings/`, `frontend/src/lib/booking.ts`.
+A guest books a space for one date and a time slot in whole hours. Code: backend `backend/app/bookings/`; frontend `frontend/src/features/bookings/` (the types in `types.ts`).
 
 | Field      | Type                                                                             | Required | Notes                                                                            |
 | ---------- | -------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |

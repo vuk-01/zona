@@ -19,7 +19,7 @@ import { Reveal } from '@/components/motion/reveal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { Booking } from '@/lib/booking'
+import { MAX_PAGE_SIZE } from '@/lib/api-client'
 import { useActiveIndicator } from '@/lib/use-active-indicator'
 
 import { useBookings } from '../api/use-bookings'
@@ -30,11 +30,11 @@ import {
   splitBookings,
   useBookingTab,
 } from '../hooks/use-booking-tabs'
-import type { BookableSpace } from '../types'
+import type { BookableSpace, Booking } from '../types'
 import { BookingCard } from './booking-card'
 
-// What the route joins in per space id (the bookings feature does not load spaces): the cover photo and,
-// for the host, what approving checks. A Space from the spaces feature has this shape.
+// What the route joins in per space id (the bookings feature does not load spaces): the cover photo.
+// A Space from the spaces feature has this shape.
 export type BookingListSpace = BookableSpace & { images: string[] }
 
 type BookingsListProps = {
@@ -141,13 +141,16 @@ const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-
 // stays in place in every state, so the title never remounts. The tab underline slides to the open tab,
 // and the cards fade in, one after another along a row.
 export function BookingsList({ view, userId, spaces, title }: BookingsListProps) {
+  // Every booking at once, so the tabs can split and count them; past MAX_PAGE_SIZE the oldest are left
+  // out (docs/follow-ups.md, "lists capped at 500").
   const {
-    data: bookings,
+    data: page,
     isLoading,
     error,
     refetch,
     isFetching,
-  } = useBookings(view === 'guest' ? { guestId: userId } : { hostId: userId })
+  } = useBookings(view === 'guest' ? { guestId: userId } : { hostId: userId }, { size: MAX_PAGE_SIZE })
+  const bookings = page?.items
   const copy = COPY[view]
   const [tab, setTab] = useBookingTab(view)
   const [tabList, setTabList] = useState<HTMLDivElement | null>(null)
@@ -302,7 +305,6 @@ export function BookingsList({ view, userId, spaces, title }: BookingsListProps)
                               imageUrl={spaces ? (space?.images[0] ?? null) : undefined}
                               variant={view}
                               onCancelled={onCancelled}
-                              space={space}
                               onReviewed={onReviewed}
                             />
                           </Reveal>

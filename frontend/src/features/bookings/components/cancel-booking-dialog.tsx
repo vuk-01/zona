@@ -12,9 +12,9 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import type { Booking } from '@/lib/booking'
 
 import { useCancelBooking } from '../api/use-bookings'
+import type { Booking } from '../types'
 import { formatBookingDate } from './format-booking'
 
 type CancelBookingDialogProps = {
