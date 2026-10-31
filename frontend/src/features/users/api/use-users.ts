@@ -60,16 +60,23 @@ export function useSwitchMode(onSwitched?: (mode: UserMode) => void | Promise<vo
   })
 }
 
-// After a DELETE the token answers 401 invalid_token, so the session ends here: no token, no signed-in
-// user, and every list loads again (the user's spaces, bookings and favorites are gone with the
-// account). Outside the hook so use-users.test.ts can run it without React.
+// After a DELETE the token answers 401 invalid_token, so the session ends here, in the same order as
+// useLogout (features/auth/api/use-auth.ts): the user is cleared, the private lists (favorites,
+// bookings) leave the cache without a request (refetching them would go out without a token: a 401),
+// then the token goes, and the public lists load again without it (the user's spaces and profile are
+// gone with the account). Outside the hook so use-users.test.ts can run it without React.
 export const deleteAccountOptions = (queryClient: QueryClient) =>
   mutationOptions({
     mutationFn: (id: number) => usersApi.remove(id),
     onSuccess: () => {
-      clearToken()
       queryClient.setQueryData(currentUserQueryKey, null)
-      return queryClient.invalidateQueries()
+      queryClient.removeQueries({ queryKey: ['favorites'] })
+      queryClient.removeQueries({ queryKey: ['bookings'] })
+      clearToken()
+      return Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['spaces'] }),
+        queryClient.invalidateQueries({ queryKey: ['users'] }),
+      ])
     },
   })
 

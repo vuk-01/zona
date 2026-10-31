@@ -1,6 +1,7 @@
-import { MutationObserver, QueryClient } from '@tanstack/react-query'
+import { MutationObserver, QueryClient, QueryObserver } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { api } from '@/lib/api-client'
 import { clearToken, getToken, setToken } from '@/lib/auth-token'
 import { type User, currentUserQueryKey } from '@/lib/user'
 
@@ -63,6 +64,34 @@ describe('deleting the account', () => {
     expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer token-7')
     expect(getToken()).toBeNull()
     expect(queryClient.getQueryData(currentUserQueryKey)).toBeNull()
+  })
+
+  it('sends no request after the DELETE for the private lists that are on screen', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+    // Favorites and bookings on screen (an active observer each), already loaded: invalidating them
+    // would refetch them right away, without the token
+    const onScreen = [
+      ['favorites', { userId: user.id }],
+      ['bookings', { guestId: user.id }],
+    ].map((queryKey) => {
+      queryClient.setQueryData(queryKey, [])
+      const observer = new QueryObserver(queryClient, {
+        queryKey,
+        queryFn: ({ signal }) => api.get(`/${String(queryKey[0])}`, { signal }),
+        staleTime: Infinity,
+      })
+      return observer.subscribe(() => undefined)
+    })
+
+    await deleteAccount(user.id)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('DELETE')
+    expect(getToken()).toBeNull()
+    expect(queryClient.getQueryData(currentUserQueryKey)).toBeNull()
+    expect(queryClient.getQueryCache().findAll({ queryKey: ['favorites'] })).toHaveLength(0)
+    expect(queryClient.getQueryCache().findAll({ queryKey: ['bookings'] })).toHaveLength(0)
+    for (const unsubscribe of onScreen) unsubscribe()
   })
 
   it('keeps the session when the backend refuses', async () => {
