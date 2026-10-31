@@ -8,4 +8,11 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, './src') },
   },
+  // The backend's routes already start with /api, so the path is passed on as it is.
+  // API_URL points the dev server at another backend (default: `poetry run start` on port 8000).
+  server: {
+    proxy: {
+      '/api': { target: process.env.API_URL ?? 'http://localhost:8000', changeOrigin: true },
+    },
+  },
 })

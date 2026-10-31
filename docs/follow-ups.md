@@ -254,9 +254,8 @@ These stay open:
 ## From the users review (left out of `backend-users` on purpose)
 
 - Frontend: the `auth-api.ts` mock that forces `mode: guest`, and the 80-character `city` limit in the
-  profile form; done when the frontend is connected to the backend. In the same change, add the `/api`
-  proxy to port 8000 in `frontend/vite.config.ts`: `backend/README.md` line 24 says the frontend dev
-  server proxies `/api`, but no proxy is configured yet.
+  profile form; done when the frontend is connected to the backend (PR 2 in
+  `docs/specs/frontend-wiring.md`).
 - Escape `%` and `_` in `search` (users and spaces).
 - bcrypt reads at most 72 bytes, not 72 characters: a password with non-ASCII letters can pass the
   length check and still be cut.
