@@ -2,10 +2,6 @@ import { type Page, api } from '@/lib/api-client'
 
 import type { NewSpace, Space, SpaceFilters } from '../types'
 
-// The largest page GET /spaces returns. Lists that need every row (the bookings join, the category
-// stats, My spaces) ask for this much; past 500 spaces they would need more pages.
-export const MAX_PAGE_SIZE = 500
-
 export type Pagination = {
   page?: number
   size?: number

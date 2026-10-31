@@ -1,4 +1,5 @@
-import { MAX_PAGE_SIZE } from '../api/spaces-api'
+import { MAX_PAGE_SIZE } from '@/lib/api-client'
+
 import { useSpaces } from '../api/use-spaces'
 import { CATEGORY_LABELS, type Space, type SpaceCategory, type SpaceFilters, type Weekday } from '../types'
 

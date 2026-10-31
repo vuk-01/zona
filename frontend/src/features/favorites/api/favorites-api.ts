@@ -1,13 +1,13 @@
-import { type Page, api } from '@/lib/api-client'
+import { MAX_PAGE_SIZE, type Page, api } from '@/lib/api-client'
 
 import type { Favorite } from '../types'
 
 // The signed-in user's favorites (docs/entities.md, Favorite); the backend takes the user from the
 // token. There is no get or update: a favorite is only saved or removed, and both are idempotent.
 export const favoritesApi = {
-  // GET /favorites, newest first. The hearts need every saved space, so the largest page (500).
+  // GET /favorites, newest first. The hearts need every saved space, so the largest page.
   list: async (signal?: AbortSignal) => {
-    const page = await api.get<Page<Favorite>>('/favorites', { params: { size: 500 }, signal })
+    const page = await api.get<Page<Favorite>>('/favorites', { params: { size: MAX_PAGE_SIZE }, signal })
     return page.items
   },
 

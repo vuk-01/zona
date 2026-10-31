@@ -37,7 +37,7 @@ should back up `data/app.db` first.
 first page and counts all matches from `total` (`spaces-list.tsx`), so past 50 spaces the rest cannot
 be reached. Add a "Load more" button (`useInfiniteQuery` with `page`) under the grid. The bookings
 join, the category stats and My spaces ask for the largest page, 500 (`MAX_PAGE_SIZE` in
-`spaces-api.ts`); they need more pages once a list grows past that.
+`src/lib/api-client.ts`); they need more pages once a list grows past that.
 
 ## Frontend: connect bookings to the backend
 
