@@ -1,87 +1,41 @@
-import { type StoredUser, db, delay } from '@/lib/mock-db'
+import { ApiError, api } from '@/lib/api-client'
+import { clearToken, getToken, setToken } from '@/lib/auth-token'
 import type { User } from '@/lib/user'
 
 import type { LoginInput, SignupInput } from '../types'
 
-// Only the signed-in user id is kept in the browser, so a reload keeps the session.
-// Storage can be blocked (private mode), so the mock then simply forgets the session.
-const SESSION_KEY = 'zona.session'
-
-function readSession() {
-  try {
-    const value = localStorage.getItem(SESSION_KEY)
-    return value === null ? null : Number(value)
-  } catch {
-    return null
-  }
+// What POST /auth/login and /auth/register answer. The token goes to auth-token.ts, so every later
+// request sends it and a reload keeps the session; the caller only gets the user.
+type AuthResponse = {
+  token: string
+  user: User
 }
 
-function writeSession(userId: number | null) {
-  try {
-    if (userId === null) localStorage.removeItem(SESSION_KEY)
-    else localStorage.setItem(SESSION_KEY, String(userId))
-  } catch {
-    // Session only lives in memory for this tab.
-  }
-}
-
-const toUser = ({ password: _password, ...user }: StoredUser): User => user
-
-const normalizeEmail = (email: string) => email.trim().toLowerCase()
-
-export class InvalidCredentialsError extends Error {
-  constructor() {
-    super('Wrong email or password')
-  }
-}
-
-export class EmailTakenError extends Error {
-  constructor() {
-    super('Email already in use')
-  }
+const startSession = ({ token, user }: AuthResponse) => {
+  setToken(token)
+  return user
 }
 
 export const authApi = {
-  me: async (): Promise<User | null> => {
-    await delay(undefined)
-    const user = db.users.find((u) => u.id === readSession())
-    return user ? toUser(user) : null
-  },
-
-  // Every sign-in starts in guest mode, also for hosts; they switch to hosting in Profile.
-  // A reload keeps the mode, because it goes through `me`, not here.
-  login: async ({ email, password }: LoginInput) => {
-    await delay(undefined)
-    const found = db.users.find((u) => u.email === normalizeEmail(email) && u.password === password)
-    if (!found) throw new InvalidCredentialsError()
-    const user: StoredUser = { ...found, mode: 'guest' }
-    db.users = db.users.map((u) => (u.id === user.id ? user : u))
-    writeSession(user.id)
-    return toUser(user)
-  },
-
-  signup: async ({ name, email, password }: SignupInput) => {
-    await delay(undefined)
-    if (db.users.some((u) => u.email === normalizeEmail(email))) throw new EmailTakenError()
-    const user: StoredUser = {
-      id: Date.now(),
-      name: name.trim(),
-      email: normalizeEmail(email),
-      password,
-      avatarUrl: null,
-      city: '',
-      bio: '',
-      isHost: false,
-      mode: 'guest',
-      createdAt: new Date().toISOString().slice(0, 10),
+  // A visitor without a token is not asked about at all. A token the backend refuses (expired, or the
+  // account is gone) answers 401 invalid_token: api-client.ts clears it and ends the session.
+  me: async (signal?: AbortSignal): Promise<User | null> => {
+    if (getToken() === null) return null
+    try {
+      return await api.get<User>('/auth/me', { signal })
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) return null
+      throw error
     }
-    db.users = [...db.users, user]
-    writeSession(user.id)
-    return toUser(user)
   },
 
+  // The user comes back in the mode they used last (guest or host).
+  login: async (input: LoginInput) => startSession(await api.post<AuthResponse>('/auth/login', input)),
+
+  signup: async (input: SignupInput) => startSession(await api.post<AuthResponse>('/auth/register', input)),
+
+  // The backend has no logout route: forgetting the token ends the session.
   logout: async () => {
-    await delay(undefined)
-    writeSession(null)
+    clearToken()
   },
 }

@@ -8,15 +8,21 @@ import { authApi } from './auth-api'
 export function useCurrentUser() {
   return useQuery({
     queryKey: currentUserQueryKey,
-    queryFn: authApi.me,
+    queryFn: ({ signal }) => authApi.me(signal),
   })
 }
 
+// The lists depend on the token too (the user's own drafts, bookingCounts, favorites, bookings), so
+// they load again for the new session, not only the signed-in user.
 function useSetCurrentUser() {
   const queryClient = useQueryClient()
   return (user: User | null) => {
     queryClient.setQueryData(currentUserQueryKey, user)
-    return queryClient.invalidateQueries({ queryKey: ['auth'] })
+    return Promise.all(
+      [['auth'], ['spaces'], ['favorites'], ['bookings']].map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey }),
+      ),
+    )
   }
 }
 

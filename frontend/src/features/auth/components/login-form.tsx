@@ -1,5 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { LockKeyhole, Loader2, Mail } from 'lucide-react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
@@ -7,6 +8,7 @@ import { z } from 'zod'
 
 import { FormAlert } from '@/components/form/form-alert'
 import { Button } from '@/components/ui/button'
+import { applyFieldErrors } from '@/lib/form-errors'
 import type { User } from '@/lib/user'
 
 import { useLogin } from '../api/use-auth'
@@ -37,18 +39,26 @@ type LoginFormProps = {
 export function LoginForm({ onLoggedIn, onSignUp, appearance }: LoginFormProps) {
   const { search } = useRedirectTarget()
   const login = useLogin()
+  // A wrong password (401 invalid_credentials) has no field of its own, so it shows in FormAlert
+  const [formError, setFormError] = useState<string | null>(null)
   const isStacked = appearance === 'stacked'
   const Field = isStacked ? StackedAuthField : AuthField
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<LoginValues>({ resolver: zodResolver(loginSchema) })
 
-  const onSubmit = (values: LoginValues) =>
+  const onSubmit = (values: LoginValues) => {
+    setFormError(null)
     // No navigate here: the user lands in the cache and GuestOnly (around this form on /login) redirects.
     // onSuccess runs after that, so the dialog's next step already sees the signed-in user.
-    login.mutate(values, { onSuccess: (user) => onLoggedIn?.(user) })
+    login.mutate(values, {
+      onSuccess: (user) => onLoggedIn?.(user),
+      onError: (error) => setFormError(applyFieldErrors(error, setError, ['email', 'password'])),
+    })
+  }
 
   return (
     <form noValidate onSubmit={handleSubmit(onSubmit)} className="grid gap-4">
@@ -90,7 +100,7 @@ export function LoginForm({ onLoggedIn, onSignUp, appearance }: LoginFormProps) 
         </div>
       )}
 
-      {login.error && <FormAlert message={login.error.message} />}
+      {formError && <FormAlert message={formError} />}
 
       <Button
         type="submit"
