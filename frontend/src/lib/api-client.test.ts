@@ -148,6 +148,44 @@ describe('answers', () => {
   })
 })
 
+describe('answers outside the contract', () => {
+  it('turns a 2xx without a JSON body into unexpected_response', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('', { status: 200 }))
+    expect(await failure(api.post('/favorites', { spaceId: 3 }))).toMatchObject({
+      status: 200,
+      code: 'unexpected_response',
+    })
+
+    fetchMock.mockResolvedValueOnce(
+      new Response('<!doctype html><title>Zona</title>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      }),
+    )
+    const error = await failure(api.get('/spaces'))
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error).toMatchObject({ code: 'unexpected_response' })
+  })
+
+  it('keeps detail and code but drops fieldErrors that are not one string per field', async () => {
+    fetchMock.mockResolvedValueOnce(
+      json(422, {
+        detail: 'Validation failed',
+        code: 'validation_error',
+        fieldErrors: { name: ['Too short'] },
+      }),
+    )
+    const error = await failure(api.patch('/spaces/1', { name: 'ab' }))
+    expect(error).toMatchObject({ code: 'validation_error', message: 'Validation failed' })
+    expect(error).toHaveProperty('fieldErrors', undefined)
+
+    fetchMock.mockResolvedValueOnce(
+      json(422, { detail: 'Validation failed', code: 'validation_error', fieldErrors: ['name'] }),
+    )
+    expect(await failure(api.patch('/spaces/1', { name: 'ab' }))).toHaveProperty('fieldErrors', undefined)
+  })
+})
+
 describe('session', () => {
   it('clears the token and tells the listeners on 401 invalid_token', async () => {
     const listener = vi.fn()

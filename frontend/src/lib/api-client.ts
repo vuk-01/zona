@@ -29,7 +29,7 @@ export class ApiError extends Error {
 const UNAVAILABLE_MESSAGE = "Zona can't be reached right now. Try again in a moment."
 const FALLBACK_MESSAGE = 'Something went wrong. Please try again.'
 
-type ErrorBody = { detail: string; code: string; fieldErrors?: Record<string, string> }
+type ErrorBody = { detail: string; code: string; fieldErrors?: unknown }
 
 const isErrorBody = (value: unknown): value is ErrorBody =>
   typeof value === 'object' &&
@@ -37,8 +37,15 @@ const isErrorBody = (value: unknown): value is ErrorBody =>
   'detail' in value &&
   typeof value.detail === 'string' &&
   'code' in value &&
-  typeof value.code === 'string' &&
-  (!('fieldErrors' in value) || (typeof value.fieldErrors === 'object' && value.fieldErrors !== null))
+  typeof value.code === 'string'
+
+// fieldErrors as the contract has it: one message per field. Anything else (a list, a message that
+// is not a string) is left out, so a form never shows it; detail and code still count.
+const isFieldErrors = (value: unknown): value is Record<string, string> =>
+  typeof value === 'object' &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.values(value).every((message) => typeof message === 'string')
 
 type QueryParams = Record<string, string | number | boolean | undefined>
 
@@ -71,7 +78,8 @@ async function toApiError(response: Response, sentToken: string | null) {
   if (response.status === 401 && body.code === 'invalid_token' && sentToken !== null) {
     expireSession(sentToken)
   }
-  return new ApiError(response.status, body.code, body.detail, body.fieldErrors)
+  const fieldErrors = isFieldErrors(body.fieldErrors) ? body.fieldErrors : undefined
+  return new ApiError(response.status, body.code, body.detail, fieldErrors)
 }
 
 async function request(method: string, path: string, { params, body, signal }: RequestOptions = {}) {
@@ -96,8 +104,14 @@ async function request(method: string, path: string, { params, body, signal }: R
 
   if (!response.ok) throw await toApiError(response, token)
   if (response.status === 204) return undefined
-  const data: unknown = await response.json()
-  return data
+  try {
+    const data: unknown = await response.json()
+    return data
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw error
+    // A 2xx without a JSON body (empty, or an HTML page from a wrong host) is not the contract.
+    throw new ApiError(response.status, 'unexpected_response', FALLBACK_MESSAGE)
+  }
 }
 
 // The caller names the response type from docs/entities.md; the client does not check it.
