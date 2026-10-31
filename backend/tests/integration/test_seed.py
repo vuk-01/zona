@@ -12,9 +12,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
 from app.bookings.models.booking import Booking, BookingStatus
+from app.config.settings import Settings
 from app.database.session_factory import ISessionFactory
 from app.favorites.models.favorite import Favorite
-from app.seed import seed
+from app.seed import SeedRefusedError, seed
 from app.spaces.models.space import Space
 from app.users.models.user import User
 from app.utils.clock import IClock
@@ -130,6 +131,18 @@ def test_seed_twice_creates_nothing_new() -> None:
     seed()
 
     assert [_count(model) for model in (User, Space, Favorite, Booking)] == counts
+
+
+def test_seed_refuses_to_run_outside_dev() -> None:
+    settings = get_from_di_container(Settings)
+    add_to_di_container(Settings, settings.model_copy(update={"ENVIRONMENT": "production"}))
+    try:
+        with pytest.raises(SeedRefusedError, match="ENVIRONMENT=production"):
+            seed()
+    finally:
+        add_to_di_container(Settings, settings)
+
+    assert _count(User) == 0
 
 
 def test_seed_restores_the_clock_it_found(fixed_clock: FixedClock) -> None:

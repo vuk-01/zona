@@ -24,7 +24,8 @@ poetry run start          # http://localhost:8000/docs
 ### Demo accounts
 
 **Local development only, never on a server:** the passwords are public. Every `@zona.app` account has
-the password `zona1234`; `demo@example.com` has `demo1234`.
+the password `zona1234`; `demo@example.com` has `demo1234`. The seed refuses to run unless
+`ENVIRONMENT` is `dev` (the default in `app/config/settings.py`), so set any other value on a server.
 
 | Account              | Mode               | What it has                                                                 |
 | -------------------- | ------------------ | --------------------------------------------------------------------------- |

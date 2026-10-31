@@ -30,6 +30,7 @@ from app.bookings.schemas.booking import (
     BookingUpdateRequestSchema,
 )
 from app.bookings.services.booking import IBookingService
+from app.config.settings import Settings
 from app.database.session_handler import db_session_handler
 from app.favorites.schemas.favorite import FavoriteCreateRequestSchema
 from app.favorites.services.favorite import IFavoriteService
@@ -55,6 +56,17 @@ from app.utils.di import add_to_di_container, get_from_di_container
 from app.utils.pagination import PaginationParams
 
 logger = logging.getLogger(__name__)
+
+
+class SeedRefusedError(RuntimeError):
+    """The seed was started outside local development (`ENVIRONMENT` is not `dev`)."""
+
+    def __init__(self, environment: str) -> None:
+        super().__init__(
+            f"The demo seed only runs with ENVIRONMENT=dev, not ENVIRONMENT={environment}: "
+            "its accounts have public passwords. Nothing was written."
+        )
+
 
 DEMO_EMAIL = "demo@example.com"
 DEMO_PASSWORD = "demo1234"
@@ -708,6 +720,10 @@ def _seed_listings(current_user: CurrentUser) -> None:
 
 @db_session_handler
 def seed() -> None:
+    # The demo passwords are public: never create these accounts outside local development.
+    environment = get_from_di_container(Settings).ENVIRONMENT
+    if environment != "dev":
+        raise SeedRefusedError(environment)
     # One "today" for every relative date, from the clock the services use too.
     today = get_from_di_container(IClock).now().astimezone(LOCAL_TIMEZONE).date()
     users = {demo.key: _seed_user(demo, today) for demo in DEMO_USERS}
