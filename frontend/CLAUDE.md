@@ -59,8 +59,9 @@ Dependency direction: shared code -> features -> app, never the other way around
   layout as `onProtectedNav` (nav items with `requiresAuth`); `/login` stays for direct links and
   `RequireAuth`'s redirects
 - Protected routes are wrapped in `RequireAuth` (`mode="host"` for `/host/*`) in `src/app/router.tsx`
-- `src/lib/`: `utils.ts` (`cn`), `mock-db.ts` (mock database and delay) and `auth-token.ts` (the API
-  token in `localStorage`, `onSessionExpired` for `src/app`)
+- `src/lib/`: `utils.ts` (`cn`), `mock-db.ts` (mock database and delay), `auth-token.ts` (the API
+  token in `localStorage`, `onSessionExpired` for `src/app`) and `api-client.ts` (`api.get/post/patch/delete`
+  on `/api`, `ApiError`, `Page<T>`, `isNotFound`, `errorMessage`; tested in `api-client.test.ts`)
 
 ## Rules
 
@@ -77,6 +78,6 @@ Dependency direction: shared code -> features -> app, never the other way around
 
 ## Done when
 
-- `pnpm typecheck` and `pnpm lint` pass
+- `pnpm typecheck`, `pnpm lint` and `pnpm test` pass
 - The page was opened with Playwright MCP and screenshots at 375 px and 1440 px match DESIGN.md
 - No errors in the browser console

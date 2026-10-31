@@ -18,6 +18,7 @@ You may talk to me in any language.
 - `pnpm dev:api`: backend at http://localhost:8000 (`poetry run start` in `backend/`)
 - `pnpm typecheck`: TypeScript check
 - `pnpm lint`: oxlint and the boundary check between features
+- `pnpm test`: Vitest unit tests (`frontend/src/**/*.test.ts`)
 - `pnpm build`: production build
 - `pnpm format`: Prettier formats `frontend/src/`
 

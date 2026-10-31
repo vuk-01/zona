@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
@@ -14,5 +15,10 @@ export default defineConfig({
     proxy: {
       '/api': { target: process.env.API_URL ?? 'http://localhost:8000', changeOrigin: true },
     },
+  },
+  // `pnpm test`: unit tests next to the code they test, in Node (no DOM needed so far).
+  test: {
+    include: ['src/**/*.test.ts'],
+    environment: 'node',
   },
 })
