@@ -47,7 +47,8 @@ closed). Two days later "today" has moved, so seed a new database to get it back
 
 The seed skips what exists (users by email, spaces by host, bookings when Marko already has some).
 It runs as one transaction: a seed that fails halfway rolls back as a whole, so running it again is
-safe. Start from a new database (delete `data/app.db`, then `poetry run migrate && poetry run seed`)
+safe. When a demo email is already registered with another password, the seed stops with that
+email and writes nothing. Start from a new database (delete `data/app.db`, then `poetry run migrate && poetry run seed`)
 when you want fresh dates, or after a seed from before these accounts (its spaces belong to
 `demo@example.com`).
 

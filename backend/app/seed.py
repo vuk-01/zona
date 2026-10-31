@@ -16,7 +16,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from app.auth.exceptions.auth import InvalidCredentialsException
+from app.auth.exceptions.auth import EmailAlreadyRegisteredException, InvalidCredentialsException
 from app.auth.schemas.auth import CurrentUser, LoginRequestSchema, RegisterRequestSchema
 from app.auth.services.auth import IAuthService
 from app.bookings.repositories.booking import IBookingRepository
@@ -62,6 +62,16 @@ class SeedRefusedError(RuntimeError):
         super().__init__(
             f"The demo seed only runs with ENVIRONMENT=dev, not ENVIRONMENT={environment}: "
             "its accounts have public passwords. Nothing was written."
+        )
+
+
+class DemoAccountTakenError(RuntimeError):
+    """A demo email is already registered with another password, so the seed cannot sign in as it."""
+
+    def __init__(self, email: str) -> None:
+        super().__init__(
+            f"{email} is already registered with a password that is not its demo password, so the "
+            "seed stopped and nothing was written. Seed a new database (README, Demo accounts)."
         )
 
 
@@ -499,9 +509,13 @@ def _seed_user(demo: _DemoUser, today: date) -> CurrentUser:
     except InvalidCredentialsException:
         pass
 
-    auth = auth_service.register(
-        RegisterRequestSchema(email=demo.email, password=demo.password, name=demo.name)
-    )
+    try:
+        auth = auth_service.register(
+            RegisterRequestSchema(email=demo.email, password=demo.password, name=demo.name)
+        )
+    except EmailAlreadyRegisteredException as e:
+        # Login failed but the email exists: someone else's account, which the seed must not touch.
+        raise DemoAccountTakenError(demo.email) from e
     current_user = auth_service.get_current_user(auth.token)
     user_service = get_from_di_container(IUserService)
     avatar_url = None if demo.avatar is None else f"https://i.pravatar.cc/300?img={demo.avatar}"

@@ -15,7 +15,7 @@ from app.bookings.models.booking import Booking, BookingStatus
 from app.config.settings import Settings
 from app.database.session_factory import ISessionFactory
 from app.favorites.models.favorite import Favorite
-from app.seed import SeedRefusedError, seed
+from app.seed import DemoAccountTakenError, SeedRefusedError, seed
 from app.spaces.models.space import Space
 from app.users.models.user import User
 from app.utils.clock import IClock, local_hour_to_utc
@@ -161,6 +161,21 @@ def test_seed_refuses_to_run_outside_dev() -> None:
         add_to_di_container(Settings, settings)
 
     assert _count(User) == 0
+
+
+def test_seed_stops_when_a_demo_email_has_another_password(client: TestClient) -> None:
+    response = client.post(
+        "/api/auth/register",
+        json={"name": "Someone Else", "email": "marko@zona.app", "password": "another-password"},
+    )
+    assert response.status_code == 201, response.text
+
+    with pytest.raises(DemoAccountTakenError, match="marko@zona.app"):
+        seed()
+
+    # The run rolled back as a whole: only the account registered above is left.
+    assert _count(User) == 1
+    assert _count(Space) == 0
 
 
 def test_seed_restores_the_clock_it_found(fixed_clock: FixedClock) -> None:
