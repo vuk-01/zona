@@ -118,7 +118,7 @@ A guest books a space for one date and a time slot in whole hours. Code: backend
 | ---------- | -------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------- |
 | id         | number                                                                           | yes      | assigned by the backend                                                          |
 | spaceId    | number                                                                           | yes      | the booked space                                                                 |
-| space      | `{id, name, address, hostId}`                                                    | yes      | read-only summary joined by the backend                                          |
+| space      | `{id, name, address, hostId, imageUrl}`                                          | yes      | read-only summary joined by the backend; `imageUrl` is the space's first image, or null |
 | guest      | `{id, name, avatarUrl}`                                                          | yes      | read-only; the signed-in user, taken from the token, never from the body         |
 | date       | `YYYY-MM-DD`                                                                     | yes      | local date in Podgorica; from today to 365 days after today; only `YYYY-MM-DD`, also in the `date` filter |
 | startTime  | `HH:mm`, whole hour, `00:00`–`23:00`                                             | yes      | local time (Europe/Podgorica); inside the space's opening hours for that weekday |
