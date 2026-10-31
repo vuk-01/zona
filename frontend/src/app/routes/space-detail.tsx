@@ -1,5 +1,6 @@
 import { MapPinOff } from 'lucide-react'
-import { Link, useParams } from 'react-router'
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router'
 
 import { FavoriteHeart } from '@/app/favorite-heart'
 import { useLoginDialog } from '@/app/login-dialog'
@@ -16,6 +17,7 @@ import { SpaceDetailSkeleton } from '@/features/spaces/components/space-detail-s
 import { SpaceGallery } from '@/features/spaces/components/space-gallery'
 import { SpaceSummary } from '@/features/spaces/components/space-summary'
 import { canView } from '@/features/spaces/types'
+import { useSwitchMode } from '@/features/users/api/use-users'
 import { HostCard } from '@/features/users/components/host-card'
 import { isNotFound } from '@/lib/api-client'
 import { cn } from '@/lib/utils'
@@ -27,6 +29,10 @@ export function SpaceDetail() {
   const { data: space, isLoading, error, refetch, isRefetching } = useSpace(Number(id))
   const { data: user, isPending: userPending } = useCurrentUser()
   const openLogin = useLoginDialog()
+  const navigate = useNavigate()
+  // A host in guest mode manages their space from here: the switch saves host mode, then goes on
+  const switchMode = useSwitchMode()
+  const [manageTo, setManageTo] = useState<string>()
 
   if (isLoading || (space && space.status === 'draft' && userPending)) return <SpaceDetailSkeleton />
 
@@ -88,7 +94,19 @@ export function SpaceDetail() {
       </div>
       <aside className="lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-start">
         {isOwner ? (
-          <OwnSpaceNotice spaceId={space.id} />
+          <OwnSpaceNotice
+            spaceId={space.id}
+            onManage={
+              user?.mode === 'guest'
+                ? (to) => {
+                    setManageTo(to)
+                    switchMode.mutate({ id: user.id, mode: 'host' }, { onSuccess: () => navigate(to) })
+                  }
+                : undefined
+            }
+            managingTo={switchMode.isPending ? manageTo : undefined}
+            manageFailed={switchMode.isError}
+          />
         ) : (
           <BookingForm
             space={space}
