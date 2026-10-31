@@ -406,7 +406,7 @@ open a dialog over the current page instead of going to `/login`
 ## Profile (`/profile`, from profilePageUI)
 
 - The hero panel holds the page title and the header: `UserAvatar` (`lg`), name, role ("Guest" /
-  "Guest and host"), city with `MapPin`. Under it two cards, `gap-6 md:gap-8`, each
+  "Guest and host"), city with `MapPin`. Under it three cards, `gap-6 md:gap-8`, each
   `rounded-lg border bg-card p-4 md:p-6`, no shadow (they are not clickable, so they do not lift); they
   fade in on scroll:
   1. "Personal information": `text-lg` title and an outline pill "Edit" (`Pencil`) above a divider, then
@@ -414,14 +414,23 @@ open a dialog over the current page instead of going to `/login`
      since, Role; About spans the whole row. One column on phones, 2 at `md`, 3 at `lg`. A missing
      value says "Not set" / "No bio yet." in `muted-foreground`.
   2. "Mode": one line ("You are renting spaces now." / "You are hosting now.") and the mode switch.
+  3. "Delete account": one line on what goes with it and an outline pill "Delete account" (`Trash2`,
+     `border-destructive text-destructive`, filled on hover), last so it is never the first thing in
+     reach.
 - "Edit" turns the pairs into fields in the same card (the fields fade in, and the values again after
   Save or Cancel): Name, City (optional) and About (optional, with
   an x/200 counter); email and password changes come with the backend. `primary` "Save" + outline
-  "Cancel", full width on phones; disabled with a spinner while saving; a server error in the
-  `role="alert"` box. Focus goes to Name on Edit and back to "Edit" after Save or Cancel; after saving,
-  a status notice says "Your profile was saved."
+  "Cancel", full width on phones; "Save" is disabled until a value differs from the one Edit started
+  with, and with a spinner while saving; a server error in the `role="alert"` box. Focus goes to Name
+  on Edit and back to "Edit" after Save or Cancel; after saving, a status notice says "Your profile
+  was saved."
+- "Delete account" follows "Delete confirmation": `AlertDialog` "Delete your account?", what goes with
+  it (profile, spaces, bookings, favorites), that it logs out and can't be undone; Cancel (outline) +
+  "Delete account" (`bg-destructive`). It stays open while deleting and on an error, shown in the
+  `role="alert"` line above the buttons. Afterwards the app goes home, signed out, and a toast says
+  "Your account was deleted."
 - Code: `features/users/components/profile-details.tsx` (and `profile-header.tsx`,
-  `profile-mode-card.tsx`).
+  `profile-mode-card.tsx`, `delete-account-card.tsx`, `delete-account-dialog.tsx`).
 
 ## Accessibility
 

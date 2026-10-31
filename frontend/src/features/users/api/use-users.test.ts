@@ -94,14 +94,32 @@ describe('deleting the account', () => {
     for (const unsubscribe of onScreen) unsubscribe()
   })
 
+  it('calls onDeleted after the token is cleared and before the user is', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+    const seen: { user: unknown; token: string | null }[] = []
+    const onDeleted = () =>
+      seen.push({ user: queryClient.getQueryData(currentUserQueryKey), token: getToken() })
+
+    await new MutationObserver(queryClient, deleteAccountOptions(queryClient, onDeleted)).mutate(user.id)
+
+    // The route leaves the page while the user is still in the cache, so RequireAuth does not
+    // redirect, and the page it opens loads without the dead token
+    expect(seen).toEqual([{ user, token: null }])
+    expect(queryClient.getQueryData(currentUserQueryKey)).toBeNull()
+  })
+
   it('keeps the session when the backend refuses', async () => {
     const body = { detail: 'Only the account owner can change this account', code: 'not_account_owner' }
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify(body), { status: 403, headers: { 'Content-Type': 'application/json' } }),
     )
 
-    await expect(deleteAccount(user.id)).rejects.toMatchObject({ status: 403, code: 'not_account_owner' })
+    const onDeleted = vi.fn()
+    const observer = new MutationObserver(queryClient, deleteAccountOptions(queryClient, onDeleted))
 
+    await expect(observer.mutate(user.id)).rejects.toMatchObject({ status: 403, code: 'not_account_owner' })
+
+    expect(onDeleted).not.toHaveBeenCalled()
     expect(getToken()).toBe('token-7')
     expect(queryClient.getQueryData(currentUserQueryKey)).toEqual(user)
   })
