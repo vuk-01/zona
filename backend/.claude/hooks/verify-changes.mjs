@@ -50,7 +50,9 @@ process.stdin.on('end', () => {
 
     let changed
     try {
-      changed = [...new Set([...git(['diff', '--name-only', 'HEAD']), ...git(['ls-files', '--others', '--exclude-standard'])])]
+      // Both lists relative to `root` (backend/), the way the files are joined below: `git diff` prints
+      // paths from the repo root unless --relative; `ls-files` is already relative to the cwd.
+      changed = [...new Set([...git(['diff', '--name-only', '--relative', 'HEAD']), ...git(['ls-files', '--others', '--exclude-standard'])])]
     } catch {
       process.exit(0) // no git: nothing to compare against
     }
