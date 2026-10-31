@@ -149,7 +149,32 @@ login). Also unchecked: whether React `StrictMode` (`src/main.tsx`, development 
 3. Both 1 and 2.
 4. A global `staleTime` on the `QueryClient`: affects every list too, so it is a wider decision.
 
-## From the PR 2 UI review (left out of `feat/frontend-auth-users` on purpose)
+## Frontend: logout from /favorites sends one request without a token
+
+Logging out from `/`, or deleting the account, sends no request without a token (fixed in PR 2,
+`useLogout` in `features/auth/api/use-auth.ts`). Logging out from `/favorites` still sends one
+`GET /api/favorites?size=500` without `Authorization`, answered `401 not_authenticated` (one
+"Failed to load resource" in the console). The user still ends up logged out on `/`.
+
+What the request log shows (checked by hand, a `fetch` logger in the page):
+- `onLoggedOut` navigates to `/` with `flushSync`, and Home mounts. `useCurrentUser` has
+  `staleTime` 0, so the mount refetches `GET /api/auth/me`, still **with** the token (200), and puts the
+  user back into the cache. The hearts then mount with that user, and their favorites query runs after
+  the token is gone.
+- Tried in PR 2 and reverted: clearing the user and removing `['favorites']`/`['bookings']` **before**
+  `onLoggedOut()`. The `/auth/me` refetch on mount still runs with the token and brings the user back,
+  so the request without a token stays.
+- Not checked: whether the hearts' observers subscribe in effects after `onSuccess` has finished (that
+  would be why removing the query first does not help).
+
+Options (not decided):
+1. A `staleTime` for `useCurrentUser` (see "extra `GET /api/auth/me` after login and sign-up" above):
+   no `/auth/me` refetch on mount, so the user cannot come back during logout.
+2. Clear the token first and accept the redirect risk, with a different way to keep `RequireAuth` from
+   sending a deliberate log out to `/login?redirect=…` (e.g. a "logging out" flag it reads).
+3. Let the favorites query run only while there is a token (a check in `use-favorites.ts`, in the
+   favorites feature).
+
 
 - **Error text contrast in the login dialog, light theme.** The dialog's forms sit on `background`
   (`oklch(0.965 0.018 255)`), and light `destructive` (`oklch(0.58 0.2 27)`) on it is **4.27:1** for
