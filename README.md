@@ -41,8 +41,10 @@ saves logging in again. The frontend moves from the mock to the API step by step
 
 ## Demo users
 
-The mock data lives in `frontend/src/lib/mock-db.ts` and resets on every page reload.
-Every account uses the password `zona1234`.
+Spaces and favorites come from the backend's demo data, `poetry run seed` (see `backend/README.md`).
+The accounts below are still the frontend's mock (`frontend/src/lib/mock-db.ts`, reset on every page
+reload) until sign-in moves to the API; the table follows the seed once it has these accounts. Every
+account uses the password `zona1234`.
 
 | Email | Name | Account |
 | --- | --- | --- |

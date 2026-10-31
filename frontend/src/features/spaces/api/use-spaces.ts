@@ -1,23 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import { NotFoundError } from '@/lib/mock-db'
+import type { NewSpace, SpaceFilters } from '../types'
+import { type Pagination, spacesApi } from './spaces-api'
 
-import type { NewSpace, SpaceFilters, SpaceHost } from '../types'
-import { spacesApi } from './spaces-api'
-
-export function useSpaces(filters: SpaceFilters = {}) {
+// One page of spaces (the backend's default is 50); `pagination` is part of the key, so a list of 50
+// and a list of 500 with the same filters are two queries.
+export function useSpaces(filters: SpaceFilters = {}, pagination: Pagination = {}) {
   return useQuery({
-    queryKey: ['spaces', filters],
-    queryFn: () => spacesApi.list(filters),
+    queryKey: ['spaces', filters, pagination],
+    queryFn: ({ signal }) => spacesApi.list(filters, pagination, signal),
   })
 }
 
+// A missing space (404, or 422 for an id like "abc") is not retried: the global retry in
+// src/app/providers.tsx only tries failures that can go away on their own.
 export function useSpace(id: number) {
   return useQuery({
     queryKey: ['spaces', id],
-    queryFn: () => spacesApi.get(id),
-    // A missing space stays missing; only retry other errors (the default is 3 tries)
-    retry: (failureCount, error) => !(error instanceof NotFoundError) && failureCount < 3,
+    queryFn: ({ signal }) => spacesApi.get(id, signal),
   })
 }
 
@@ -25,7 +25,7 @@ export function useSpace(id: number) {
 export function useCreateSpace() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ input, host }: { input: NewSpace; host: SpaceHost }) => spacesApi.create(input, host),
+    mutationFn: (input: NewSpace) => spacesApi.create(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['spaces'] }),
   })
 }

@@ -1,10 +1,10 @@
 import { skipToken, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
-import type { Favorite } from '@/lib/favorite'
-
+import type { Favorite } from '../types'
 import { favoritesApi } from './favorites-api'
 
-// null: a visitor; undefined: the session is still loading. Neither has favorites to load.
+// null: a visitor; undefined: the session is still loading. Neither has favorites to load. The API takes
+// the user from the token; the id only keeps one user's favorites apart from another's in the cache.
 type MaybeUserId = number | null | undefined
 
 const favoritesKey = (userId: MaybeUserId) => ['favorites', { userId }] as const
@@ -17,7 +17,7 @@ const toSpaceIds = (favorites: Favorite[]) => new Set(favorites.map((f) => f.spa
 export function useFavoriteIds(userId: MaybeUserId) {
   return useQuery({
     queryKey: favoritesKey(userId),
-    queryFn: typeof userId === 'number' ? () => favoritesApi.list(userId) : skipToken,
+    queryFn: typeof userId === 'number' ? ({ signal }) => favoritesApi.list(signal) : skipToken,
     select: toSpaceIds,
   })
 }
@@ -36,9 +36,9 @@ export function useSetFavorite() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationKey: ['favorites'],
-    mutationFn: async ({ userId, spaceId, saved }: SetFavoriteInput) => {
-      if (saved) await favoritesApi.create(userId, spaceId)
-      else await favoritesApi.remove(userId, spaceId)
+    mutationFn: async ({ spaceId, saved }: SetFavoriteInput) => {
+      if (saved) await favoritesApi.create(spaceId)
+      else await favoritesApi.remove(spaceId)
     },
     onMutate: async ({ userId, spaceId, saved }) => {
       const queryKey = favoritesKey(userId)

@@ -163,7 +163,7 @@ A slot that breaks the rules returns `422 invalid_slot` with the message in `det
 
 ## Favorite
 
-A space a user saved with the heart. Code: backend `backend/app/favorites/`; frontend `frontend/src/features/favorites/`, `frontend/src/lib/favorite.ts`.
+A space a user saved with the heart. Code: backend `backend/app/favorites/`; frontend `frontend/src/features/favorites/` (type in `types.ts`).
 
 | Field     | Type   | Required | Notes                                                                          |
 | --------- | ------ | -------- | ------------------------------------------------------------------------------ |

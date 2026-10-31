@@ -46,8 +46,12 @@ const spaceFormSchema = z
       error: 'Pick a category',
     }),
     deskCount: z.string().trim(),
-    city: z.string().trim().min(1, 'Enter the city'),
-    address: z.string().trim().min(1, 'Enter the street address'),
+    city: z.string().trim().min(1, 'Enter the city').max(80, 'Keep the city under 80 characters'),
+    address: z
+      .string()
+      .trim()
+      .min(1, 'Enter the street address')
+      .max(120, 'Keep the address under 120 characters'),
     pricePerHour: z
       .string()
       .trim()
@@ -76,6 +80,7 @@ const spaceFormSchema = z
             .string()
             .trim()
             .min(1, 'Paste a link to a photo')
+            .max(500, 'Use a link of at most 500 characters')
             .refine(isHttpUrl, 'Enter a link that starts with https://'),
         }),
       )
