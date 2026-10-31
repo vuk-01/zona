@@ -55,7 +55,8 @@ export function DeleteSpaceDialog({ space, onDeleted }: DeleteSpaceDialogProps) 
   const onOpenChange = (next: boolean) => {
     if (deleteSpace.isPending) return
     setOpen(next)
-    if (!next) deleteSpace.reset()
+    // On open and on close: a 409 from last time never keeps the dialog blocked
+    deleteSpace.reset()
   }
 
   return (
