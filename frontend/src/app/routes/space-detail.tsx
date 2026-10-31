@@ -34,7 +34,9 @@ export function SpaceDetail() {
   const switchMode = useSwitchMode()
   const [manageTo, setManageTo] = useState<string>()
 
-  if (isLoading || (space && space.status === 'draft' && userPending)) return <SpaceDetailSkeleton />
+  // Wait for the user too: a draft is only shown to its host, and the host sees "This is your space"
+  // instead of the booking form, so deciding before the user loads would flash the wrong one
+  if (isLoading || userPending) return <SpaceDetailSkeleton />
 
   if (isNotFound(error) || (space && !canView(space, user?.id))) {
     return (
@@ -110,7 +112,7 @@ export function SpaceDetail() {
         ) : (
           <BookingForm
             space={space}
-            user={userPending ? undefined : (user ?? null)}
+            user={user ?? null}
             onLogin={(continueWith) => openLogin({ continueWith })}
           />
         )}
