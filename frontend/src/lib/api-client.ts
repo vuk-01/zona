@@ -127,6 +127,16 @@ export const api = {
   },
 }
 
+// A failure that can go away on its own: no answer (0), a timeout (408), too many requests (429) or
+// a server error (5xx). Other answers (403, 404, 422, a 2xx outside the contract) come back the same
+// every time. Not an ApiError: an error in the code around the request, retried as before.
+export const isTransient = (error: unknown) =>
+  !(error instanceof ApiError) ||
+  error.status === 0 ||
+  error.status === 408 ||
+  error.status === 429 ||
+  error.status >= 500
+
 // Only for a GET by id: the record does not exist (404), or the id in the path is not a valid id (422).
 export const isNotFound = (error: unknown) =>
   error instanceof ApiError && (error.status === 404 || error.status === 422)

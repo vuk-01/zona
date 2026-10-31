@@ -3,14 +3,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { Toaster } from '@/components/ui/sonner'
-import { ApiError } from '@/lib/api-client'
+import { isTransient } from '@/lib/api-client'
 import { onSessionChanged, onSessionExpired } from '@/lib/auth-token'
 import { currentUserQueryKey } from '@/lib/user'
 
-// A 4xx from the backend (not found, no access, invalid input) gives the same answer every time, so
-// it is not retried. Anything else gets TanStack Query's default of 3 tries, as the mock always had.
-const retry = (failureCount: number, error: Error) =>
-  !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 3
+// Only a failure that can go away on its own (isTransient: no answer, 408, 429, 5xx) is tried again,
+// up to TanStack Query's default of 3 times; not found, no access or invalid input fail at once.
+const retry = (failureCount: number, error: Error) => isTransient(error) && failureCount < 3
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry } } })
 

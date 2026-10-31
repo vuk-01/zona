@@ -61,7 +61,7 @@ Dependency direction: shared code -> features -> app, never the other way around
 - Protected routes are wrapped in `RequireAuth` (`mode="host"` for `/host/*`) in `src/app/router.tsx`
 - `src/lib/`: `utils.ts` (`cn`), `mock-db.ts` (mock database and delay), `auth-token.ts` (the API
   token in `localStorage`, `onSessionExpired` and `onSessionChanged` for `src/app`; tested in `auth-token.test.ts`), `api-client.ts` (`api.get/post/patch/delete`
-  on `/api`, `ApiError`, `Page<T>`, `isNotFound`, `errorMessage`; tested in `api-client.test.ts`) and `form-errors.ts` (`applyFieldErrors`, tested in `form-errors.test.ts`: the
+  on `/api`, `ApiError`, `Page<T>`, `isNotFound`, `isTransient`, `errorMessage`; tested in `api-client.test.ts`) and `form-errors.ts` (`applyFieldErrors`, tested in `form-errors.test.ts`: the
   backend's `fieldErrors` on react-hook-form fields)
 
 ## Rules

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, api, errorMessage, isNotFound } from './api-client'
+import { ApiError, api, errorMessage, isNotFound, isTransient } from './api-client'
 import { clearToken, getToken, onSessionExpired, setToken } from './auth-token'
 
 const fetchMock = vi.fn<typeof fetch>()
@@ -282,6 +282,17 @@ describe('helpers', () => {
     expect(isNotFound(new ApiError(422, 'validation_error', 'Validation failed'))).toBe(true)
     expect(isNotFound(new ApiError(409, 'slot_full', 'No desks left at 10:00'))).toBe(false)
     expect(isNotFound(new Error('Space with id 9 does not exist'))).toBe(false)
+  })
+
+  it('isTransient is true for no answer, 408, 429 and 5xx, false for other answers', () => {
+    expect(isTransient(new ApiError(0, 'network_error', 'x'))).toBe(true)
+    expect(isTransient(new ApiError(408, 'request_timeout', 'x'))).toBe(true)
+    expect(isTransient(new ApiError(429, 'too_many_requests', 'x'))).toBe(true)
+    expect(isTransient(new ApiError(502, 'server_unavailable', 'x'))).toBe(true)
+    expect(isTransient(new Error('mock failed'))).toBe(true)
+    expect(isTransient(new ApiError(404, 'space_not_found', 'x'))).toBe(false)
+    expect(isTransient(new ApiError(422, 'validation_error', 'x'))).toBe(false)
+    expect(isTransient(new ApiError(200, 'unexpected_response', 'x'))).toBe(false)
   })
 
   it('errorMessage shows the detail of an ApiError and the fallback otherwise', () => {
