@@ -12,9 +12,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import type { Booking } from '@/lib/booking'
+import { errorMessage } from '@/lib/api-client'
 
 import { useCancelBooking } from '../api/use-bookings'
+import type { Booking } from '../types'
 import { formatBookingDate } from './format-booking'
 
 type CancelBookingDialogProps = {
@@ -81,7 +82,7 @@ export function CancelBookingDialog({ booking, onCancelled }: CancelBookingDialo
             className="flex items-center justify-center gap-2 text-sm text-destructive sm:justify-start"
           >
             <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
-            Could not cancel the booking. Please try again.
+            {errorMessage(cancelBooking.error, 'Could not cancel the booking. Please try again.')}
           </p>
         )}
         <AlertDialogFooter>

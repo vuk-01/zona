@@ -4,11 +4,9 @@ import { Link } from 'react-router'
 
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { UserAvatar } from '@/components/user-avatar'
-import { type Booking, isActive } from '@/lib/booking'
 
-import { type BookableSpace, STATUS_LABELS } from '../types'
+import { type Booking, STATUS_LABELS, isActive } from '../types'
 import { CancelBookingDialog } from './cancel-booking-dialog'
 import { bookingHours, formatBookingDate } from './format-booking'
 import { ReservationActions, type ReservationDecision } from './reservation-actions'
@@ -30,35 +28,24 @@ const statusBadge = cva('rounded-full', {
 
 type BookingCardProps = {
   booking: Booking
-  // The space's cover photo, joined in by the route: undefined while the spaces load, null when there is none
-  imageUrl?: string | null
   // guest: one of their own bookings, with "Cancel booking" while it is active. host: a booking of one of
   // their spaces, with the guest and, while it is pending, Approve and Decline.
   variant?: 'guest' | 'host'
   onCancelled?: (booking: Booking) => void
-  // host: the booked space, which approving checks the overlap rule against (joined in by the route)
-  space?: BookableSpace
   onReviewed?: (booking: Booking, decision: ReservationDecision) => void
 }
 
 // A booking. The whole card opens the space page: the name is a link stretched over the card, and the
 // actions sit above it, so a button is never inside the link. Hovering the link lifts the card like a
 // space card (DESIGN.md "Motion"); hovering a button does not.
-export function BookingCard({
-  booking,
-  imageUrl,
-  variant = 'guest',
-  onCancelled,
-  space,
-  onReviewed,
-}: BookingCardProps) {
+export function BookingCard({ booking, variant = 'guest', onCancelled, onReviewed }: BookingCardProps) {
   const hours = bookingHours(booking.startTime, booking.endTime)
+  // The space's cover photo comes with the booking; null when the space has none
+  const imageUrl = booking.space.imageUrl
 
   return (
     <Card className="group relative h-full gap-4 overflow-hidden rounded-lg pt-0 pb-4 shadow-none transition-[translate,box-shadow,border-color] duration-300 ease-out has-[a:hover]:border-primary/60 has-[a:hover]:shadow-lift has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring motion-safe:has-[a:hover]:-translate-y-1">
-      {imageUrl === undefined ? (
-        <Skeleton className="aspect-[16/10] w-full rounded-lg" />
-      ) : imageUrl === null ? (
+      {imageUrl === null ? (
         <div className="flex aspect-[16/10] w-full items-center justify-center rounded-lg bg-muted text-muted-foreground">
           <ImageOff className="size-6" aria-hidden="true" />
         </div>
@@ -121,7 +108,7 @@ export function BookingCard({
         )}
         {variant === 'host' && booking.status === 'pending' && (
           <div className="relative z-10">
-            <ReservationActions booking={booking} space={space} onReviewed={onReviewed} />
+            <ReservationActions booking={booking} onReviewed={onReviewed} />
           </div>
         )}
       </CardContent>
