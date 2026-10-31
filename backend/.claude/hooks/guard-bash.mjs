@@ -15,17 +15,18 @@ const RULES = [
   [/^git\s+clean\s+(?:.*\s)?(?:-[a-zA-Z]*f[a-zA-Z]*|--force)\b/, 'git clean -f deletes untracked files; ask the user first'],
   [/^git\s+(?:checkout|restore)\s+(?:--\s+|--staged\s+|--worktree\s+)*\.(?:\s|$)/, 'git checkout . / git restore . throws away every uncommitted change; ask the user first'],
   [/^git\s+branch\s+(?:.*\s)?-D(?:\s|$)/, 'git branch -D deletes a branch for good; ask the user first'],
-  [/^(?:poetry\s+run\s+)?alembic\s+downgrade\b/, 'alembic downgrade drops tables and columns with their data; ask the user first (rules/backend-db.md)'],
+  [/^(?:poetry\s+(?:(?:-C|--directory|-P|--project)(?:=|\s+)\S+\s+)?run\s+)?alembic\s+downgrade\b/,'alembic downgrade drops tables and columns with their data; ask the user first (rules/backend-db.md)'],
   [/^docker(?:\s+compose|-compose)\s+down\b(?:.*\s)?(?:-v|--volumes|-[a-zA-Z]*v[a-zA-Z]*)(?:\s|$)/, 'docker compose down -v deletes the database volume; ask the user first'],
   [/^docker\s+volume\s+(?:rm|prune)\b/, 'deleting Docker volumes deletes data; ask the user first'],
   [/^(?:cat|less|more|head|tail|bat|type|Get-Content|strings)\s+(?:-\S+\s+)*\S*\.env(?!\.example)(?:\.\w+)?(?:\s|$)/, '.env holds secrets and is never printed; read .env.example instead (rules/safety.md)'],
-  [/^(?:uv\s+add|uv\s+pip\s+install|pip3?\s+install|poetry\s+add)\b/, 'a new backend dependency needs approval: name the package, why it is needed and the alternative, then let the user run `poetry add <package>` themselves (rules/safety.md, ADR-013)'],
+  [/^(?:uv\s+add|uv\s+pip\s+install|pip3?\s+install|poetry\s+(?:(?:-C|--directory|-P|--project)(?:=|\s+)\S+\s+)?add)\b/,'a new backend dependency needs approval: name the package, why it is needed and the alternative, then let the user run `poetry add <package>` themselves (rules/safety.md, ADR-013)'],
 ]
 
 // `rm -r` (any flag spelling) aimed at a source tree, the repo root, the home folder or a bare wildcard.
-// `rm -rf .venv` or `rm -rf data/*.db` stay allowed.
+// Paths are matched as typed in backend/ (`app/`) and at the repo root (`backend/app/`, `frontend/src/`).
+// `rm -rf .venv`, `rm -rf data/*.db`, `rm -rf frontend/dist` or `rm -rf frontend/node_modules` stay allowed.
 const PROTECTED_RM_TARGET =
-  /^(?:\.\/)?(?:(?:app|tests|alembic|docs)(?:\/|$)|\.claude(?:\/|$)|\.git(?:\/|$)|\/$|~\/?$|\*$|\.\.?\/?$)|\/(?:app|tests|alembic|\.claude)\/?$/
+  /^(?:\.\/)?(?:(?:backend\/)?(?:app|tests|alembic|docs|\.claude)(?:\/|$)|(?:backend|frontend)\/?$|frontend\/src(?:\/|$)|\.git(?:\/|$)|\/$|~\/?$|\*$|\.\.?\/?$)|\/(?:app|tests|alembic|alembic\/versions|\.claude|backend|frontend|frontend\/src)\/?$/
 
 // Destructive SQL handed to a database shell (`psql -c "..."`, `sqlite3 data/app.db "..."`).
 const DB_SHELL = /^(?:psql|sqlite3|pgcli|litecli)\b/
