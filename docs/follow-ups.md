@@ -72,22 +72,15 @@ a list grows past that.
   `fieldErrors` entry (`booking_in_past`, a date past 365 days) as a signed-in demo guest and check
   that focus lands once, on the right field; keep one of the two.
 
-## Frontend: Delete account on Profile
+## Contract: "Host since" is the sign-up date
 
-`useDeleteAccount` (`frontend/src/features/users/api/use-users.ts`) calls `DELETE /api/users/:id`,
-then clears the token and the signed-in user, but no screen calls it yet.
-
-- A "Delete account" button on Profile with an `AlertDialog` confirmation, and a section for it in
-  `frontend/DESIGN.md`, modeled on "Delete confirmation" (what happens, that it can't be undone,
-  Cancel + `bg-destructive` "Delete").
-- `useDeleteAccount` gets `onDeleted?: () => void` (and `deleteAccountOptions(queryClient, onDeleted)`),
-  called first in `onSuccess`, like `onLoggedOut` in `useLogout`; the button passes the navigation to
-  `/`. An `onSuccess` given to `mutate()` is not enough: it runs only after the hook's own `onSuccess`,
-  when the user is already cleared, so `RequireAuth` would send them to `/login?redirect=/profile`.
-  `use-users.test.ts` checks the order (`onDeleted` runs while the user is still in the cache).
-- **Not checked by hand yet:** the hook's logic is covered by `use-users.test.ts`
-  (`deleteAccountOptions`), but the flow from the UI (click → hook → signed out → navigation) can
-  only be checked once the button exists.
+"Hosted by …" on a space page (`frontend/src/features/users/components/host-card.tsx`) says "Host
+since {month year}" from `createdAt`, the date the account was registered, not the day the user first
+switched to host mode. For a guest who became a host later (Teodora in the seed) it is too early.
+The real date needs a new field in the contract, e.g. `hostSince: date | null` on `User` and
+`PublicUser`, set by the backend the first time `PATCH /api/users/:id {mode: "host"}` makes `isHost`
+true (and a migration that fills it from `createdAt` for existing hosts). Then `host-card.tsx` reads
+`hostSince`; both `entities.md` copies and `frontend/src/lib/user.ts` change in the same PR.
 
 ## Frontend: `RequireAuth` when the backend is down
 
@@ -222,13 +215,6 @@ bcrypt (e.g. SHA-256 → base64), which changes how stored hashes are checked. E
   `app/favorites/repositories/favorite.py` leave it on `"auto"`. No wrong answer was found: their
   `WHERE` is on the id only, not a compare-and-set. The fix would be `"fetch"`, for consistency with
   the bookings repository and `.claude/frequent-mistakes.md` (ADR-023).
-- **The `format` hook ignores `extend-exclude` and deletes new imports.** `backend/.claude/hooks/format.mjs`
-  passes the edited file to `ruff check --fix` and `black` by name, and both apply `extend-exclude`
-  (`alembic/versions` in `pyproject.toml`) only to files they find themselves, unless `--force-exclude`
-  is given. `--fix` also removes an import (F401) added in an edit before its first use, so the entry
-  about it in `.claude/frequent-mistakes.md` keeps coming back: the cause is the hook, not the agent.
-  Fix: `--force-exclude` for both commands and `--extend-unfixable F401` for ruff, then remove that
-  frequent-mistakes entry.
 - **`backend/app/database/__init__.py`** goes against `backend/CLAUDE.md` and ADR-014 (no
   `__init__.py` below `app/` except `app/__init__.py`). It only re-exports `Base`, for
   `alembic/env.py`; import `Base` from `app.database.base` there and delete the file.
@@ -433,6 +419,34 @@ These stay open:
 - The guard planned for `8dbecd30b036` (`if bind is None: return`) would not help: in offline mode
   `op.get_bind()` returns a `MockConnection`, not `None`. If the guard is ever needed, the right
   check is `context.is_offline_mode()`.
+
+## Backend: format and Stop hooks only run in a session started in `backend/`
+
+`guard-bash` and `guard-edits` are wired in the root `.claude/settings.json` too (tested in
+`backend/.claude/hooks/guards.test.mjs`). `format.mjs` (ruff + black after an edit) and
+`verify-changes.mjs` (the Stop check) are still wired only in `backend/.claude/settings.json`, so a
+session at the repo root leaves edited `.py` files unformatted and unchecked until CI. Both assume
+`CLAUDE_PROJECT_DIR` is `backend/` (`const backend = root`): registered in the root settings as they
+are, `format.mjs` would treat the repo root as the backend and `verify-changes.mjs` would run poetry
+outside `backend/`. Fix: `const backend = path.resolve(import.meta.dirname, '../..')` in both, run
+`verify-changes`' git commands with `cwd: backend` (so `--relative` lists only `backend/` files), then
+register both in the root settings. Cost to weigh first: from the root the Stop hook runs mypy and
+pytest (up to 180 s) whenever any `.py` file is modified, also one this session did not touch.
+`session-start.mjs` stays backend-only. Check both entry points by hand: an unused import in a
+modified file (Stop hook exit 2) from `backend/` and from the root.
+
+## Backend: guard-bash cannot catch every way to write a protected file
+
+`guard-bash` blocks writing `.env*` (except `.env.example`) and `poetry.lock` from the shell through
+`>` / `>>`, `tee`, `sed -i`, `cp` and `mv`. A pattern on the command text cannot see every way to write
+a file: `python -c "open('.env', 'w')..."`, `node -e`, `perl -pi`, `dd of=`, `install`, a script
+file that writes it, a path built from a variable (`f=.env; echo x > $f`), or `cp x backend/` when the
+source is named `.env`. These rules stop the agent's usual commands, not a determined bypass; the real
+line is that `.env` is gitignored and holds only local values. Committed migrations are not protected
+from the shell at all: `guard-edits` blocks the Edit and Write tools, but `sed -i` or a redirect into
+`alembic/versions/*.py` passes, because `guard-bash` would need to ask git whether each target is
+committed. If that is ever needed, it can reuse `isCommitted` from `guard-edits.mjs` for every write
+target under `alembic/versions/`.
 
 ## Frontend: a booking detail page
 

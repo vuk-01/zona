@@ -79,7 +79,10 @@ PR 1 only adds these files; no `*-api.ts` uses them yet, so it can be merged on 
   `remove` → `DELETE /users/:id` (204).
 - `create` and `NewUser` go (the contract has no `POST /users`), and so do `normalize` and
   `InvalidProfileError`.
-- `useDeleteAccount`: on success `clearToken()` and `setQueryData(currentUserQueryKey, null)`.
+- `useDeleteAccount(onDeleted?)`: on success `clearToken()` first (the token is dead, so Home must not
+  load with it), then `onDeleted` (Profile goes home while the user is still cached, so `RequireAuth`
+  does not redirect), then `setQueryData(currentUserQueryKey, null)`. The button is the "Delete
+  account" card on Profile (`delete-account-card.tsx`, `delete-account-dialog.tsx`).
 - `use-profile-form.ts`: `city` `.max(80)`; `profile-details.tsx` shows server errors through
   `applyFieldErrors`.
 - **`createdAt` fix:** `host-card.tsx:28` and `profile-details.tsx:94` build
@@ -293,7 +296,9 @@ curl -s http://localhost:5173/api/spaces | head -c 200
     logged out, toast.
 15. Backend down: the lists show their error state with "Try again"; once the backend is back,
     "Try again" works.
-16. Deleting the account → logged out.
+16. Deleting the account: on a new account from sign-up (never a demo account), Profile → the last
+    card, "Delete account" → the dialog → "Delete account" → `DELETE /api/users/:id 204`, the app goes
+    home logged out with the toast "Your account was deleted."; logging in with it answers `401`.
 
 ## PR split
 

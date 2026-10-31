@@ -1,6 +1,8 @@
 // PreToolUse hook (matcher: Edit|Write|MultiEdit): protects files that must not be edited by hand.
 // Exit 0 lets the edit happen. Exit 2 blocks it and sends the stderr message back to the agent.
 // Any parse or runtime failure exits 0, so a broken hook can never wedge the agent.
+// Wired in backend/.claude/settings.json and in the root .claude/settings.json; the tool sends an absolute
+// `file_path`, so `CLAUDE_PROJECT_DIR` being backend/ or the repo root changes nothing; tested in guards.test.mjs.
 //
 // 1. A committed Alembic migration is history: it has already run on someone else's database
 //    (a teammate's laptop, CI, a server). Editing it makes databases drift apart. A new revision is the fix.

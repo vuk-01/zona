@@ -22,6 +22,10 @@ You may talk to me in any language.
 - `pnpm build`: production build
 - `pnpm format`: Prettier formats `frontend/src/`
 
+## Hooks
+- `.claude/settings.json` runs Prettier on edited `frontend/` files and the backend's `guard-bash` and
+  `guard-edits` (`backend/.claude/hooks/`) on every command and edit, as in a session started in `backend/`
+
 ## Working in the monorepo
 - One change that touches frontend and backend goes in one commit or pull request
 - When an entity changes, update `docs/entities.md` in the same change
