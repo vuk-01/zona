@@ -42,21 +42,24 @@ export function useSignup() {
   })
 }
 
-// The order matters, and nothing may load without the token in between:
+// The order matters:
 // 1. `onLoggedOut` (leaving the page) runs before the user is cleared: on a protected page, clearing
 //    first would let RequireAuth send the user to /login?redirect=… right after a deliberate log out.
-//    What mounts there (the hearts on Home) still sends the token.
-// 2. The user is cleared, and the private lists (favorites, bookings) leave the cache without a
+//    The page it mounts refetches the signed-in user (GET /auth/me, still with the token).
+// 2. That /auth/me in flight is cancelled first: it would otherwise answer after the user is cleared
+//    and put them back in the cache, and the hearts would then load favorites without a token.
+// 3. The user is cleared, and the private lists (favorites, bookings) leave the cache without a
 //    request: the next render has no user, so their queries change key and stop (skipToken, enabled).
 //    Invalidating them would refetch them first, without a token: a 401 not_authenticated.
-// 3. Only then the token goes, and the spaces load again without it (no own drafts, no bookingCounts).
+// 4. Only then the token goes, and the spaces load again without it (no own drafts, no bookingCounts).
 export function useLogout(onLoggedOut?: () => void) {
   const queryClient = useQueryClient()
   return useMutation({
     // The backend has no logout route; the session ends in onSuccess, in the order above
     mutationFn: async () => undefined,
-    onSuccess: () => {
+    onSuccess: async () => {
       onLoggedOut?.()
+      await queryClient.cancelQueries({ queryKey: currentUserQueryKey })
       queryClient.setQueryData(currentUserQueryKey, null)
       queryClient.removeQueries({ queryKey: ['favorites'] })
       queryClient.removeQueries({ queryKey: ['bookings'] })
