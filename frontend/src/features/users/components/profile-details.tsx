@@ -130,13 +130,17 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
       {isEditing ? (
         <form noValidate onSubmit={onSubmit} className={`mt-6 flex flex-col gap-4 ${fadeIn}`}>
           <div className="grid gap-4 md:grid-cols-2">
-            <FormField
-              id="profile-name"
-              label="Name"
-              autoComplete="name"
-              error={errors.name?.message}
-              {...register('name')}
-            />
+            {/* content-start, like City: a message under City makes the row taller, and FormField's own
+                grid would otherwise stretch, moving the Name label and field down */}
+            <div className="grid content-start">
+              <FormField
+                id="profile-name"
+                label="Name"
+                autoComplete="name"
+                error={errors.name?.message}
+                {...register('name')}
+              />
+            </div>
             <div className="grid content-start gap-2">
               <Label htmlFor="profile-city" className="px-4">
                 City <span className="font-normal text-muted-foreground">(optional)</span>
