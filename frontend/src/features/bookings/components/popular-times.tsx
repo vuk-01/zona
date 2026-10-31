@@ -44,7 +44,9 @@ const barVariants = cva('w-full max-w-6 rounded-t-xs transition-colors', {
   },
 })
 
-const describe = (value: number) => (value === 0 ? 'quiet or closed' : `usually ${value}% booked`)
+// A 0 is "quiet" within the opening hours and "closed" outside them
+const describe = (value: number, open: boolean) =>
+  value > 0 ? `usually ${value}% booked` : open ? 'usually quiet' : 'closed'
 
 type PopularTimesProps = {
   spaceId: number
@@ -211,7 +213,7 @@ export function PopularTimes({ spaceId, openingHours }: PopularTimesProps) {
                 key={index}
                 type="button"
                 tabIndex={index === selected ? 0 : -1}
-                aria-label={`${formatHour(hourAt(index))}, ${describe(value)}`}
+                aria-label={`${formatHour(hourAt(index))}, ${describe(value, isOpenAt(openingHours[day], hourAt(index)))}`}
                 aria-current={index === selected ? 'true' : undefined}
                 className="flex h-full flex-1 items-end justify-center px-px outline-none focus-visible:rounded-xs focus-visible:ring-[3px] focus-visible:ring-ring"
                 onPointerEnter={() => setPicked(index)}

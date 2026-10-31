@@ -82,7 +82,6 @@ export function SpaceDetail() {
         !isOwner && 'pb-24 md:pb-0',
       )}
     >
-      {' '}
       <div className="flex min-w-0 flex-col gap-8">
         <div className="flex flex-col gap-4">
           {/* A draft is only seen by its host and never shows in Favorites, so it has no heart */}
