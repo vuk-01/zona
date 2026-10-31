@@ -96,6 +96,44 @@ When `GET /api/auth/me` fails with an error that is not a 401 (backend down, `5x
 although the token is still there. It should tell "no user" (`null`) apart from "don't know whether
 there is a user" (an error): for example an error state with "Try again" instead of the redirect.
 
+## Frontend: extra `GET /api/auth/me` after login and sign-up
+
+The manual check of PR 2 saw three `GET /api/auth/me` (all `200`, no loop) after every login and
+sign-up, on `/login`, `/signup` and through the login dialog. One is enough: login and register already
+answer the user.
+
+**Confirmed from the code:**
+- `['auth', 'me']` has no `staleTime` (neither `useCurrentUser` in
+  `frontend/src/features/auth/api/use-auth.ts` nor the `QueryClient` in `frontend/src/app/providers.tsx`,
+  which sets only `retry`), so it is TanStack Query's default `0`: the user is stale right after
+  `setQueryData`, and every new observer refetches it on mount (`refetchOnMount` default `true`), unless
+  a fetch is already running (then it joins that one).
+- `useSetCurrentUser` (login, sign-up, logout) calls `setQueryData(currentUserQueryKey, user)` with the
+  user from the answer and then `invalidateQueries({ queryKey: ['auth'] })`, which refetches the active
+  `['auth', 'me']` once more. That is one of the three, and it fetches what the cache already holds. On
+  logout it sends nothing (`me` without a token makes no request).
+- `useCurrentUser` is read in 13 places: `app/app-shell.tsx`, `app/favorite-heart.tsx` (one per space
+  card, so it mounts only once the spaces list has loaded), the routes `bookings`, `favorites`,
+  `host-reservations`, `host-space-edit`, `host-space-new`, `host-spaces`, `profile`, `space-detail`,
+  and `features/auth/components/account-menu.tsx`, `guest-only.tsx`, `require-auth.tsx`. After the login
+  the page changes (`GuestOnly` → the mode's home or `?redirect=`, the dialog → its `redirect`), and
+  these mount at different moments.
+
+**Not checked (needs the browser):** which mounts send the second and third request. Likely candidates:
+the route that mounts after the navigation (e.g. `RequireAuth` and the page on `/favorites`) and the
+hearts on the space cards, which mount after the spaces list loads again (`['spaces']` is invalidated on
+login). Also unchecked: whether React `StrictMode` (`src/main.tsx`, development only) adds one.
+
+**Options (not decided):**
+1. Drop `['auth']` from the invalidation in `useSetCurrentUser`: the user from the answer is already in
+   the cache. Removes one request; the mount refetches stay.
+2. A `staleTime` for `useCurrentUser` only (e.g. a few minutes, or `Infinity`): every change of the user
+   already goes through the cache (`setQueryData` on login, sign-up, logout, mode switch;
+   `invalidateQueries` on a profile edit; `onSessionExpired` and `onSessionChanged` in `providers.tsx`).
+   Removes the mount refetches; a change made elsewhere (another device) shows after a reload.
+3. Both 1 and 2.
+4. A global `staleTime` on the `QueryClient`: affects every list too, so it is a wider decision.
+
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
 - **Confirm after the space became a draft.** The contract does not say what happens; today the host
