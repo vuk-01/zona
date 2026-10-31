@@ -8,15 +8,21 @@ import { authApi } from './auth-api'
 export function useCurrentUser() {
   return useQuery({
     queryKey: currentUserQueryKey,
-    queryFn: authApi.me,
+    queryFn: ({ signal }) => authApi.me(signal),
   })
 }
 
+// The lists depend on the token too (the user's own drafts, bookingCounts, favorites, bookings), so
+// they load again for the new session, not only the signed-in user. Logging out has its own order.
 function useSetCurrentUser() {
   const queryClient = useQueryClient()
-  return (user: User | null) => {
+  return (user: User) => {
     queryClient.setQueryData(currentUserQueryKey, user)
-    return queryClient.invalidateQueries({ queryKey: ['auth'] })
+    return Promise.all(
+      [['auth'], ['spaces'], ['favorites'], ['bookings']].map((queryKey) =>
+        queryClient.invalidateQueries({ queryKey }),
+      ),
+    )
   }
 }
 
@@ -36,15 +42,29 @@ export function useSignup() {
   })
 }
 
-// `onLoggedOut` (leaving the page) runs before the user is cleared: on a protected page, clearing
-// first would let RequireAuth send the user to /login?redirect=… right after a deliberate log out.
+// The order matters:
+// 1. `onLoggedOut` (leaving the page) runs before the user is cleared: on a protected page, clearing
+//    first would let RequireAuth send the user to /login?redirect=… right after a deliberate log out.
+//    The page it mounts refetches the signed-in user (GET /auth/me, still with the token).
+// 2. That /auth/me in flight is cancelled first: it would otherwise answer after the user is cleared
+//    and put them back in the cache, and the hearts would then load favorites without a token.
+// 3. The user is cleared, and the private lists (favorites, bookings) leave the cache without a
+//    request: the next render has no user, so their queries change key and stop (skipToken, enabled).
+//    Invalidating them would refetch them first, without a token: a 401 not_authenticated.
+// 4. Only then the token goes, and the spaces load again without it (no own drafts, no bookingCounts).
 export function useLogout(onLoggedOut?: () => void) {
-  const setCurrentUser = useSetCurrentUser()
+  const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: authApi.logout,
-    onSuccess: () => {
+    // The backend has no logout route; the session ends in onSuccess, in the order above
+    mutationFn: async () => undefined,
+    onSuccess: async () => {
       onLoggedOut?.()
-      return setCurrentUser(null)
+      await queryClient.cancelQueries({ queryKey: currentUserQueryKey })
+      queryClient.setQueryData(currentUserQueryKey, null)
+      queryClient.removeQueries({ queryKey: ['favorites'] })
+      queryClient.removeQueries({ queryKey: ['bookings'] })
+      authApi.logout()
+      return queryClient.invalidateQueries({ queryKey: ['spaces'] })
     },
   })
 }

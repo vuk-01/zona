@@ -25,7 +25,7 @@ export function HostCard({ userId }: HostCardProps) {
       <div className="flex min-w-0 flex-col gap-1">
         <p className="font-semibold">Hosted by {host.name}</p>
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-          <span>Host since {sinceFormat.format(new Date(`${host.createdAt}T00:00:00Z`))}</span>
+          <span>Host since {sinceFormat.format(new Date(host.createdAt))}</span>
           {host.city && (
             <span className="flex items-center gap-1">
               <MapPin className="size-4" aria-hidden="true" />

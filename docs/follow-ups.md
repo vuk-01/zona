@@ -72,6 +72,146 @@ a list grows past that.
   `fieldErrors` entry (`booking_in_past`, a date past 365 days) as a signed-in demo guest and check
   that focus lands once, on the right field; keep one of the two.
 
+## Frontend: Delete account on Profile
+
+`useDeleteAccount` (`frontend/src/features/users/api/use-users.ts`) calls `DELETE /api/users/:id`,
+then clears the token and the signed-in user, but no screen calls it yet.
+
+- A "Delete account" button on Profile with an `AlertDialog` confirmation, and a section for it in
+  `frontend/DESIGN.md`, modeled on "Delete confirmation" (what happens, that it can't be undone,
+  Cancel + `bg-destructive` "Delete").
+- `useDeleteAccount` gets `onDeleted?: () => void` (and `deleteAccountOptions(queryClient, onDeleted)`),
+  called first in `onSuccess`, like `onLoggedOut` in `useLogout`; the button passes the navigation to
+  `/`. An `onSuccess` given to `mutate()` is not enough: it runs only after the hook's own `onSuccess`,
+  when the user is already cleared, so `RequireAuth` would send them to `/login?redirect=/profile`.
+  `use-users.test.ts` checks the order (`onDeleted` runs while the user is still in the cache).
+- **Not checked by hand yet:** the hook's logic is covered by `use-users.test.ts`
+  (`deleteAccountOptions`), but the flow from the UI (click → hook → signed out → navigation) can
+  only be checked once the button exists.
+
+## Frontend: `RequireAuth` when the backend is down
+
+When `GET /api/auth/me` fails with an error that is not a 401 (backend down, `5xx`, no network),
+`useCurrentUser` has no data, so `RequireAuth`
+(`frontend/src/features/auth/components/require-auth.tsx`) sends a signed-in user to `/login`
+although the token is still there. It should tell "no user" (`null`) apart from "don't know whether
+there is a user" (an error): for example an error state with "Try again" instead of the redirect.
+
+## Frontend: extra `GET /api/auth/me` after login and sign-up
+
+The manual check of PR 2 saw three `GET /api/auth/me` (all `200`, no loop) after every login and
+sign-up, on `/login`, `/signup` and through the login dialog. One is enough: login and register already
+answer the user.
+
+**Confirmed from the code:**
+- `['auth', 'me']` has no `staleTime` (neither `useCurrentUser` in
+  `frontend/src/features/auth/api/use-auth.ts` nor the `QueryClient` in `frontend/src/app/providers.tsx`,
+  which sets only `retry`), so it is TanStack Query's default `0`: the user is stale right after
+  `setQueryData`, and every new observer refetches it on mount (`refetchOnMount` default `true`), unless
+  a fetch is already running (then it joins that one).
+- `useSetCurrentUser` (login and sign-up) calls `setQueryData(currentUserQueryKey, user)` with the
+  user from the answer and then invalidates `['auth']`, `['spaces']`, `['favorites']` and `['bookings']`;
+  the `['auth']` part refetches the active `['auth', 'me']` once more. That is one of the three, and it
+  fetches what the cache already holds.
+- `useLogout` does not use it: it navigates (`onLoggedOut`), cancels the `/auth/me` in flight,
+  `setQueryData(currentUserQueryKey, null)`, removes the private lists (`['favorites']`, `['bookings']`),
+  clears the token and refetches `['spaces']`. Its `/auth/me` refetches after that send nothing (`me`
+  without a token makes no request).
+- `useCurrentUser` is read in 13 places: `app/app-shell.tsx`, `app/favorite-heart.tsx` (one per space
+  card, so it mounts only once the spaces list has loaded), the routes `bookings`, `favorites`,
+  `host-reservations`, `host-space-edit`, `host-space-new`, `host-spaces`, `profile`, `space-detail`,
+  and `features/auth/components/account-menu.tsx`, `guest-only.tsx`, `require-auth.tsx`. After the login
+  the page changes (`GuestOnly` → the mode's home or `?redirect=`, the dialog → its `redirect`), and
+  these mount at different moments.
+
+**Not checked (needs the browser):** which mounts send the second and third request. Likely candidates:
+the route that mounts after the navigation (e.g. `RequireAuth` and the page on `/favorites`) and the
+hearts on the space cards, which mount after the spaces list loads again (`['spaces']` is invalidated on
+login). Also unchecked: whether React `StrictMode` (`src/main.tsx`, development only) adds one.
+
+**Options (not decided):**
+1. Drop `['auth']` from the invalidation in `useSetCurrentUser`: the user from the answer is already in
+   the cache. Removes one request; the mount refetches stay.
+2. A `staleTime` for `useCurrentUser` only (e.g. a few minutes, or `Infinity`): every change of the user
+   already goes through the cache (`setQueryData` on login, sign-up, logout, mode switch;
+   `invalidateQueries` on a profile edit; `onSessionExpired` and `onSessionChanged` in `providers.tsx`).
+   Removes the mount refetches; a change made elsewhere (another device) shows after a reload.
+3. Both 1 and 2.
+4. A global `staleTime` on the `QueryClient`: affects every list too, so it is a wider decision.
+
+## Frontend: a session that expires refetches the private lists without a token
+
+For Ivana (`frontend/src/app/providers.tsx`, `onSessionExpired`). `expireSession` clears the token
+first, and `resetQueries()` then refetches the active `['favorites', userId]` right away, with the old
+key, before the next render has no user: probably one `401 not_authenticated` (not checked in the
+browser). Logging out avoids it with `removeQueries` (`useLogout` in
+`frontend/src/features/auth/api/use-auth.ts`).
+
+Proposal: `removeQueries` for `['favorites']` and `['bookings']` before `resetQueries()`. The
+`setQueryData(currentUserQueryKey, null)` there is redundant: `resetQueries()` right after it puts the
+signed-in user back to its initial state, and `me` without a token then answers `null`.
+
+## Frontend: `useLogout` has no test
+
+`deleteAccountOptions` in `frontend/src/features/users/api/use-users.ts` is tested without React
+(`use-users.test.ts`); `useLogout` (`frontend/src/features/auth/api/use-auth.ts`), whose order matters
+just as much, has no test. Move its options out into `logoutOptions(queryClient, onLoggedOut)` the same
+way and test the case where a `GET /api/auth/me` sent with the token answers after the logout: the user
+must stay `null` (the `cancelQueries` from PR 2) and no request goes out without the token.
+
+## Docs: the mock users in README.md and frontend/CLAUDE.md
+
+Auth and users use the backend since PR 2, and `src/lib/mock-db.ts` is deleted (in the merge of PR 4
+into `feat/frontend-auth-users`). These texts still describe the mock:
+- `README.md:13`: "auth and users are still an in-memory mock".
+- `README.md:46-48`: the frontend signs in against its own mock users (`frontend/src/lib/mock-db.ts`).
+- `README.md:74`: `src/lib/` holds "shared helpers and mock-db.ts".
+- `frontend/CLAUDE.md:34`: "auth and users are still a mock".
+- `frontend/CLAUDE.md:63`: `mock-db.ts` in the `src/lib/` list (the mock users, `delay`, `NotFoundError`).
+- `frontend/CLAUDE.md:78`: `src/lib/mock-db.ts` among the shared data whose changes are announced.
+
+Update them in the PR `feat/frontend-wiring → main`.
+
+## From the PR 2 UI review (left out of `feat/frontend-auth-users` on purpose)
+
+- **Error text contrast in the login dialog, light theme.** The dialog's forms sit on `background`
+  (`oklch(0.965 0.018 255)`), and light `destructive` (`oklch(0.58 0.2 27)`) on it is **4.27:1** for
+  14 px text; DESIGN.md "Accessibility" asks for 4.5:1. It affects the field errors
+  (`features/auth/components/stacked-auth-field.tsx`) and `FormAlert` in the dialog, e.g. the 409
+  "Email is already registered" and the 401 "Wrong email or password". On `card` (`/login`, `/signup`,
+  `/profile`) it is 4.75:1, and the dark theme passes everywhere. The token is older than PR 2.
+  Proposal: darken light `--destructive` in `frontend/src/index.css` a little (about L 0.55) and update
+  its note in `frontend/DESIGN.md`.
+- **`FormField` has no optional variant.** It always sets `aria-required="true"`, so the optional City
+  field in `features/users/components/profile-details.tsx` copies its markup by hand (label with
+  "(optional)", the pill input, the error `<p>`). Proposal: an `optional` prop on
+  `frontend/src/components/form/form-field.tsx` that leaves out `aria-required` and adds the
+  "(optional)" span; City then uses `FormField`.
+
+## Backend: the 72-character password limit and bcrypt's 72 bytes
+
+The contract (`docs/entities.md`, User) and the schemas (`backend/app/auth/schemas/auth.py`,
+`max_length=72`) count **characters**; bcrypt reads at most 72 **bytes** of UTF-8. Checked by hand on
+`feat/frontend-auth-users` against the local backend (bcrypt 4.3.0, `pyproject.toml` `^4.3.0`):
+
+- `POST /api/auth/register` with a password of 72 × "š" (144 bytes) → `201`.
+- `POST /api/auth/login` with the same password → `200`.
+- `POST /api/auth/login` with **another** password that has the same first 72 bytes (36 × "š" +
+  36 × "x") → `200`. bcrypt 4.3 silently cuts the input at 72 bytes, so only the first 72 bytes count.
+  The test account was deleted afterwards (`204`).
+- The comment in `backend/app/auth/password.py:5` ("longer input raises in bcrypt >= 4") does not match
+  4.3, which cuts without an error. bcrypt 5 raises `ValueError` for more than 72 bytes; with it,
+  `hash_password` (`password.py:9`) would fail on such a password and register would answer `500`
+  (not checked: 5 is not installed).
+- The frontend (zod `.max(72)` in `login-form.tsx`, `signup-form.tsx`) counts UTF-16 units: an emoji
+  counts as 2, so it can refuse a password the backend accepts.
+
+What it means, without a decision: either the contract and the schemas limit **bytes** (a validator
+on `len(password.encode("utf-8")) <= 72`, the message and `docs/entities.md` say so, and the frontend
+checks the same with `TextEncoder`), or the backend accepts longer passwords and pre-hashes them before
+bcrypt (e.g. SHA-256 → base64), which changes how stored hashes are checked. Either way the comment in
+`password.py` gets fixed, and a test covers a password over 72 bytes.
+
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
 - **Confirm after the space became a draft.** The contract does not say what happens; today the host
