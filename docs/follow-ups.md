@@ -161,14 +161,16 @@ must stay `null` (the `cancelQueries` from PR 2) and no request goes out without
 
 ## Docs: the mock users in README.md and frontend/CLAUDE.md
 
-Since PR 2 sign-in and profiles use the API, and `src/lib/mock-db.ts` has no users any more. Two texts
-still say otherwise:
-- `README.md`, around lines 44–47: the demo accounts are "still the frontend's mock", with the password
-  `zona1234`.
-- `frontend/CLAUDE.md`, around line 34: `api-client.ts` is used by "spaces and favorites; the others are
-  still a mock".
+Auth and users use the backend since PR 2, and `src/lib/mock-db.ts` is deleted (in the merge of PR 4
+into `feat/frontend-auth-users`). These texts still describe the mock:
+- `README.md:13`: "auth and users are still an in-memory mock".
+- `README.md:46-48`: the frontend signs in against its own mock users (`frontend/src/lib/mock-db.ts`).
+- `README.md:74`: `src/lib/` holds "shared helpers and mock-db.ts".
+- `frontend/CLAUDE.md:34`: "auth and users are still a mock".
+- `frontend/CLAUDE.md:63`: `mock-db.ts` in the `src/lib/` list (the mock users, `delay`, `NotFoundError`).
+- `frontend/CLAUDE.md:78`: `src/lib/mock-db.ts` among the shared data whose changes are announced.
 
-Update both once the whole wiring is in: in PR 4, or in the PR `feat/frontend-wiring → main`.
+Update them in the PR `feat/frontend-wiring → main`.
 
 ## From the PR 2 UI review (left out of `feat/frontend-auth-users` on purpose)
 
