@@ -37,7 +37,7 @@ pnpm dev:api          # http://localhost:8000/docs
 
 A token lives 60 minutes; for development, a longer `ACCESS_TOKEN_EXPIRE_MINUTES` in `backend/.env`
 saves logging in again. The frontend moves from the mock to the API step by step, see
-`docs/specs/frontend-wiring.md`.
+`docs/frontend-wiring.md`.
 
 ## Demo users
 
