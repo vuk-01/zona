@@ -6,6 +6,7 @@ import { useCurrentUser } from '@/features/auth/api/use-auth'
 import { BookingsList } from '@/features/bookings/components/bookings-list'
 import { useSpaces } from '@/features/spaces/api/use-spaces'
 import type { Space } from '@/features/spaces/types'
+import { MAX_PAGE_SIZE } from '@/lib/api-client'
 
 // Wrapped in RequireAuth mode="host" in the router, so the user is a host once the page renders. The
 // bookings of the host's spaces, laid out like the guest's My bookings: the title and the tabs (Pending,
@@ -13,11 +14,11 @@ import type { Space } from '@/features/spaces/types'
 // approving a booking checks. If they fail to load, the bookings still show with a placeholder photo.
 export function HostReservations() {
   const { data: user } = useCurrentUser()
-  const { data: spaces, isError } = useSpaces({ hostId: user?.id })
+  const { data: spaces, isError } = useSpaces({ hostId: user?.id }, { size: MAX_PAGE_SIZE })
 
   const spacesById = useMemo(() => {
     if (isError) return new Map<number, Space>()
-    return spaces && new Map(spaces.map((space) => [space.id, space]))
+    return spaces && new Map(spaces.items.map((space) => [space.id, space]))
   }, [spaces, isError])
 
   const title = <PageTitle>Reservations</PageTitle>

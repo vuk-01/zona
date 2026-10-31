@@ -12,8 +12,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { ApiError, errorMessage } from '@/lib/api-client'
 
-import { SpaceHasActiveBookingsError } from '../api/spaces-api'
 import { useDeleteSpace } from '../api/use-spaces'
 import type { Space } from '../types'
 
@@ -32,10 +32,12 @@ export function DeleteSpaceDialog({ space, onDeleted }: DeleteSpaceDialogProps) 
   const [open, setOpen] = useState(false)
   const deleteSpace = useDeleteSpace()
 
-  // The count comes with the host's listing; the API checks again (409) in case it changed since.
-  const refused = deleteSpace.error instanceof SpaceHasActiveBookingsError ? deleteSpace.error : null
-  const activeBookings = refused?.activeBookings ?? space.bookingCounts?.active ?? 0
-  const isBlocked = activeBookings > 0
+  // The count comes with the host's listing; the API checks again (409) in case it changed since, and
+  // then says how many in its detail ("This space has 2 active bookings").
+  const refused =
+    deleteSpace.error instanceof ApiError && deleteSpace.error.code === 'space_has_active_bookings'
+  const activeBookings = space.bookingCounts?.active ?? 0
+  const isBlocked = refused || activeBookings > 0
 
   // mutateAsync, not mutate(…, { onSuccess }): mutate callbacks are skipped once this component
   // unmounts, and it does unmount as soon as the refetched list no longer has this space.
@@ -53,7 +55,8 @@ export function DeleteSpaceDialog({ space, onDeleted }: DeleteSpaceDialogProps) 
   const onOpenChange = (next: boolean) => {
     if (deleteSpace.isPending) return
     setOpen(next)
-    if (!next) deleteSpace.reset()
+    // On open and on close: a 409 from last time never keeps the dialog blocked
+    deleteSpace.reset()
   }
 
   return (
@@ -76,8 +79,17 @@ export function DeleteSpaceDialog({ space, onDeleted }: DeleteSpaceDialogProps) 
                 You can't delete {space.name} yet
               </AlertDialogTitle>
               <AlertDialogDescription>
-                It has {bookingsText(activeBookings)}. You can delete it once{' '}
-                {activeBookings === 1 ? 'it is' : 'they are'} finished or cancelled.
+                {refused ? (
+                  <>
+                    {errorMessage(deleteSpace.error)}. You can delete it once its bookings are finished or
+                    cancelled.
+                  </>
+                ) : (
+                  <>
+                    It has {bookingsText(activeBookings)}. You can delete it once{' '}
+                    {activeBookings === 1 ? 'it is' : 'they are'} finished or cancelled.
+                  </>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -102,7 +114,7 @@ export function DeleteSpaceDialog({ space, onDeleted }: DeleteSpaceDialogProps) 
                 className="flex items-center justify-center gap-2 text-sm text-destructive sm:justify-start"
               >
                 <CircleAlert className="size-4 shrink-0" aria-hidden="true" />
-                Could not delete the space. Please try again.
+                {errorMessage(deleteSpace.error, 'Could not delete the space. Please try again.')}
               </p>
             )}
             <AlertDialogFooter>

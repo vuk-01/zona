@@ -10,6 +10,10 @@ export type Page<T> = {
   pages: number | null
 }
 
+// The largest page any GET list returns (size 1–500). Lists that need every row (the bookings join, the
+// category stats, My spaces, the hearts) ask for this much; past 500 rows they would need more pages.
+export const MAX_PAGE_SIZE = 500
+
 // Every error the backend sends: {"detail", "code"} plus `fieldErrors` when a field is at fault.
 // status 0: the request never got an answer (no network).
 export class ApiError extends Error {

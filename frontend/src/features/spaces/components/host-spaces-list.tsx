@@ -7,6 +7,7 @@ import { StatusNotice } from '@/components/feedback/status-notice'
 import { Reveal } from '@/components/motion/reveal'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { MAX_PAGE_SIZE } from '@/lib/api-client'
 
 import { useSpaces } from '../api/use-spaces'
 import type { Space } from '../types'
@@ -23,7 +24,8 @@ const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-
 // The host's own spaces (listed and drafts) with all three states: loading, empty and error. Every state
 // fades in; the cards come in one after another along a row, and further down they fade in on scroll.
 export function HostSpacesList({ hostId }: HostSpacesListProps) {
-  const { data: spaces, isLoading, error, refetch, isFetching } = useSpaces({ hostId })
+  const { data, isLoading, error, refetch, isFetching } = useSpaces({ hostId }, { size: MAX_PAGE_SIZE })
+  const spaces = data?.items
 
   // After a delete the card and its button are gone: focus moves to the list and the result is
   // announced. Focus only moves once the refetched list no longer has the space, i.e. after the

@@ -1,3 +1,5 @@
+import { MAX_PAGE_SIZE } from '@/lib/api-client'
+
 import { useSpaces } from '../api/use-spaces'
 import { CATEGORY_LABELS, type Space, type SpaceCategory, type SpaceFilters, type Weekday } from '../types'
 
@@ -39,10 +41,10 @@ const countsOf = (of: (category: CategoryOption) => CategoryStats) =>
 
 // Numbers for the hero panel on Home and Explore: spaces per category, what is open now, the newest
 // space. They follow the other filters (search, price) but never the category itself, so every category
-// says how many spaces it would show. With no filters this is the same query as Home's list.
+// says how many spaces it would show. Every matching space counts, so it asks for the largest page.
 export function useCategoryStats(filters: SpaceFilters = { status: 'listed' }) {
-  const { data, isLoading, isError } = useSpaces({ ...filters, category: undefined })
-  const spaces = data ?? []
+  const { data, isLoading, isError } = useSpaces({ ...filters, category: undefined }, { size: MAX_PAGE_SIZE })
+  const spaces = data?.items ?? []
   const now = new Date()
   const of = (category: CategoryOption) =>
     statsFor(category === 'all' ? spaces : spaces.filter((space) => space.category === category), now)

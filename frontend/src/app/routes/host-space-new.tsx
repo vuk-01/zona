@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router'
 
 import { HeroPanel } from '@/components/layout/hero-panel'
 import { PageTitle } from '@/components/layout/page-title'
-import { useCurrentUser } from '@/features/auth/api/use-auth'
 import { useCreateSpace } from '@/features/spaces/api/use-spaces'
 import { BackToSpacesLink } from '@/features/spaces/components/back-to-spaces-link'
 import { SpaceForm } from '@/features/spaces/components/space-form'
@@ -13,7 +12,6 @@ import { savedNotice } from '@/features/spaces/hooks/use-saved-notice'
 // panel; the form's sections are cards below it.
 export function HostSpaceNew() {
   const navigate = useNavigate()
-  const { data: user } = useCurrentUser()
   const createSpace = useCreateSpace()
 
   return (
@@ -26,14 +24,12 @@ export function HostSpaceNew() {
       </HeroPanel>
       <SpaceForm
         isPending={createSpace.isPending}
-        error={createSpace.error}
-        onSubmit={(input) => {
-          if (!user) return
-          createSpace.mutate(
-            { input, host: user },
-            { onSuccess: (space) => navigate('/host/spaces', { state: savedNotice(space, true) }) },
-          )
-        }}
+        // The backend takes the host from the token. mutateAsync: the form shows a failure itself.
+        onSubmit={(input) =>
+          createSpace
+            .mutateAsync(input)
+            .then((space) => navigate('/host/spaces', { state: savedNotice(space, true) }))
+        }
       />
     </section>
   )
