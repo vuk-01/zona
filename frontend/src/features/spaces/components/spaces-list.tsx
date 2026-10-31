@@ -41,6 +41,10 @@ const emptyVariants = cva(fadeIn, {
 
 const spacesFound = (count: number) => `${count} ${count === 1 ? 'space' : 'spaces'}`
 
+// Until Load more comes, a list cut at one page says so: "Showing 50 of 120 spaces"
+const countText = (visible: number, found: number) =>
+  visible < found ? `Showing ${visible} of ${spacesFound(found)}` : spacesFound(found)
+
 type SpacesListProps = {
   filters?: SpaceFilters
   // Show at most this many spaces (Home shows a few, Explore shows all)
@@ -169,7 +173,9 @@ export function SpacesList({
       // A new key per filter set: the cards come in again on every change, also from the cache
       <div key={JSON.stringify(filters)} className="flex flex-col gap-4">
         {showCount && !allRemoved && (
-          <p className={`text-sm text-muted-foreground ${fadeIn}`}>{spacesFound(foundCount ?? 0)}</p>
+          <p className={`text-sm text-muted-foreground ${fadeIn}`}>
+            {countText(visibleCount ?? 0, foundCount ?? 0)}
+          </p>
         )}
         <ul className={grid}>
           {shown.map((space, index) => (
@@ -189,11 +195,20 @@ export function SpacesList({
     )
   }
 
+  const statusText =
+    isLoading || error || visibleCount === undefined
+      ? ''
+      : !foundCount
+        ? 'No spaces found'
+        : visibleCount < foundCount
+          ? countText(visibleCount, foundCount)
+          : `${spacesFound(foundCount)} found`
+
   return (
     <div ref={resultsRef} tabIndex={-1} className="outline-none">
       {/* Always rendered, so screen readers hear the result of every filter change, not the whole grid */}
       <p role="status" className="sr-only">
-        {isLoading || error ? '' : foundCount ? `${spacesFound(foundCount)} found` : 'No spaces found'}
+        {statusText}
       </p>
       {chips.length > 0 && (
         // Wraps onto a new row when the chips do not fit (phones)
