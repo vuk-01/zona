@@ -2,6 +2,7 @@ import { Check, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { errorMessage } from '@/lib/api-client'
 
 import { useConfirmBooking } from '../api/use-bookings'
 import type { Booking } from '../types'
@@ -19,7 +20,8 @@ type ReservationActionsProps = {
 
 // Approve and Decline for the host on a pending booking (in place of the guest's "Cancel booking").
 // Approve needs no confirmation: it can still be cancelled later. Decline asks first, since it is final.
-// Both end with a toast; an approve that fails (e.g. the slot filled up meanwhile) says why in one.
+// Both end with a toast; an approve that fails says why in one: the backend's detail, e.g. "No desks left
+// at 10:00" (409 slot_full) or "Only a pending booking can be confirmed" (422 invalid_status_change).
 export function ReservationActions({ booking, onReviewed }: ReservationActionsProps) {
   const confirmBooking = useConfirmBooking()
   const when = `${formatBookingDate(booking.date)}, ${booking.startTime}–${booking.endTime}`
@@ -34,7 +36,7 @@ export function ReservationActions({ booking, onReviewed }: ReservationActionsPr
       onReviewed?.(booking, 'confirmed')
     } catch (error) {
       toast.error('Could not approve the booking', {
-        description: error instanceof Error ? error.message : 'Please try again.',
+        description: errorMessage(error, 'Please try again.'),
       })
     }
   }
