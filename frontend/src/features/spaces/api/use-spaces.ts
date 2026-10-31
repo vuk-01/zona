@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { ApiError } from '@/lib/api-client'
+
 import type { NewSpace, SpaceFilters } from '../types'
 import { type Pagination, spacesApi } from './spaces-api'
 
@@ -44,5 +46,12 @@ export function useDeleteSpace() {
   return useMutation({
     mutationFn: (id: number) => spacesApi.remove(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['spaces'] }),
+    // A 409 means the listing's bookingCounts were out of date: refetch, so the card shows the real
+    // count. Only then: after a network error a refetch would swap the list for its error state.
+    onError: (error) => {
+      if (error instanceof ApiError && error.code === 'space_has_active_bookings') {
+        void queryClient.invalidateQueries({ queryKey: ['spaces'] })
+      }
+    },
   })
 }
