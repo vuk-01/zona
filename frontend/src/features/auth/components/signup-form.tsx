@@ -66,8 +66,9 @@ export function SignupForm({ onSignedUp, onLogIn, appearance }: SignupFormProps)
     })
   }
 
+  // An invalid submit also clears the server error: it was about the values sent before
   return (
-    <form noValidate onSubmit={handleSubmit(onSubmit)} className="grid gap-4">
+    <form noValidate onSubmit={handleSubmit(onSubmit, () => setFormError(null))} className="grid gap-4">
       <Field
         icon={UserRound}
         id="name"

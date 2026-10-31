@@ -79,20 +79,24 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
     editRef.current?.focus()
   }
 
-  const onSubmit = handleSubmit((changes) => {
-    setFormError(null)
-    updateProfile.mutate(
-      { id: user.id, changes },
-      {
-        // useUpdateProfile waits for the signed-in user to refetch, so the new values show right away
-        onSuccess: () => {
-          setNotice('Your profile was saved.')
-          stopEditing()
+  // An invalid submit also clears the server error: it was about the values sent before
+  const onSubmit = handleSubmit(
+    (changes) => {
+      setFormError(null)
+      updateProfile.mutate(
+        { id: user.id, changes },
+        {
+          // useUpdateProfile waits for the signed-in user to refetch, so the new values show right away
+          onSuccess: () => {
+            setNotice('Your profile was saved.')
+            stopEditing()
+          },
+          onError: (error) => setFormError(applyFieldErrors(error, setError, ['name', 'city', 'bio'])),
         },
-        onError: (error) => setFormError(applyFieldErrors(error, setError, ['name', 'city', 'bio'])),
-      },
-    )
-  })
+      )
+    },
+    () => setFormError(null),
+  )
 
   const details = [
     { label: 'Name', value: user.name },
