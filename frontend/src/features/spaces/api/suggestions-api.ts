@@ -1,4 +1,5 @@
-import { delay } from '@/lib/mock-db'
+// The cities are still a mock (GET /api/spaces/cities is not built); the delay stands in for the request.
+const delay = <T>(value: T) => new Promise<T>((resolve) => setTimeout(() => resolve(value), 400))
 
 // One city in the search suggestions. Contract with the backend: docs/search-suggestions.md
 export type CitySuggestion = {

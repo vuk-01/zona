@@ -16,8 +16,39 @@ describe('applyFieldErrors', () => {
 
     const message = applyFieldErrors<SpaceForm>(validation({ name: 'Too short' }), setError, fields)
 
-    expect(setError).toHaveBeenCalledWith('name', { type: 'server', message: 'Too short' })
+    expect(setError).toHaveBeenCalledWith(
+      'name',
+      { type: 'server', message: 'Too short' },
+      { shouldFocus: true },
+    )
     expect(message).toBeNull()
+  })
+
+  it('focuses only the first field with an error, in the order of fields', () => {
+    const setError = vi.fn()
+
+    // The server lists city first; the form lists name first, so name takes focus
+    applyFieldErrors<SpaceForm>(validation({ city: 'Too long', name: 'Too short' }), setError, fields)
+
+    expect(setError).toHaveBeenCalledTimes(2)
+    expect(setError).toHaveBeenCalledWith(
+      'name',
+      { type: 'server', message: 'Too short' },
+      { shouldFocus: true },
+    )
+    expect(setError).toHaveBeenCalledWith('city', { type: 'server', message: 'Too long' }, undefined)
+  })
+
+  it('focuses the only field with an error', () => {
+    const setError = vi.fn()
+
+    applyFieldErrors<SpaceForm>(validation({ city: 'Too long' }), setError, fields)
+
+    expect(setError).toHaveBeenCalledExactlyOnceWith(
+      'city',
+      { type: 'server', message: 'Too long' },
+      { shouldFocus: true },
+    )
   })
 
   it('returns the detail when an error has no field in this form', () => {

@@ -145,6 +145,7 @@ def test_create_response_has_created_at_and_nested_space_and_guest(
         "name": "Hub Morača Coworking",
         "address": "Bulevar Svetog Petra Cetinjskog 9",
         "hostId": user_id(client, auth_headers),
+        "imageUrl": "https://example.com/hub.jpg",
     }
     assert body["guest"] == {
         "id": user_id(client, other_auth_headers),

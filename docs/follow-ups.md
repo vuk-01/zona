@@ -36,8 +36,8 @@ should back up `data/app.db` first.
 `GET /api/spaces` returns 50 spaces per page by default (`{total, items, pages}`). Explore shows the
 first page and counts all matches from `total` (`spaces-list.tsx`), so past 50 spaces the rest cannot
 be reached; until then the count says "Showing 50 of 120 spaces". Add a "Load more" button
-(`useInfiniteQuery` with `page`) under the grid. The bookings join, the category stats and My spaces
-ask for the largest page, 500 (`MAX_PAGE_SIZE` in `src/lib/api-client.ts`); they need more pages once
+(`useInfiniteQuery` with `page`) under the grid. My bookings and Reservations, the category stats and My
+spaces ask for the largest page, 500 (`MAX_PAGE_SIZE` in `src/lib/api-client.ts`); they need more pages once
 a list grows past that.
 
 ## Frontend: lists capped at 500 and a second spaces query on Home
@@ -50,44 +50,167 @@ a list grows past that.
 - **Favorites.** `favoritesApi.list` reads one page of 500 and drops `total`: a user's 501st saved
   space never shows a filled heart, and clicking it sends a `POST` that changes nothing. Read every
   page while `pages` says there are more, or give the hearts a check per visible space.
+- **My bookings and Reservations.** `BookingsList` (`features/bookings/components/bookings-list.tsx`)
+  reads one page of 500 (`GET /bookings?guestId=` or `?hostId=`) and splits it into the tabs on the
+  client. The backend sorts earliest first (`order_by(Booking.date, Booking.start_hour, Booking.id)`
+  in `backend/app/bookings/repositories/booking.py:77`), so past 500 bookings the first page cuts off
+  the latest ones: Upcoming and Pending lose future bookings, Past stays full, and the tab counts stop
+  at 500 (the Reservations badge in `app/app-shell.tsx` reads `total`, so it stays right). Fix: one
+  request per tab with a `status` filter and its `total`, so each tab gets its own page and count and
+  the future bookings are never cut off by the past ones.
 - **Two `/spaces` requests on Home.** The list asks for the default page (50) and the stats for 500,
   and `pagination` is part of the query key, so the same filters run twice. Let the list read the
   first `limit` cards from the stats query, or give both the same size.
 
-## Frontend: connect bookings to the backend
+## Frontend: check once PR 2 (auth and users) is in
 
-The backend has `GET/POST/PATCH/DELETE /api/bookings` (branch `feat/bookings`, PR 1); the frontend
-still uses the mock. When the frontend is connected:
+- **The booking form may focus the field at fault twice.** `booking-form.tsx` focuses the first slot
+  field with an error (or the alert) in its own `useEffect` on `errors`. Today `applyFieldErrors`
+  (`src/lib/form-errors.ts`) gets a local `setError` that only collects messages, so nothing else
+  moves focus. If PR 2 makes `applyFieldErrors` pass `shouldFocus`, or the form moves its slot into
+  react-hook-form, focus would be set twice. Book a slot that the backend refuses with a
+  `fieldErrors` entry (`booking_in_past`, a date past 365 days) as a signed-in demo guest and check
+  that focus lands once, on the right field; keep one of the two.
 
-- `frontend/src/features/bookings/api/bookings-api.ts`: a real `fetch` for every route; `list` reads
-  `items` from the paginated answer.
-- Until then the mock follows the contract: a `PATCH` to the status the booking already has answers
-  `422 invalid_status_change` (not idempotent), and `create` answers `422 booking_in_past` for a start
-  that is not strictly after now.
-- The status buttons (`components/reservation-actions.tsx`, `components/booking-card.tsx`) are disabled
-  while their mutation is pending, so a double click does not send the same change twice.
-- Local time is Europe/Podgorica, not the browser's zone: `statusNow` in `frontend/src/lib/booking.ts`,
-  `localToday` in `bookings-api.ts` (`Intl.DateTimeFormat` without `timeZone` today) and
-  `hooks/use-booking-slot.ts`.
-- `422 invalid_slot` and `422 booking_in_past` map to `InvalidBookingError`, with `fieldErrors` on
-  the field at fault.
-- **Booking window.** The backend takes a `date` from today to 365 days ahead (Podgorica) and answers
-  `422 booking_too_far_ahead` ("Pick a date within the next 365 days", `fieldErrors.date`) after that,
-  and `booking_in_past` for a date before today before any slot check. The mock's `create` in
-  `bookings-api.ts` checks only the past (with its own message, "Pick today or a later date"):
-  give it the same two checks, and map `booking_too_far_ahead` to `InvalidBookingError` on `date`.
-  The date picker allows 60 days (`BOOKABLE_DAYS` in `hooks/use-booking-slot.ts`), so the UI never
-  reaches the limit today; decide whether the picker stays at 60 or follows the backend's 365.
-- **PR 4 of the wiring plan: the space on a booking card.** My bookings and Reservations
-  (`app/routes/bookings.tsx`, `host-reservations.tsx`) join each booking to a space from
-  `GET /spaces?size=500`. That list never has other people's drafts, so a booking on a space whose host
-  turned it into a draft loses its photo and details (and past 500 spaces some are missing anyway).
-  Use the `space` summary the booking answer already carries (`{id, name, address, hostId}`); for the
-  photo, add the cover image to that summary on the backend (`GET /spaces/:id` is a 404 for someone
-  else's draft too, so fetching it by id does not help).
-- **Since bookings PR 2:** `GET /api/bookings/availability` answers `{available, freeDesks, message}`
-  for a slot before it is sent; `availability` in `bookings-api.ts` (mock, same shape) becomes a
-  `fetch` of that route.
+## Frontend: Delete account on Profile
+
+`useDeleteAccount` (`frontend/src/features/users/api/use-users.ts`) calls `DELETE /api/users/:id`,
+then clears the token and the signed-in user, but no screen calls it yet.
+
+- A "Delete account" button on Profile with an `AlertDialog` confirmation, and a section for it in
+  `frontend/DESIGN.md`, modeled on "Delete confirmation" (what happens, that it can't be undone,
+  Cancel + `bg-destructive` "Delete").
+- `useDeleteAccount` gets `onDeleted?: () => void` (and `deleteAccountOptions(queryClient, onDeleted)`),
+  called first in `onSuccess`, like `onLoggedOut` in `useLogout`; the button passes the navigation to
+  `/`. An `onSuccess` given to `mutate()` is not enough: it runs only after the hook's own `onSuccess`,
+  when the user is already cleared, so `RequireAuth` would send them to `/login?redirect=/profile`.
+  `use-users.test.ts` checks the order (`onDeleted` runs while the user is still in the cache).
+- **Not checked by hand yet:** the hook's logic is covered by `use-users.test.ts`
+  (`deleteAccountOptions`), but the flow from the UI (click → hook → signed out → navigation) can
+  only be checked once the button exists.
+
+## Frontend: `RequireAuth` when the backend is down
+
+When `GET /api/auth/me` fails with an error that is not a 401 (backend down, `5xx`, no network),
+`useCurrentUser` has no data, so `RequireAuth`
+(`frontend/src/features/auth/components/require-auth.tsx`) sends a signed-in user to `/login`
+although the token is still there. It should tell "no user" (`null`) apart from "don't know whether
+there is a user" (an error): for example an error state with "Try again" instead of the redirect.
+
+## Frontend: extra `GET /api/auth/me` after login and sign-up
+
+The manual check of PR 2 saw three `GET /api/auth/me` (all `200`, no loop) after every login and
+sign-up, on `/login`, `/signup` and through the login dialog. One is enough: login and register already
+answer the user.
+
+**Confirmed from the code:**
+- `['auth', 'me']` has no `staleTime` (neither `useCurrentUser` in
+  `frontend/src/features/auth/api/use-auth.ts` nor the `QueryClient` in `frontend/src/app/providers.tsx`,
+  which sets only `retry`), so it is TanStack Query's default `0`: the user is stale right after
+  `setQueryData`, and every new observer refetches it on mount (`refetchOnMount` default `true`), unless
+  a fetch is already running (then it joins that one).
+- `useSetCurrentUser` (login and sign-up) calls `setQueryData(currentUserQueryKey, user)` with the
+  user from the answer and then invalidates `['auth']`, `['spaces']`, `['favorites']` and `['bookings']`;
+  the `['auth']` part refetches the active `['auth', 'me']` once more. That is one of the three, and it
+  fetches what the cache already holds.
+- `useLogout` does not use it: it navigates (`onLoggedOut`), cancels the `/auth/me` in flight,
+  `setQueryData(currentUserQueryKey, null)`, removes the private lists (`['favorites']`, `['bookings']`),
+  clears the token and refetches `['spaces']`. Its `/auth/me` refetches after that send nothing (`me`
+  without a token makes no request).
+- `useCurrentUser` is read in 13 places: `app/app-shell.tsx`, `app/favorite-heart.tsx` (one per space
+  card, so it mounts only once the spaces list has loaded), the routes `bookings`, `favorites`,
+  `host-reservations`, `host-space-edit`, `host-space-new`, `host-spaces`, `profile`, `space-detail`,
+  and `features/auth/components/account-menu.tsx`, `guest-only.tsx`, `require-auth.tsx`. After the login
+  the page changes (`GuestOnly` → the mode's home or `?redirect=`, the dialog → its `redirect`), and
+  these mount at different moments.
+
+**Not checked (needs the browser):** which mounts send the second and third request. Likely candidates:
+the route that mounts after the navigation (e.g. `RequireAuth` and the page on `/favorites`) and the
+hearts on the space cards, which mount after the spaces list loads again (`['spaces']` is invalidated on
+login). Also unchecked: whether React `StrictMode` (`src/main.tsx`, development only) adds one.
+
+**Options (not decided):**
+1. Drop `['auth']` from the invalidation in `useSetCurrentUser`: the user from the answer is already in
+   the cache. Removes one request; the mount refetches stay.
+2. A `staleTime` for `useCurrentUser` only (e.g. a few minutes, or `Infinity`): every change of the user
+   already goes through the cache (`setQueryData` on login, sign-up, logout, mode switch;
+   `invalidateQueries` on a profile edit; `onSessionExpired` and `onSessionChanged` in `providers.tsx`).
+   Removes the mount refetches; a change made elsewhere (another device) shows after a reload.
+3. Both 1 and 2.
+4. A global `staleTime` on the `QueryClient`: affects every list too, so it is a wider decision.
+
+## Frontend: a session that expires refetches the private lists without a token
+
+For Ivana (`frontend/src/app/providers.tsx`, `onSessionExpired`). `expireSession` clears the token
+first, and `resetQueries()` then refetches the active `['favorites', userId]` right away, with the old
+key, before the next render has no user: probably one `401 not_authenticated` (not checked in the
+browser). Logging out avoids it with `removeQueries` (`useLogout` in
+`frontend/src/features/auth/api/use-auth.ts`).
+
+Proposal: `removeQueries` for `['favorites']` and `['bookings']` before `resetQueries()`. The
+`setQueryData(currentUserQueryKey, null)` there is redundant: `resetQueries()` right after it puts the
+signed-in user back to its initial state, and `me` without a token then answers `null`.
+
+## Frontend: `useLogout` has no test
+
+`deleteAccountOptions` in `frontend/src/features/users/api/use-users.ts` is tested without React
+(`use-users.test.ts`); `useLogout` (`frontend/src/features/auth/api/use-auth.ts`), whose order matters
+just as much, has no test. Move its options out into `logoutOptions(queryClient, onLoggedOut)` the same
+way and test the case where a `GET /api/auth/me` sent with the token answers after the logout: the user
+must stay `null` (the `cancelQueries` from PR 2) and no request goes out without the token.
+
+## Docs: the mock users in README.md and frontend/CLAUDE.md
+
+Auth and users use the backend since PR 2, and `src/lib/mock-db.ts` is deleted (in the merge of PR 4
+into `feat/frontend-auth-users`). These texts still describe the mock:
+- `README.md:13`: "auth and users are still an in-memory mock".
+- `README.md:46-48`: the frontend signs in against its own mock users (`frontend/src/lib/mock-db.ts`).
+- `README.md:74`: `src/lib/` holds "shared helpers and mock-db.ts".
+- `frontend/CLAUDE.md:34`: "auth and users are still a mock".
+- `frontend/CLAUDE.md:63`: `mock-db.ts` in the `src/lib/` list (the mock users, `delay`, `NotFoundError`).
+- `frontend/CLAUDE.md:78`: `src/lib/mock-db.ts` among the shared data whose changes are announced.
+
+Update them in the PR `feat/frontend-wiring → main`.
+
+## From the PR 2 UI review (left out of `feat/frontend-auth-users` on purpose)
+
+- **Error text contrast in the login dialog, light theme.** The dialog's forms sit on `background`
+  (`oklch(0.965 0.018 255)`), and light `destructive` (`oklch(0.58 0.2 27)`) on it is **4.27:1** for
+  14 px text; DESIGN.md "Accessibility" asks for 4.5:1. It affects the field errors
+  (`features/auth/components/stacked-auth-field.tsx`) and `FormAlert` in the dialog, e.g. the 409
+  "Email is already registered" and the 401 "Wrong email or password". On `card` (`/login`, `/signup`,
+  `/profile`) it is 4.75:1, and the dark theme passes everywhere. The token is older than PR 2.
+  Proposal: darken light `--destructive` in `frontend/src/index.css` a little (about L 0.55) and update
+  its note in `frontend/DESIGN.md`.
+- **`FormField` has no optional variant.** It always sets `aria-required="true"`, so the optional City
+  field in `features/users/components/profile-details.tsx` copies its markup by hand (label with
+  "(optional)", the pill input, the error `<p>`). Proposal: an `optional` prop on
+  `frontend/src/components/form/form-field.tsx` that leaves out `aria-required` and adds the
+  "(optional)" span; City then uses `FormField`.
+
+## Backend: the 72-character password limit and bcrypt's 72 bytes
+
+The contract (`docs/entities.md`, User) and the schemas (`backend/app/auth/schemas/auth.py`,
+`max_length=72`) count **characters**; bcrypt reads at most 72 **bytes** of UTF-8. Checked by hand on
+`feat/frontend-auth-users` against the local backend (bcrypt 4.3.0, `pyproject.toml` `^4.3.0`):
+
+- `POST /api/auth/register` with a password of 72 × "š" (144 bytes) → `201`.
+- `POST /api/auth/login` with the same password → `200`.
+- `POST /api/auth/login` with **another** password that has the same first 72 bytes (36 × "š" +
+  36 × "x") → `200`. bcrypt 4.3 silently cuts the input at 72 bytes, so only the first 72 bytes count.
+  The test account was deleted afterwards (`204`).
+- The comment in `backend/app/auth/password.py:5` ("longer input raises in bcrypt >= 4") does not match
+  4.3, which cuts without an error. bcrypt 5 raises `ValueError` for more than 72 bytes; with it,
+  `hash_password` (`password.py:9`) would fail on such a password and register would answer `500`
+  (not checked: 5 is not installed).
+- The frontend (zod `.max(72)` in `login-form.tsx`, `signup-form.tsx`) counts UTF-16 units: an emoji
+  counts as 2, so it can refuse a password the backend accepts.
+
+What it means, without a decision: either the contract and the schemas limit **bytes** (a validator
+on `len(password.encode("utf-8")) <= 72`, the message and `docs/entities.md` say so, and the frontend
+checks the same with `TextEncoder`), or the backend accepts longer passwords and pre-hashes them before
+bcrypt (e.g. SHA-256 → base64), which changes how stored hashes are checked. Either way the comment in
+`password.py` gets fixed, and a test covers a password over 72 bytes.
 
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
@@ -121,14 +244,6 @@ still uses the mock. When the frontend is connected:
 The second review (2026-10-30) was APPROVED with 2 MEDIUM and 7 LOW. Only the SQLite id reuse was
 fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
 
-- **The mock does not follow the contract yet, although "Frontend: connect bookings to the backend"
-  above says it does.** `frontend/src/features/bookings/api/bookings-api.ts` returns the booking
-  unchanged for a `PATCH` to the status it already has (contract: `422 invalid_status_change`,
-  "Confirmed bookings cannot be confirmed again"), and `create` checks only the date, not a start
-  earlier today (contract: `422 booking_in_past`, "Pick a time that has not started yet"). The mock
-  also sets `createdAt` to a date only (`.slice(0, 10)`) and uses its own messages ("Pick a whole hour,
-  for example 10:00", "The end time must be after the start time", "`<Label>` bookings cannot be
-  changed"). Either fix the mock or reword that paragraph as an open to-do (ADR-018, ADR-002).
 - **`PATCH` and `DELETE` error-mapping tests assert only `code`.** `test_patch_maps_the_service_errors`
   and `test_delete_maps_the_service_errors` in `backend/tests/unit/test_bookings_api.py` should assert
   the full `{"detail", "code"}` body, as the `POST` test does; the integration tests for
@@ -232,18 +347,8 @@ These stay open:
   and the space's fields; `_to_response` also counts the confirmed bookings of the current hour, one
   `SELECT` too many per request. Options: a `get_visible` on the Protocol that returns the space
   without the computed fields, or a flag; keep the 404 for someone else's draft in one place (ADR-020).
-- **Frontend wiring also covers `frontend/src/features/spaces/api/spaces-api.ts`.** `list` sends
-  `hostId` and gets `bookingCounts` only when it is the signed-in user's own id (left out of the
-  response otherwise, so the type is optional); `remove` handles `409 space_has_active_bookings`
-  (the count: the item above). Add both to "Frontend: connect bookings to the backend".
-
 ## From bookings PR 3 (left out of `feat/bookings-popular-times` on purpose)
 
-- **Popular time picks "today" and "now" in the browser's time zone.** `PopularTimes` in
-  `frontend/src/features/bookings/components/popular-times.tsx` opens on `new Date().getDay()` and
-  highlights `new Date().getHours()`; the backend's days and hours are Podgorica time. A visitor in
-  another time zone sees the wrong day or hour selected. Take both from the Podgorica clock, as the
-  booking form should too.
 - **Product decision: popular times can be differenced on a small N.** The window grows by one known
   date a day from day 14 up to 56 days, and for a whole space (`units = 1`) a value moves in steps
   of 12.5 % or more. Anyone who asks every day can subtract yesterday's answer from today's and get

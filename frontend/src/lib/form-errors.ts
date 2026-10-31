@@ -6,6 +6,8 @@ import { ApiError, errorMessage } from './api-client'
 // has, e.g. ['name', 'city']). Returns the message for FormAlert: the `detail` when some error has no
 // field in this form (or there are none), or null when every error is shown next to its field. zod checks the same limits
 // first, so a field error from the server is rare.
+// The first field with an error, in the order of `fields`, takes focus: with no FormAlert the submit
+// button (disabled while the request ran) would otherwise leave focus nowhere.
 export function applyFieldErrors<T extends FieldValues>(
   error: unknown,
   setError: UseFormSetError<T>,
@@ -13,10 +15,13 @@ export function applyFieldErrors<T extends FieldValues>(
 ): string | null {
   if (!(error instanceof ApiError) || !error.fieldErrors) return errorMessage(error)
 
+  const fieldErrors = error.fieldErrors
   const isField = (key: string): key is Path<T> => fields.some((field) => field === key)
-  const entries = Object.entries(error.fieldErrors)
+  const firstField = fields.find((field) => Object.hasOwn(fieldErrors, field))
+  const entries = Object.entries(fieldErrors)
   for (const [key, message] of entries) {
-    if (isField(key)) setError(key, { type: 'server', message })
+    if (isField(key))
+      setError(key, { type: 'server', message }, key === firstField ? { shouldFocus: true } : undefined)
   }
   return entries.length > 0 && entries.every(([key]) => isField(key)) ? null : error.message
 }

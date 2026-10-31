@@ -1,11 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { LockKeyhole, Loader2, Mail, UserRound } from 'lucide-react'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router'
 import { z } from 'zod'
 
 import { FormAlert } from '@/components/form/form-alert'
 import { Button } from '@/components/ui/button'
+import { applyFieldErrors } from '@/lib/form-errors'
 import type { User } from '@/lib/user'
 
 import { useSignup } from '../api/use-auth'
@@ -21,7 +23,7 @@ const signupSchema = z.object({
     .min(2, 'Use at least 2 characters')
     .max(60, 'Use at most 60 characters'),
   email: z.string().trim().min(1, 'Enter your email').pipe(z.email('Enter a valid email')),
-  password: z.string().min(8, 'Use at least 8 characters'),
+  password: z.string().min(8, 'Use at least 8 characters').max(72, 'Use at most 72 characters'),
 })
 
 type SignupValues = z.infer<typeof signupSchema>
@@ -43,21 +45,31 @@ type SignupFormProps = {
 export function SignupForm({ onSignedUp, onLogIn, appearance }: SignupFormProps) {
   const { search } = useRedirectTarget()
   const signup = useSignup()
+  // A server error that has no field in this form (no network, a 5xx). A taken email
+  // (409 email_already_registered) is the exception: it comes with fieldErrors.email and shows under that field
+  const [formError, setFormError] = useState<string | null>(null)
   const isStacked = appearance === 'stacked'
   const Field = isStacked ? StackedAuthField : AuthField
   const {
     register,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm<SignupValues>({ resolver: zodResolver(signupSchema) })
 
-  const onSubmit = (values: SignupValues) =>
+  const onSubmit = (values: SignupValues) => {
+    setFormError(null)
     // No navigate here: the user lands in the cache and GuestOnly (around this form on /signup) redirects.
     // onSuccess runs after that, so the dialog's next step already sees the signed-in user.
-    signup.mutate(values, { onSuccess: (user) => onSignedUp?.(user) })
+    signup.mutate(values, {
+      onSuccess: (user) => onSignedUp?.(user),
+      onError: (error) => setFormError(applyFieldErrors(error, setError, ['name', 'email', 'password'])),
+    })
+  }
 
+  // An invalid submit also clears the server error: it was about the values sent before
   return (
-    <form noValidate onSubmit={handleSubmit(onSubmit)} className="grid gap-4">
+    <form noValidate onSubmit={handleSubmit(onSubmit, () => setFormError(null))} className="grid gap-4">
       <Field
         icon={UserRound}
         id="name"
@@ -88,7 +100,7 @@ export function SignupForm({ onSignedUp, onLogIn, appearance }: SignupFormProps)
         {...register('password')}
       />
 
-      {signup.error && <FormAlert message={signup.error.message} />}
+      {formError && <FormAlert message={formError} />}
 
       <Button
         type="submit"
