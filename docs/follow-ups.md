@@ -448,3 +448,18 @@ My bookings and Reservations put finished, expired, declined and cancelled booki
 "Cancelled" tab (cancelled and declined, also for a later date) would leave "Past" with the slots that
 have ended. `GET /api/bookings` already filters by `status`, so this fits the "one request per tab" fix in
 "lists capped at 500" above.
+
+## Frontend: the Pending tab is out of sight when Past is active
+
+On phones (375 px) the tab row of My bookings and Reservations scrolls sideways, and with
+"Past & cancelled" active it scrolls so that "Pending" is off the left edge. Nothing shows that there
+is a tab there (no fade or arrow at the edge), so a guest or host may not know pending bookings exist.
+A fade at the scrolled edge, or labels short enough that the three tabs fit at 375 px, would fix it
+(found in the `fix/booking-ux` review).
+
+## Frontend: the host sees the favorite heart on their own space
+
+The space page shows `FavoriteHeart` for every listed space (`src/app/routes/space-detail.tsx`), also
+to its host, who sees "This is your space" instead of the booking form on the same page. Hide the
+heart for the owner, in the same place that already decides between the booking form and
+`OwnSpaceNotice` (found in the `fix/booking-ux` review; the space cards are left as they are).
