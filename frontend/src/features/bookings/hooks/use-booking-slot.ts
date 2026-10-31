@@ -1,18 +1,20 @@
 import { useSearchParams } from 'react-router'
 
 import type { BookableSpace, NewBooking, Weekday } from '../types'
+import { podgoricaNow } from './podgorica-now'
 
 const WEEKDAYS: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 const BOOKABLE_DAYS = 60
 
-// Dates are 'YYYY-MM-DD' in the browser's time zone; parsing them as UTC keeps the weekday stable.
-const localDate = (date: Date) => new Intl.DateTimeFormat('en-CA').format(date)
+// Dates are 'YYYY-MM-DD' in Podgorica time; parsing them as UTC keeps the weekday stable.
 const atUtcNoon = (date: string) => new Date(`${date}T12:00:00Z`)
 const weekdayName = (date: string) =>
   new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(atUtcNoon(date))
 
 const hourOf = (time: string) => Number(time.slice(0, 2))
 export const formatHour = (hour: number) => `${String(hour).padStart(2, '0')}:00`
+const addDays = (date: string, days: number) =>
+  new Date(atUtcNoon(date).getTime() + days * 86_400_000).toISOString().slice(0, 10)
 const range = (from: number, to: number) =>
   Array.from({ length: Math.max(to - from + 1, 0) }, (_, i) => from + i)
 
@@ -21,9 +23,10 @@ const range = (from: number, to: number) =>
 export function useBookingSlot(space: BookableSpace) {
   const [params, setParams] = useSearchParams()
 
-  const now = new Date()
-  const today = localDate(now)
-  const maxDate = localDate(new Date(now.getTime() + BOOKABLE_DAYS * 86_400_000))
+  // Podgorica's clock, as the backend checks it, not the browser's time zone
+  const now = podgoricaNow()
+  const today = now.date
+  const maxDate = addDays(today, BOOKABLE_DAYS)
 
   const dateParam = params.get('date')
   const date =
@@ -33,7 +36,7 @@ export function useBookingSlot(space: BookableSpace) {
 
   const dayHours = space.openingHours[WEEKDAYS[atUtcNoon(date).getUTCDay()]]
   // Today, only hours that have not started yet
-  const earliest = dayHours ? Math.max(hourOf(dayHours.open), date === today ? now.getHours() + 1 : 0) : 0
+  const earliest = dayHours ? Math.max(hourOf(dayHours.open), date === today ? now.hour + 1 : 0) : 0
   const fromOptions = dayHours ? range(earliest, hourOf(dayHours.close) - 1) : []
 
   const fromParam = Number(params.get('from'))

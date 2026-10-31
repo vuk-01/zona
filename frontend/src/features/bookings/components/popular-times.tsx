@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 import { usePopularTimes } from '../api/use-bookings'
+import { podgoricaNow } from '../hooks/podgorica-now'
 import { formatHour } from '../hooks/use-booking-slot'
 import type { Weekday } from '../types'
 
@@ -17,7 +18,6 @@ const DAYS: { key: Weekday; short: string; long: string }[] = [
   { key: 'sat', short: 'Sat', long: 'Saturday' },
   { key: 'sun', short: 'Sun', long: 'Sunday' },
 ]
-const BY_JS_DAY: Weekday[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat']
 const AXIS_HOURS = [9, 12, 15, 18, 21]
 
 const chipVariants = cva(
@@ -53,7 +53,9 @@ type PopularTimesProps = {
 // Hover, tap or arrow keys pick an hour, and its value shows in a pill above the bar.
 export function PopularTimes({ spaceId }: PopularTimesProps) {
   const { data, isLoading, error, refetch, isRefetching } = usePopularTimes(spaceId)
-  const today = BY_JS_DAY[new Date().getDay()]
+  // Today and the current hour in Podgorica, the time zone of the backend's days and hours
+  const now = podgoricaNow()
+  const today = now.weekday
   const [day, setDay] = useState<Weekday>(today)
   const [picked, setPicked] = useState<number | null>(null)
   const barsRef = useRef<HTMLDivElement>(null)
@@ -114,7 +116,7 @@ export function PopularTimes({ spaceId }: PopularTimesProps) {
   const hourAt = (index: number) => data.firstHour + index
   const busiest = values ? values.indexOf(Math.max(...values)) : -1
   // The current hour on today's tab, otherwise the busiest hour
-  const nowIndex = new Date().getHours() - data.firstHour
+  const nowIndex = now.hour - data.firstHour
   const defaultIndex = day === today && values && values[nowIndex] > 0 ? nowIndex : busiest
   const selected = picked ?? defaultIndex
 

@@ -30,19 +30,13 @@ import {
   splitBookings,
   useBookingTab,
 } from '../hooks/use-booking-tabs'
-import type { BookableSpace, Booking } from '../types'
+import type { Booking } from '../types'
 import { BookingCard } from './booking-card'
-
-// What the route joins in per space id (the bookings feature does not load spaces): the cover photo.
-// A Space from the spaces feature has this shape.
-export type BookingListSpace = BookableSpace & { images: string[] }
 
 type BookingsListProps = {
   // guest: My bookings (the user's own bookings); host: Reservations (the bookings of the user's spaces)
   view: BookingView
   userId: number
-  // undefined while the spaces load; a space missing from the map shows a placeholder photo
-  spaces?: Map<number, BookingListSpace>
   // The page title (the route's PageTitle), shown in the hero panel above the tabs
   title: ReactNode
 }
@@ -140,7 +134,7 @@ const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-
 // those of their spaces (Pending, Upcoming, Past). The title and the tabs share the hero panel; the panel
 // stays in place in every state, so the title never remounts. The tab underline slides to the open tab,
 // and the cards fade in, one after another along a row.
-export function BookingsList({ view, userId, spaces, title }: BookingsListProps) {
+export function BookingsList({ view, userId, title }: BookingsListProps) {
   // Every booking at once, so the tabs can split and count them; past MAX_PAGE_SIZE the oldest are left
   // out (docs/follow-ups.md, "lists capped at 500").
   const {
@@ -295,22 +289,18 @@ export function BookingsList({ view, userId, spaces, title }: BookingsListProps)
                   <EmptyState icon={empty.icon} title={empty.title} text={empty.text} action={empty.action} />
                 ) : (
                   <ul className={grid}>
-                    {byTab[value].map((booking, index) => {
-                      const space = spaces?.get(booking.spaceId)
-                      return (
-                        <li key={booking.id}>
-                          <Reveal delay={(index % 3) * 90} className="h-full">
-                            <BookingCard
-                              booking={booking}
-                              imageUrl={spaces ? (space?.images[0] ?? null) : undefined}
-                              variant={view}
-                              onCancelled={onCancelled}
-                              onReviewed={onReviewed}
-                            />
-                          </Reveal>
-                        </li>
-                      )
-                    })}
+                    {byTab[value].map((booking, index) => (
+                      <li key={booking.id}>
+                        <Reveal delay={(index % 3) * 90} className="h-full">
+                          <BookingCard
+                            booking={booking}
+                            variant={view}
+                            onCancelled={onCancelled}
+                            onReviewed={onReviewed}
+                          />
+                        </Reveal>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </TabsContent>
