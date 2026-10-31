@@ -19,7 +19,10 @@ from app.bookings.exceptions.booking import (
     SlotFullException,
 )
 from app.bookings.schemas.booking import (
+    END_TIME_PATTERN,
     MAX_ID,
+    START_TIME_PATTERN,
+    AvailabilityResponseSchema,
     BookingCreateRequestSchema,
     BookingListFilters,
     BookingResponseSchema,
@@ -103,6 +106,48 @@ def get_bookings(
     return booking_service.list(
         filters=filters, pagination_params=pagination_params, current_user=current_user
     )
+
+
+def get_availability_slot(
+    space_id: Annotated[int, Query(alias="spaceId", ge=1, le=MAX_ID)],
+    day: Annotated[IsoDate, Query(alias="date", description="YYYY-MM-DD")],
+    start_time: Annotated[str, Query(alias="startTime", pattern=START_TIME_PATTERN)],
+    end_time: Annotated[str, Query(alias="endTime", pattern=END_TIME_PATTERN)],
+) -> BookingCreateRequestSchema:
+    # The POST body as query parameters, with the same limits. Not a query model
+    # (`Annotated[BookingCreateRequestSchema, Query()]`): with the camelCase alias generator
+    # FastAPI 0.115 reports some fieldErrors in snake_case.
+    return BookingCreateRequestSchema(
+        space_id=space_id, date=day, start_time=start_time, end_time=end_time
+    )
+
+
+# Above /{booking_id}, as /popular-times: FastAPI takes the first route that matches, and
+# "availability" would otherwise be parsed as a booking id.
+@router.get(
+    path="/availability",
+    summary="Is a slot free",
+    description=(
+        "Public. The same checks as `POST` and the same count as confirm, without the lock: "
+        "`available` is what a confirm would answer now. `freeDesks` is the desks free in the "
+        "busiest hour (`null` for a space booked whole); `message` is the `409 slot_full` detail "
+        "when the slot is full. Counts only, never anyone's bookings."
+    ),
+    responses=error_responses(
+        *OPTIONAL_USER_ERRORS,
+        SpaceNotFoundException(),
+        InvalidSlotException(),
+        BookingInPastException(),
+        BookingTooFarAheadException(),
+        _INVALID_BODY,
+    ),
+)
+def get_availability(
+    data: Annotated[BookingCreateRequestSchema, Depends(get_availability_slot)],
+    booking_service: Annotated[IBookingService, Depends(get_di_entity(IBookingService))],
+    current_user: Annotated[CurrentUser | None, Depends(get_optional_user)],
+) -> AvailabilityResponseSchema:
+    return booking_service.availability(data=data, current_user=current_user)
 
 
 # Above /{booking_id}: FastAPI takes the first route that matches, and "popular-times" would

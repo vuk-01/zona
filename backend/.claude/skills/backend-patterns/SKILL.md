@@ -377,15 +377,16 @@ hour without this one. Under the lock the count is the truth (on `POST` the same
 `pending` booking takes no room):
 
 ```python
-# app/bookings/services/booking.py
+# app/bookings/services/booking.py (_free_units; _raise_if_full raises SlotFullException.at(full_at))
 taken = self._booking_repository.confirmed_per_hour(
     space_id=space_id, day=day, exclude_id=exclude_id
 )
 # A database CHECK keeps desk_count NULL for every category but desk.
 units = desk_count or 1
-for hour in range(start_hour, end_hour):
-    if taken.get(hour, 0) >= units:
-        raise SlotFullException.at(_hh_mm(hour), has_desks=desk_count is not None)
+free = [units - taken.get(hour, 0) for hour in range(start_hour, end_hour)]
+full_at = next((start_hour + i for i, left in enumerate(free) if left <= 0), None)
+# A lowered deskCount can leave more confirmed bookings than desks (docs/follow-ups.md).
+return max(min(free), 0), full_at
 ```
 
 The write is a compare-and-set, which also guards cancel, decline and delete (no lock there):
@@ -468,6 +469,55 @@ if not self._space_repository.delete(space_id):
 
 `booking_counts` is the same grouped query the host's list uses (§12), so "active" (`pending` or `confirmed` as
 returned) is defined once.
+
+### A read that answers what a write would: the same functions, not a copy (ADR-028)
+
+`GET /api/bookings/availability` asks "would a confirm of this slot go through now?". It calls the same two
+functions as `POST` and confirm, so the question and the write cannot drift apart: `_checked_slot` holds the
+checks of `POST` in their order, `_free_units` the count of confirm. Only what the contract leaves out differs:
+no "not own" check, no lock (advice, like `POST`), no write.
+
+```python
+# app/bookings/services/booking.py
+def _checked_slot(
+    space: SpaceResponseSchema, data: BookingCreateRequestSchema, now: datetime
+) -> tuple[int, int]:
+    # Before the slot: the time helpers cannot reach a date in year 1 or 9999 (OverflowError).
+    _raise_if_outside_booking_window(data.date, now)
+    start_hour, end_hour = _slot_hours(space, data)
+    # A booking that starts exactly now has already started (ADR-022).
+    if local_hour_to_utc(data.date, start_hour) <= now:
+        raise BookingInPastException
+    return start_hour, end_hour
+```
+
+```python
+# app/bookings/services/booking.py (BookingService.availability)
+space = self._space_service.get(space_id=data.space_id, current_user=current_user)
+start_hour, end_hour = _checked_slot(space, data, self._clock.now())
+free, full_at = self._free_units(
+    space_id=space.id,
+    desk_count=space.desk_count,
+    day=data.date,
+    start_hour=start_hour,
+    end_hour=end_hour,
+)
+has_desks = space.desk_count is not None
+return AvailabilityResponseSchema(
+    available=full_at is None,
+    free_desks=free if has_desks else None,
+    message=None
+    if full_at is None
+    else SlotFullException.at(_hh_mm(full_at), has_desks=has_desks).message,
+)
+```
+
+The query parameters reuse the body's limits (`START_TIME_PATTERN`, `END_TIME_PATTERN`, `IsoDate`, `MAX_ID`) in a
+dependency with `Query(alias="startTime", ...)` that builds `BookingCreateRequestSchema`. Not a query model
+(`Annotated[BookingCreateRequestSchema, Query()]`): with the camelCase alias generator FastAPI 0.115 reports some
+`fieldErrors` in snake_case (`space_id`, `start_time`). The route sits above `/{booking_id}`. The integration test
+asks availability and then confirms the same slot, and expects the same answer
+(`test_availability_answers_what_a_confirm_of_the_slot_answers` in `tests/integration/test_bookings_availability.py`).
 
 ## 11. Local time (ADR-022)
 

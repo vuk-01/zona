@@ -73,11 +73,6 @@ still uses the mock. When the frontend is connected:
 
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
-- **Bookings PR 2: remove the temporary sentence in `entities.md`.** The Booking "Built so far" note
-  in both copies says that `/api/bookings/availability` matches `GET /api/bookings/:id` and fails as an
-  invalid id (bookings PR 3 built `/popular-times` and took it out of that sentence). When PR 2
-  registers `/availability` before `/{booking_id}` in `backend/app/bookings/api/booking.py`, delete the
-  sentence from both copies in the same PR.
 - **`PATCH /api/spaces` against confirmed bookings.** A lower `deskCount`, a change of category or
   new opening hours can leave confirmed bookings that no longer fit. The check takes
   `ISpaceRepository.lock(space_id)` as its first statement, the lock `DELETE /api/spaces` takes since
@@ -146,10 +141,9 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
   `not_booking_participant` on `PATCH`/`DELETE` and the `DELETE` `404` in `test_bookings.py` too. This
   breaks the `*_maps_the_service_errors` entry in `.claude/frequent-mistakes.md` that this PR added:
   sharpen that entry so it names the full body (ADR-011, ADR-005).
-- **`"2026-11-04\n"` gets Pydantic's message, not "Use the format YYYY-MM-DD".** `_ISO_DATE.match` in
-  `backend/app/bookings/schemas/booking.py` uses `$`, which also matches before a trailing newline:
-  use `fullmatch` and add the case to the unit test. `entities.md` should also say that a well-formed
-  but impossible date (`2026-02-30`) is `422 validation_error` with Pydantic's message (ADR-002).
+- **`entities.md` does not say what an impossible date answers.** A well-formed but impossible date
+  (`2026-02-30`) is `422 validation_error` with Pydantic's message, not "Use the format YYYY-MM-DD";
+  say so in both copies (ADR-002).
 - **A cancel that loses to a confirm after the slot ended says "confirmed meanwhile".**
   `_raise_lost_race` in `backend/app/bookings/services/booking.py` builds the message from the stored
   status; the contract asks for the status as returned (`finished`). Pass it through
@@ -160,9 +154,6 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
 - **`entities.md` does not say the order for a date of today:** the slot rules come before
   `booking_in_past` (`now` 10:00, a slot 07:00–09:00 at a space opening at 08:00 answers
   `invalid_slot`). Add the sentence to both copies (ADR-002).
-- **No test for the "Built so far" behaviour of `/availability`** (`401` without or with a bad token,
-  `422 validation_error` with a valid one; `/popular-times` is built since bookings PR 3). Add a test
-  for that path; it goes away with the sentence in bookings PR 2 (ADR-011).
 - **`not_booking_participant` says "see" on `PATCH` and `DELETE`.** "Only the guest or the host can see
   this booking" is written for `GET`. Optional wording change in the code and both copies of
   `entities.md` (ADR-005).

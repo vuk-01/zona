@@ -5,7 +5,7 @@ from collections.abc import Collection
 from datetime import UTC, date, datetime
 from typing import Protocol
 
-from sqlalchemy import ColumnElement, case, delete, func, or_, select, update
+from sqlalchemy import ColumnElement, Integer, case, delete, func, or_, select, type_coerce, update
 from sqlalchemy.orm import contains_eager, joinedload
 
 from app.bookings.models.booking import Booking, BookingStatus
@@ -159,7 +159,8 @@ class BookingRepository(IBookingRepository):
             )
             .group_by(Booking.space_id)
         )
-        return dict(rows.tuples().all())
+        # A Row unpacks like a typed tuple since SQLAlchemy 2.1 (`Result.tuples()` is deprecated).
+        return dict(rows.all())
 
     def booking_counts(
         self, space_ids: Collection[int], now: datetime
@@ -178,7 +179,11 @@ class BookingRepository(IBookingRepository):
             select(
                 Booking.space_id,
                 func.count(),
-                func.sum(case((returned == BookingReturnedStatus.PENDING, 1), else_=0)),
+                # Typed as Integer for mypy only (no CAST in SQL): an untyped `sum` makes the row
+                # unpack as `object`.
+                type_coerce(
+                    func.sum(case((returned == BookingReturnedStatus.PENDING, 1), else_=0)), Integer
+                ),
             )
             .where(
                 Booking.space_id.in_(space_ids),
@@ -186,7 +191,7 @@ class BookingRepository(IBookingRepository):
             )
             .group_by(Booking.space_id)
         )
-        return {space_id: (active, int(pending)) for space_id, active, pending in rows.tuples()}
+        return {space_id: (active, pending) for space_id, active, pending in rows}
 
     def set_status(self, booking: Booking, new: str) -> bool:
         """Compare-and-set: False when the row is gone or no longer has the status it was read with."""

@@ -13,7 +13,7 @@ Delivery (the contract describes all of it from PR 1 on):
 
 Out of scope: frontend wiring (`docs/follow-ups.md`); `PATCH /api/spaces` against existing confirmed bookings
 (follow-up, reuses `ISpaceRepository.lock(space_id)`, which `DELETE /api/spaces` takes in PR 2; confirm takes
-`ISpaceRepository.lock_for_booking(booking_id)` instead); a booking window limit; removing `app/listings/`.
+`ISpaceRepository.lock_for_booking(booking_id)` instead); removing `app/listings/`.
 
 ## Entities & fields
 **Booking** (`bookings`, `app/bookings/`)
@@ -43,13 +43,14 @@ Relations: Space 1–N Booking, User 1–N Booking (guest), `passive_deletes`; d
 |---|---|---|---|---|
 | GET | `/api/bookings?spaceId=&guestId=&hostId=&status=&date=&page=&size=` | yes | | `200 Page[Booking]` where the user is guest or host, by date, start time, id; `401`; `403 not_own_bookings`; `422` |
 | GET | `/api/bookings/{id}` | guest or host | | `200`; `401`; `403 not_booking_participant`; `404 booking_not_found`; `422` |
-| POST | `/api/bookings` | yes | `{spaceId, date, startTime, endTime}` | `201` pending; `401`; `403 cannot_book_own_space`; `404 space_not_found`; `409 slot_full`; `422 invalid_slot` / `booking_in_past` / `validation_error` |
+| POST | `/api/bookings` | yes | `{spaceId, date, startTime, endTime}` | `201` pending; `401`; `403 cannot_book_own_space`; `404 space_not_found`; `409 slot_full`; `422 invalid_slot` / `booking_in_past` / `booking_too_far_ahead` / `validation_error` |
 | PATCH | `/api/bookings/{id}` | guest or host | `{status: confirmed \| declined \| cancelled}` | `200`; `401`; `403 not_booking_participant` / `not_booking_host`; `404`; `409 slot_full` (confirm); `422 invalid_status_change` / `validation_error` |
 | DELETE | `/api/bookings/{id}` | guest, only `pending` | | `204`; `401`; `403 not_booking_participant` / `not_booking_guest`; `404`; `422 invalid_status_change` |
-| GET | `/api/bookings/availability?spaceId=&date=&startTime=&endTime=` | no | | `200 {available, freeDesks, message}`; `401 invalid_token`; `404 space_not_found`; `422 invalid_slot` / `booking_in_past` / `validation_error` (PR 2) |
+| GET | `/api/bookings/availability?spaceId=&date=&startTime=&endTime=` | no | | `200 {available, freeDesks, message}`; `401 invalid_token`; `404 space_not_found`; `422 invalid_slot` / `booking_in_past` / `booking_too_far_ahead` / `validation_error` (PR 2) |
 | GET | `/api/bookings/popular-times?spaceId=` | no | | `200 {firstHour: 8, days: {mon…sun: number[14] \| null}}` or `200 null` when the space is younger than 14 days; `401 invalid_token`; `404`; `422` (PR 3) |
 
-POST checks, in order: space visible (`ISpaceService.get`) → not own → slot (whole hours, start < end, inside the
+POST checks, in order: space visible (`ISpaceService.get`) → not own → booking window (`booking_in_past` for a date
+before today, `booking_too_far_ahead` after today + 365 days) → slot (whole hours, start < end, inside the
 weekday's opening hours, every hour exists that day) → start strictly after now → overlap (advisory) → INSERT in a
 SAVEPOINT; IntegrityError (ADR-019): `not IUserRepository.exists(guest)` → `401 invalid_token`, then
 `not ISpaceRepository.exists(space)` → `404`, else re-raise. `exists()`, not `get_by_id()`, by the project's rule
@@ -66,6 +67,12 @@ exist (DST). Cancel/decline/delete: compare-and-set, no lock. A compare-and-set 
 again with a `select()` (not `db.get`: the first read is in the identity map): no row → `404 booking_not_found`,
 another status → `422 invalid_status_change`; it never assumes the row is still there. Same status again → `422`
 (not idempotent, ADR-021 does not apply).
+Availability (ADR-028): the same checks as POST from `_checked_slot` (window, slot, start after now) after
+`ISpaceService.get`, without "not own" (a host may ask about their own space, also a draft), then the count of confirm
+from `_free_units` (`confirmed_per_hour`, no `exclude_id`), without the lock and without a write. `available` = no
+full hour; `freeDesks` = `min(units − taken)` over the slot's hours, at least 0, `null` for a whole space; `message` =
+`null` or `SlotFullException.at(first full hour)`. The query parameters are a dependency with `Query(alias=...)`, not a
+query model: with the camelCase alias generator FastAPI 0.115 gives some `fieldErrors` in snake_case.
 Popular times: last 8 weeks (fewer if the space is younger), confirmed bookings only, per weekday and hour 08–21:
 taken units / units (`deskCount` or 1) averaged over that weekday's dates, 0–100 rounded; `null` for a closed day.
 Visibility through `ISpaceService.get` (another host's draft → `404`), then `now` from `IClock`:
@@ -97,7 +104,8 @@ is `(200·S + units·N) // (2·units·N)`, half up in integers (Python's `round(
 | 404 | unknown space, another host's draft, deleted during the request | Space not found | `space_not_found` |
 | 409 | no room in some hour | No desks left at 10:00 / This space is already booked at 15:00 | `slot_full` |
 | 422 | not whole hours, end ≤ start, outside opening hours, a nonexistent hour (DST) | e.g. Glass Room is open 08:00–20:00 on that day | `invalid_slot` + `fieldErrors` |
-| 422 | start not strictly after now (Podgorica → UTC) | Pick a time that has not started yet | `booking_in_past` + `fieldErrors.startTime` |
+| 422 | start not strictly after now (Podgorica → UTC), or a date before today | Pick a time that has not started yet | `booking_in_past` + `fieldErrors.startTime` |
+| 422 | a date more than 365 days after today | Pick a date within the next 365 days | `booking_too_far_ahead` + `fieldErrors.date` |
 | 422 | any other status change, incl. the same status | Confirmed bookings cannot be confirmed again / Only a pending booking can be declined | `invalid_status_change` |
 | 422 | bad body, query or path | Validation failed | `validation_error` + `fieldErrors` |
 
