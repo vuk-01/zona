@@ -3,7 +3,6 @@
 
 import type { Booking, BookingGuest } from './booking'
 import type { Favorite } from './favorite'
-import type { User } from './user'
 
 const DELAY_MS = 400
 
@@ -15,109 +14,7 @@ export class NotFoundError extends Error {
   }
 }
 
-// The mock keeps passwords next to users; the real backend stores only a hash.
-export type StoredUser = User & { password: string }
-
 const avatar = (n: number) => `https://i.pravatar.cc/300?img=${n}`
-
-const users: StoredUser[] = [
-  {
-    id: 1,
-    name: 'Ana Petrović',
-    email: 'ana@zona.app',
-    password: 'zona1234',
-    avatarUrl: avatar(47),
-    city: 'Podgorica',
-    bio: 'Freelance UX designer. I book a desk near the river a few mornings a week.',
-    isHost: false,
-    mode: 'guest',
-    createdAt: '2026-09-02',
-  },
-  {
-    id: 2,
-    name: 'Marko Jovanović',
-    email: 'marko@zona.app',
-    password: 'zona1234',
-    avatarUrl: avatar(12),
-    city: 'Podgorica',
-    bio: 'I run two coworking floors and an event loft in Podgorica. Happy to help with setup for workshops.',
-    isHost: true,
-    mode: 'host',
-    createdAt: '2026-08-14',
-  },
-  {
-    id: 3,
-    name: 'Jelena Nikolić',
-    email: 'jelena@zona.app',
-    password: 'zona1234',
-    avatarUrl: avatar(45),
-    city: 'Nikšić',
-    bio: 'Product manager at a remote startup, in Podgorica twice a month for team days.',
-    isHost: false,
-    mode: 'guest',
-    createdAt: '2026-10-05',
-  },
-  {
-    id: 4,
-    name: 'Milica Vuković',
-    email: 'milica@zona.app',
-    password: 'zona1234',
-    avatarUrl: avatar(32),
-    city: 'Podgorica',
-    bio: 'Office manager at City Kvart. I rent out our meeting rooms when the team does not need them.',
-    isHost: true,
-    mode: 'host',
-    createdAt: '2026-08-21',
-  },
-  {
-    id: 5,
-    name: 'Nikola Bulatović',
-    email: 'nikola@zona.app',
-    password: 'zona1234',
-    avatarUrl: null,
-    city: 'Budva',
-    bio: 'Backend developer, looking for a quiet desk when I visit the capital.',
-    isHost: false,
-    mode: 'guest',
-    createdAt: '2026-10-11',
-  },
-  {
-    id: 6,
-    name: 'Ivana Radulović',
-    email: 'ivana@zona.app',
-    password: 'zona1234',
-    avatarUrl: avatar(44),
-    city: 'Cetinje',
-    bio: 'Turning my grandfather’s old painting studio in Cetinje into a small workspace.',
-    isHost: true,
-    mode: 'host',
-    createdAt: '2026-10-17',
-  },
-  {
-    id: 7,
-    name: 'Luka Šćepanović',
-    email: 'luka@zona.app',
-    password: 'zona1234',
-    avatarUrl: avatar(53),
-    city: 'Kotor',
-    bio: 'Photographer. I book event halls for exhibitions and portfolio reviews.',
-    isHost: false,
-    mode: 'guest',
-    createdAt: '2026-09-29',
-  },
-  {
-    id: 8,
-    name: 'Teodora Vujošević',
-    email: 'teodora@zona.app',
-    password: 'zona1234',
-    avatarUrl: null,
-    city: 'Bar',
-    bio: 'Getting a small office by the marina ready to list. Until then I book desks in Podgorica myself.',
-    isHost: true,
-    mode: 'guest',
-    createdAt: '2026-09-08',
-  },
-]
 
 // Today's date in the browser's time zone ('YYYY-MM-DD'), for seed rows that should always be current.
 const today = new Intl.DateTimeFormat('en-CA').format(new Date())
@@ -351,12 +248,9 @@ const favorites: Favorite[] = [
   { userId: 8, spaceId: 3, createdAt: '2026-10-02T13:25:00Z' },
 ]
 
-// One users table for auth (login, sign-up) and users (profile), so a profile change is seen by the
-// signed-in session right away. One bookings table for bookings (the overlap rule) and spaces (free
-// desks). One favorites table for favorites (the hearts) and spaces (the Favorites page). Every demo
-// account uses the password "zona1234".
-export const db: { users: StoredUser[]; bookings: Booking[]; favorites: Favorite[] } = {
-  users,
+// One bookings table for bookings (the overlap rule) and spaces (free desks). One favorites table for
+// favorites (the hearts) and spaces (the Favorites page). Users come from the backend.
+export const db: { bookings: Booking[]; favorites: Favorite[] } = {
   bookings,
   favorites,
 }
