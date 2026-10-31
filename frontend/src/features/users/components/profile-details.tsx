@@ -16,7 +16,7 @@ import type { User } from '@/lib/user'
 import { useUpdateProfile } from '../api/use-users'
 import { BIO_MAX_LENGTH, toProfileFormValues, useProfileForm } from '../hooks/use-profile-form'
 
-// Dates are stored as 'YYYY-MM-DD'; formatting them in UTC keeps the month from shifting.
+// createdAt is an ISO date-time in UTC; formatting it in UTC keeps the month from shifting.
 const memberSinceFormat = new Intl.DateTimeFormat('en-GB', {
   month: 'long',
   year: 'numeric',
@@ -91,7 +91,7 @@ export function ProfileDetails({ user }: ProfileDetailsProps) {
     { label: 'Name', value: user.name },
     { label: 'Email', value: user.email },
     { label: 'City', value: user.city },
-    { label: 'Member since', value: memberSinceFormat.format(new Date(`${user.createdAt}T00:00:00Z`)) },
+    { label: 'Member since', value: memberSinceFormat.format(new Date(user.createdAt)) },
     { label: 'Role', value: user.isHost ? 'Guest and host' : 'Guest' },
   ]
 
