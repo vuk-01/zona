@@ -13,7 +13,7 @@ const profileFormSchema = z.object({
     .trim()
     .min(2, 'Enter your name, at least 2 characters')
     .max(60, 'Keep your name under 60 characters'),
-  city: z.string().trim().max(80, 'Keep your city under 80 characters'),
+  city: z.string().trim().max(80, 'Use at most 80 characters'),
   bio: z.string().trim().max(BIO_MAX_LENGTH, `Keep your bio under ${BIO_MAX_LENGTH} characters`),
 })
 
