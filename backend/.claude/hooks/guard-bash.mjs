@@ -8,7 +8,7 @@
 
 // Each rule is tested against one command segment (the text between `&&`, `||`, `;`, `|` or a newline),
 // anchored at the command position, so "git commit -m 'never run git reset --hard'" is not a false positive:
-// single-quoted strings are removed first and the message is only an argument.
+// single-quoted strings (other than a plain path) are removed first and the message is only an argument.
 const RULES = [
   [/^git\s+push\b(?:.*\s)?(?:-f|--force|--force-with-lease)(?:\s|$)/, 'git push --force rewrites shared history; ask the user and let them run it'],
   [/^git\s+reset\s+(?:.*\s)?--hard\b/, 'git reset --hard destroys uncommitted work; ask the user first'],
@@ -31,6 +31,23 @@ const PROTECTED_RM_TARGET =
 // Destructive SQL handed to a database shell (`psql -c "..."`, `sqlite3 data/app.db "..."`).
 const DB_SHELL = /^(?:psql|sqlite3|pgcli|litecli)\b/
 const DESTRUCTIVE_SQL = /\b(?:DROP\s+(?:TABLE|DATABASE|SCHEMA|INDEX)|TRUNCATE|DELETE\s+FROM)\b/i
+
+// Writing a file guard-edits protects from the shell: `>`/`>>`, `tee`, `sed -i`, or `cp`/`mv` onto it.
+// `.env.example` (and copies like `.env.example.bak`) holds placeholders and stays writable.
+const PROTECTED_FILE = /^(?:\.env(?!\.example(?:\.|$))(?:\..+)?|poetry\.lock)$/
+
+const writeTargets = (segment) => {
+  const targets = [...segment.matchAll(/>>?(?!&)\s*([^\s<>&|;]+)/g)].map((match) => match[1])
+  const [cmd, ...args] = segment.split(/\s+/)
+  const files = args.filter((arg) => !arg.startsWith('-') && !/^\d*>/.test(arg))
+  if (cmd === 'tee') targets.push(...files)
+  if (cmd === 'sed' && args.some((arg) => /^(?:-[a-zA-Z]*i|--in-place)/.test(arg))) targets.push(...files)
+  if ((cmd === 'cp' || cmd === 'mv') && files.length > 1) targets.push(files[files.length - 1])
+  return targets
+}
+
+const writesProtectedFile = (segment) =>
+  writeTargets(segment).some((target) => PROTECTED_FILE.test(target.replace(/^["']|["']$/g, '').split('/').pop() ?? ''))
 
 const segments = (command) =>
   command
@@ -58,12 +75,14 @@ process.stdin.on('end', () => {
     const command = String(JSON.parse(input).tool_input?.command ?? '')
     if (!command) process.exit(0)
 
-    const scrubbed = command.replace(/'[^']*'/g, "''")
+    // A single-quoted plain path is kept (`> '.env'` is still `.env`); any other quoted text is dropped.
+    const scrubbed = command.replace(/'([^']*)'/g, (quoted, text) => (/^[\w./-]+$/.test(text) ? text : "''"))
     for (const segment of segments(scrubbed)) {
       for (const [pattern, why] of RULES) {
         if (pattern.test(segment)) block(why, command)
       }
       if (rmHitsProtectedTarget(segment)) block('rm -r on a source tree, the repo root or a wildcard; delete single files, or ask the user', command)
+      if (writesProtectedFile(segment)) block('writing .env or poetry.lock from the shell skips guard-edits: put placeholders in .env.example and tell the user which value to set; poetry.lock changes only through `poetry add`, which the user runs (rules/safety.md, ADR-013)', command)
     }
     // SQL is checked on the raw command: the statement is usually inside quotes.
     if (segments(command).some((segment) => DB_SHELL.test(segment)) && DESTRUCTIVE_SQL.test(command)) {

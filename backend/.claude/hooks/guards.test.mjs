@@ -102,6 +102,22 @@ for (const { name, dir, prefix } of SESSIONS) {
       'sudo rm -rf /',
       'psql -c "DROP TABLE users"',
       'sqlite3 data/app.db "DELETE FROM bookings"',
+      // writing a file guard-edits protects, from the shell
+      'echo SECRET=x > .env',
+      'echo SECRET=x >> backend/.env',
+      'printf x>backend/.env.local',
+      "echo x > '.env'",
+      'echo x > "backend/.env"',
+      'echo x | tee backend/.env',
+      'echo x | tee -a .env.local',
+      'sed -i "s/a/b/" backend/.env',
+      "sed -i '' 's/a/b/' .env",
+      'sed -i.bak s/a/b/ backend/poetry.lock',
+      'cp .env.example .env',
+      'cp backend/.env.example backend/.env',
+      'mv /tmp/env backend/.env.local',
+      'echo x > backend/poetry.lock',
+      'cp /tmp/poetry.lock poetry.lock',
     ]
     const allowed = [
       'git status',
@@ -116,6 +132,14 @@ for (const { name, dir, prefix } of SESSIONS) {
       'rm -rf .venv',
       'rm -rf data/app.db',
       'sqlite3 data/app.db "SELECT count(*) FROM users"',
+      'echo x > notes.txt',
+      'echo x >> backend/.env.example',
+      'cp .env.example .env.example.bak',
+      'pnpm build > build.log 2>&1',
+      'pnpm lint 2>&1 | tee lint.log',
+      'sed -i "s/a/b/" app/main.py',
+      'mv .envrc .envrc.bak',
+      "git commit -m 'never echo x > .env'",
     ]
 
     for (const command of blocked) {

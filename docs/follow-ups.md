@@ -434,3 +434,16 @@ register both in the root settings. Cost to weigh first: from the root the Stop 
 pytest (up to 180 s) whenever any `.py` file is modified, also one this session did not touch.
 `session-start.mjs` stays backend-only. Check both entry points by hand: an unused import in a
 modified file (Stop hook exit 2) from `backend/` and from the root.
+
+## Backend: guard-bash cannot catch every way to write a protected file
+
+`guard-bash` blocks writing `.env*` (except `.env.example`) and `poetry.lock` from the shell through
+`>` / `>>`, `tee`, `sed -i`, `cp` and `mv`. A pattern on the command text cannot see every way to write
+a file: `python -c "open('.env', 'w')..."`, `node -e`, `perl -pi`, `dd of=`, `install`, a script
+file that writes it, a path built from a variable (`f=.env; echo x > $f`), or `cp x backend/` when the
+source is named `.env`. These rules stop the agent's usual commands, not a determined bypass; the real
+line is that `.env` is gitignored and holds only local values. Committed migrations are not protected
+from the shell at all: `guard-edits` blocks the Edit and Write tools, but `sed -i` or a redirect into
+`alembic/versions/*.py` passes, because `guard-bash` would need to ask git whether each target is
+committed. If that is ever needed, it can reuse `isCommitted` from `guard-edits.mjs` for every write
+target under `alembic/versions/`.
