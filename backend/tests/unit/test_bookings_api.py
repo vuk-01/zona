@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, get_args
 from unittest.mock import Mock
 
 import pytest
+from fastapi import params
 from fastapi.testclient import TestClient
 
 from app.auth.exceptions.auth import InvalidTokenException
+from app.bookings.api.booking import get_availability_slot
 from app.bookings.exceptions.booking import (
     BookingInPastException,
     BookingNotFoundException,
@@ -25,6 +28,7 @@ from app.bookings.exceptions.booking import (
 )
 from app.bookings.schemas.booking import (
     AvailabilityResponseSchema,
+    BookingCreateRequestSchema,
     BookingGuestSchema,
     BookingListFilters,
     BookingResponseSchema,
@@ -680,6 +684,27 @@ def test_availability_with_an_invalid_token_is_401(
     assert response.status_code == 401
     assert response.json() == {"detail": "Invalid or expired token", "code": "invalid_token"}
     booking_service.availability.assert_not_called()
+
+
+def test_availability_query_has_the_same_limits_as_the_post_body() -> None:
+    # A limit added only to the schema would pass the Query check and then fail inside the
+    # dependency's BookingCreateRequestSchema(...) as a 500, not a 422 with fieldErrors.
+    def limits(base: Any, metadata: list[Any]) -> tuple[Any, list[str]]:
+        return base, [repr(item) for item in metadata]
+
+    query: dict[str, tuple[Any, list[str]]] = {}
+    for parameter in inspect.signature(get_availability_slot, eval_str=True).parameters.values():
+        base, *extras = get_args(parameter.annotation)
+        (param,) = [extra for extra in extras if isinstance(extra, params.Query)]
+        others = [extra for extra in extras if extra is not param]
+        assert param.alias is not None
+        query[param.alias] = limits(base, [*others, *param.metadata])
+    body = {
+        field.alias or name: limits(field.annotation, field.metadata)
+        for name, field in BookingCreateRequestSchema.model_fields.items()
+    }
+
+    assert query == body
 
 
 @pytest.mark.parametrize(
