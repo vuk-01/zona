@@ -239,6 +239,38 @@ These stay open:
   both. Whatever is decided goes into both copies of `entities.md` and the spec; an ADR if it is a
   privacy rule for every aggregate (ADR-006).
 
+## From the demo seed review (left out of `feat/seed-demo` on purpose)
+
+- **Finer idempotency, per space.** `_seed_spaces` in `backend/app/seed.py` skips a host that has any
+  space, and `_seed_bookings` skips everything when Marko has any booking. A demo space deleted or
+  renamed in the app is not created again, and then no bookings are created either, with only an
+  INFO line ("Some demo spaces are missing, no bookings"). Match each demo space by host and name
+  and create only the missing ones, or at least log the skip as a warning.
+- **Seed tests for other days.** `tests/integration/test_seed.py` runs at one "now" (Wednesday
+  2026-11-04 10:30). Parametrize the idempotency test and
+  `test_no_hour_has_more_confirmed_bookings_than_the_space_has_room` over a Sunday (Hub Morača is
+  closed, no booking for today), a Saturday after closing, and a date whose 56-day window contains
+  the spring-forward day (2026-03-29 or 2027-03-28). These were run by hand during the review and
+  passed, but no test holds them (ADR-022).
+- **Sharper asserts.** The popular-times check only asserts `is not None`: also assert that Hub
+  Morača's `days.sun` is `null` and that a Monday 09:00 value is above 0. The idempotency test leaves
+  out `Listing` and runs the second seed at the same "now": add `Listing` to the counts and move
+  `fixed_clock` forward a day between the two runs.
+- **`tzinfo` on Postgres in the seed test.** `space.created_at.replace(tzinfo=UTC)` overwrites an
+  aware value on Postgres instead of only filling in a naive one from SQLite; use
+  `x if x.tzinfo else x.replace(tzinfo=UTC)` as `test_past_bookings_were_created_before_their_slot`
+  does (ADR-022).
+- **One `FixedClock`.** `_FixedClock` in `backend/app/seed.py` duplicates `FixedClock` in
+  `backend/tests/utils.py`. Move one `FixedClock` into `backend/app/utils/clock.py` and use it from
+  both.
+- **The real clock next to `IClock`.** JWT `iat` in `app/auth/services/auth.py` uses the real
+  `datetime.now`, while the seed backdates `created_at` from `IClock`; `get_current_user` rejects a
+  token with `iat < created_at`, so a seed test whose fixed clock is more than about 58 days ahead of
+  the real date fails with `invalid_token`, for a reason that is not obvious. The same split means an
+  upcoming booking's `created_at` is the database's real now (`server_default`), not the fixed
+  "now": the seed test checks `created_at` before the slot only for past bookings for that reason.
+  Take `iat` from `IClock`, or document the limit.
+
 ## From the favorites review (left out of `feat/favorites` on purpose)
 
 - **Index for "newest saved first".** `GET /api/favorites` and `GET /api/spaces?favoriteOf=` find a
