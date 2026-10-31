@@ -182,6 +182,20 @@ export function BookingsList({ view, userId, title }: BookingsListProps) {
     return () => clearTimeout(timer)
   }, [movedOut])
 
+  // Phones: the tab row scrolls sideways (three tabs do not fit at 375px), so the open tab is scrolled into
+  // view, also when the page opens on ?tab=past. Only the row scrolls, never the page; the 16px edge
+  // matches the row's padding.
+  useEffect(() => {
+    const scroller = tabList?.parentElement
+    const active = tabList?.querySelector<HTMLElement>('[data-state="active"]')
+    if (!scroller || !active) return
+    const row = scroller.getBoundingClientRect()
+    const box = active.getBoundingClientRect()
+    const edge = 16
+    if (box.left < row.left + edge) scroller.scrollBy({ left: box.left - row.left - edge })
+    else if (box.right > row.right - edge) scroller.scrollBy({ left: box.right - row.right + edge })
+  }, [tab, tabList])
+
   // Error first: a retry keeps the error block (and the focused "Try again" button) on screen
   const state = error
     ? 'error'
@@ -197,34 +211,37 @@ export function BookingsList({ view, userId, title }: BookingsListProps) {
         {title}
         {state === 'loading' && <Skeleton className="h-9 w-56 rounded-full" />}
         {state === 'ready' && (
-          <TabsList
-            ref={setTabList}
-            variant="line"
-            className="relative h-auto gap-6 border-b pb-0"
-            aria-label={copy.label}
-          >
-            {underline && (
-              <span
-                aria-hidden="true"
-                className="pointer-events-none absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-primary transition-[translate,width] duration-300 ease-out motion-reduce:transition-none"
-                style={{ translate: `${underline.x}px 0`, width: underline.width }}
-              />
-            )}
-            {VIEW_TABS[view].map((value) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                className="h-11 flex-none rounded-none px-1 pb-3 text-base text-muted-foreground after:hidden hover:text-foreground focus-visible:rounded-sm focus-visible:ring-ring data-[state=active]:font-semibold data-[state=active]:text-primary md:h-9 dark:data-[state=active]:text-primary"
-              >
-                {TAB_LABELS[value]}
-                {/* The card-colored ring outlines the pill where it sits on the panel's pale-blue circle
+          // Phones: the row scrolls sideways, edge to edge of the panel; py-1 leaves room for the focus ring
+          <div className="-mx-4 -my-1 overflow-x-auto px-4 py-1 motion-safe:scroll-smooth md:mx-0 md:overflow-visible md:px-0">
+            <TabsList
+              ref={setTabList}
+              variant="line"
+              className="relative h-auto gap-6 border-b pb-0"
+              aria-label={copy.label}
+            >
+              {underline && (
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-[-1px] left-0 h-0.5 rounded-full bg-primary transition-[translate,width] duration-300 ease-out motion-reduce:transition-none"
+                  style={{ translate: `${underline.x}px 0`, width: underline.width }}
+                />
+              )}
+              {VIEW_TABS[view].map((value) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className="h-11 flex-none rounded-none px-1 pb-3 text-base text-muted-foreground after:hidden hover:text-foreground focus-visible:rounded-sm focus-visible:ring-ring data-[state=active]:font-semibold data-[state=active]:text-primary md:h-9 dark:data-[state=active]:text-primary"
+                >
+                  {TAB_LABELS[value]}
+                  {/* The card-colored ring outlines the pill where it sits on the panel's pale-blue circle
                     (phones, three tabs); on the card itself it does not show */}
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground ring-2 ring-card">
-                  {byTab[value].length}
-                </span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+                  <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold text-secondary-foreground ring-2 ring-card">
+                    {byTab[value].length}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
         )}
       </HeroPanel>
 
