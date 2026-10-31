@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { clearToken, onSessionChanged } from './auth-token'
+import { clearToken, getToken, onSessionChanged, setToken } from './auth-token'
 
 // localStorage for Node; `failWrites` makes setItem throw like a full storage
 function memoryStorage({ failWrites = false } = {}) {
@@ -48,5 +48,29 @@ describe('another tab', () => {
     window.dispatchEvent(storageEvent('zona.token'))
 
     expect(listener).not.toHaveBeenCalled()
+  })
+})
+
+describe('storage that cannot be written', () => {
+  it('keeps the token in memory when the write fails but reads work', () => {
+    vi.stubGlobal('localStorage', memoryStorage({ failWrites: true }))
+
+    setToken('abc')
+
+    expect(getToken()).toBe('abc')
+    clearToken()
+    expect(getToken()).toBeNull()
+  })
+
+  it('ignores other tabs while the token lives only in memory', () => {
+    vi.stubGlobal('localStorage', memoryStorage({ failWrites: true }))
+    const listener = vi.fn()
+    const stop = onSessionChanged(listener)
+    setToken('abc')
+
+    window.dispatchEvent(storageEvent('zona.token'))
+
+    expect(listener).not.toHaveBeenCalled()
+    stop()
   })
 })
