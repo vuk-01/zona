@@ -60,7 +60,7 @@ Dependency direction: shared code -> features -> app, never the other way around
   `RequireAuth`'s redirects
 - Protected routes are wrapped in `RequireAuth` (`mode="host"` for `/host/*`) in `src/app/router.tsx`
 - `src/lib/`: `utils.ts` (`cn`), `mock-db.ts` (mock database and delay), `auth-token.ts` (the API
-  token in `localStorage`, `onSessionExpired` for `src/app`), `api-client.ts` (`api.get/post/patch/delete`
+  token in `localStorage`, `onSessionExpired` and `onSessionChanged` for `src/app`; tested in `auth-token.test.ts`), `api-client.ts` (`api.get/post/patch/delete`
   on `/api`, `ApiError`, `Page<T>`, `isNotFound`, `errorMessage`; tested in `api-client.test.ts`) and `form-errors.ts` (`applyFieldErrors`: the
   backend's `fieldErrors` on react-hook-form fields)
 

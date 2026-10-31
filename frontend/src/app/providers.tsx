@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 import { ApiError } from '@/lib/api-client'
-import { onSessionExpired } from '@/lib/auth-token'
+import { onSessionChanged, onSessionExpired } from '@/lib/auth-token'
 import { currentUserQueryKey } from '@/lib/user'
 
 // A 4xx from the backend (not found, no access, invalid input) gives the same answer every time, so
@@ -20,6 +20,12 @@ onSessionExpired(() => {
   queryClient.setQueryData(currentUserQueryKey, null)
   void queryClient.invalidateQueries()
   toast('Your session ended. Log in again.', { id: 'session-expired' })
+})
+
+// Another tab logged in, out or as someone else: nothing cached may outlive the old token, so every
+// query goes back to its initial state (the signed-in user included) and the active ones load again.
+onSessionChanged(() => {
+  void queryClient.resetQueries()
 })
 
 type ProvidersProps = {

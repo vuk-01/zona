@@ -31,12 +31,12 @@ export function clearToken() {
   }
 }
 
-type SessionExpiredListener = () => void
+type SessionListener = () => void
 
-const listeners = new Set<SessionExpiredListener>()
+const listeners = new Set<SessionListener>()
 
 // src/app listens here (the signed-in user is cleared, a toast is shown); src/lib cannot import it.
-export function onSessionExpired(listener: SessionExpiredListener) {
+export function onSessionExpired(listener: SessionListener) {
   listeners.add(listener)
   return () => {
     listeners.delete(listener)
@@ -49,4 +49,24 @@ export function expireSession(token: string) {
   if (getToken() !== token) return
   clearToken()
   for (const listener of listeners) listener()
+}
+
+const changeListeners = new Set<SessionListener>()
+
+// Another tab logged in, logged out or switched accounts: the token this tab sends from now on belongs
+// to someone else (or to no one). The browser fires `storage` only in the other tabs, never in the
+// one that wrote; `key` is null when that tab cleared all of storage.
+function handleStorage(event: StorageEvent) {
+  if (event.key !== TOKEN_KEY && event.key !== null) return
+  for (const listener of changeListeners) listener()
+}
+
+// src/app listens here (the signed-in user is read again, every query runs with the new token).
+export function onSessionChanged(listener: SessionListener) {
+  if (changeListeners.size === 0) window.addEventListener('storage', handleStorage)
+  changeListeners.add(listener)
+  return () => {
+    changeListeners.delete(listener)
+    if (changeListeners.size === 0) window.removeEventListener('storage', handleStorage)
+  }
 }
