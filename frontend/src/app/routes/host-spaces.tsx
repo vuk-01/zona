@@ -1,7 +1,6 @@
 import { Plus } from 'lucide-react'
 import { Link } from 'react-router'
 
-import { StatusNotice } from '@/components/feedback/status-notice'
 import { HeroPanel } from '@/components/layout/hero-panel'
 import { PageTitle } from '@/components/layout/page-title'
 import { Button } from '@/components/ui/button'
@@ -13,7 +12,8 @@ import { useSavedNotice } from '@/features/spaces/hooks/use-saved-notice'
 // The title and "Add a space" share the hero panel, like the guest pages; the cards are below it.
 export function HostSpaces() {
   const { data: user } = useCurrentUser()
-  // "Glass Room is published" after the space form sends the host back here
+  // "Glass Room is published" after the space form sends the host back here; the list shows it in the
+  // same place as its own "… was deleted", so a newer result replaces it
   const notice = useSavedNotice()
 
   return (
@@ -33,8 +33,7 @@ export function HostSpaces() {
           </Button>
         </div>
       </HeroPanel>
-      <StatusNotice notice={notice} />
-      {user && <HostSpacesList hostId={user.id} />}
+      {user && <HostSpacesList hostId={user.id} notice={notice} />}
     </section>
   )
 }

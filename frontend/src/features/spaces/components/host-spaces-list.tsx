@@ -15,6 +15,8 @@ import { HostSpaceCard } from './host-space-card'
 
 type HostSpacesListProps = {
   hostId: number
+  // "Glass Room is published" from the space form; a later delete replaces it, so only the latest shows
+  notice?: string | null
 }
 
 // One column on phones, 2 at md, 3 at lg, like the guest lists
@@ -23,7 +25,7 @@ const fadeIn = 'motion-safe:animate-in motion-safe:fade-in motion-safe:duration-
 
 // The host's own spaces (listed and drafts) with all three states: loading, empty and error. Every state
 // fades in; the cards come in one after another along a row, and further down they fade in on scroll.
-export function HostSpacesList({ hostId }: HostSpacesListProps) {
+export function HostSpacesList({ hostId, notice = null }: HostSpacesListProps) {
   const { data, isLoading, error, refetch, isFetching } = useSpaces({ hostId }, { size: MAX_PAGE_SIZE })
   const spaces = data?.items
 
@@ -105,7 +107,7 @@ export function HostSpacesList({ hostId }: HostSpacesListProps) {
       aria-label="Your spaces"
       className="rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-offset-4 focus-visible:ring-offset-sheet md:focus-visible:ring-offset-background"
     >
-      <StatusNotice notice={announcement || null} className="mb-6" />
+      <StatusNotice notice={announcement || notice} className="mb-6" />
       {isEmpty ? (
         <div className={fadeIn}>
           <EmptyState
