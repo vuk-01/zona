@@ -1,13 +1,44 @@
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { toast } from 'sonner'
 
-const queryClient = new QueryClient()
+import { Toaster } from '@/components/ui/sonner'
+import { isTransient } from '@/lib/api-client'
+import { onSessionChanged, onSessionExpired } from '@/lib/auth-token'
+import { currentUserQueryKey } from '@/lib/user'
+
+// Only a failure that can go away on its own (isTransient: no answer, 408, 429, 5xx) is tried again,
+// up to TanStack Query's default of 3 times; not found, no access or invalid input fail at once.
+const retry = (failureCount: number, error: Error) => isTransient(error) && failureCount < 3
+
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry } } })
+
+// The backend refused the stored token (expired, or the account is gone): the user is signed out and
+// every query runs again without it. Subscribed once here, not in an effect, so StrictMode does not
+// add it twice; the fixed toast id shows one toast for several refused requests at once.
+onSessionExpired(() => {
+  queryClient.setQueryData(currentUserQueryKey, null)
+  void queryClient.invalidateQueries()
+  toast('Your session ended. Log in again.', { id: 'session-expired' })
+})
+
+// Another tab logged in, out or as someone else: nothing cached may outlive the old token, so every
+// query goes back to its initial state (the signed-in user included) and the active ones load again.
+onSessionChanged(() => {
+  void queryClient.resetQueries()
+})
 
 type ProvidersProps = {
   children: ReactNode
 }
 
-// All global providers in one place (data cache now, later e.g. theme or auth).
+// All global providers in one place: the data cache, with its retry rule and the session end above,
+// and the Toaster, mounted once for every page (the session-end toast can come on /login too).
 export function Providers({ children }: ProvidersProps) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <Toaster />
+    </QueryClientProvider>
+  )
 }

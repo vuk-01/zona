@@ -40,7 +40,7 @@ Dependency direction: shared code -> features -> app, never the other way around
 - `src/components/form/`: `FormField`, `FormAlert` and `TimeSelect` (a whole hour, on `ui/select.tsx`)
 - `src/components/feedback/`: `EmptyState` (every empty list and "not found" page) and `StatusNotice`
   (the visible result of an action); quick actions in a list (Approve / Decline) use a toast instead
-  (`toast` from `sonner`, `Toaster` in `src/components/ui/sonner.tsx`, mounted in `AppLayout`)
+  (`toast` from `sonner`, `Toaster` in `src/components/ui/sonner.tsx`, mounted in `src/app/providers.tsx`)
 - `src/components/user-avatar.tsx`: a user's photo or initials (profile, side menu, the guest on a
   host's reservation)
 - `src/app/app-shell.tsx`: reads the signed-in user and passes the guest/host `mode`, the account menu
@@ -59,7 +59,10 @@ Dependency direction: shared code -> features -> app, never the other way around
   layout as `onProtectedNav` (nav items with `requiresAuth`); `/login` stays for direct links and
   `RequireAuth`'s redirects
 - Protected routes are wrapped in `RequireAuth` (`mode="host"` for `/host/*`) in `src/app/router.tsx`
-- `src/lib/`: `utils.ts` (`cn`) and `mock-db.ts` (mock database and delay)
+- `src/lib/`: `utils.ts` (`cn`), `mock-db.ts` (mock database and delay), `auth-token.ts` (the API
+  token in `localStorage`, `onSessionExpired` and `onSessionChanged` for `src/app`; tested in `auth-token.test.ts`), `api-client.ts` (`api.get/post/patch/delete`
+  on `/api`, `ApiError`, `Page<T>`, `isNotFound`, `isTransient`, `errorMessage`; tested in `api-client.test.ts`) and `form-errors.ts` (`applyFieldErrors`, tested in `form-errors.test.ts`: the
+  backend's `fieldErrors` on react-hook-form fields)
 
 ## Rules
 
@@ -76,6 +79,6 @@ Dependency direction: shared code -> features -> app, never the other way around
 
 ## Done when
 
-- `pnpm typecheck` and `pnpm lint` pass
+- `pnpm typecheck`, `pnpm lint` and `pnpm test` pass
 - The page was opened with Playwright MCP and screenshots at 375 px and 1440 px match DESIGN.md
 - No errors in the browser console

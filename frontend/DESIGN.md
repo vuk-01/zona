@@ -310,7 +310,7 @@ replace them.
   `primary` (or an `OctagonX` in `destructive` for an error), a weight-600 title and one line in
   `muted-foreground`. Bottom right on md+, full width above the tab bar on phones; it leaves after 4s and
   can be swiped away. Code: `src/components/ui/sonner.tsx` (shadcn's Sonner, drawn only with tokens),
-  mounted once in `AppLayout`; call `toast.success(title, { description })` from `sonner`.
+  mounted once in `src/app/providers.tsx` (every page, /login and /signup too); call `toast.success(title, { description })` from `sonner`.
 
 ## Popular time (from slika3)
 

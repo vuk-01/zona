@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { Outlet } from 'react-router'
 
-import { Toaster } from '@/components/ui/sonner'
 import type { UserMode } from '@/lib/user'
 
 import { BottomNav } from './bottom-nav'
@@ -29,8 +28,8 @@ type AppLayoutProps = {
 
 // Mobile: top bar (wordmark, theme toggle + account) on the sky background, content in a white sheet,
 // the tab bar at the bottom. Desktop (md+): the navy side menu with the navigation and, at its bottom,
-// the account; the theme toggle top right above the content. Toasts (the result of an action that keeps
-// the user on the page, e.g. approving a reservation) come in bottom right, above the tab bar on phones.
+// the account; the theme toggle top right above the content. Toasts come in bottom right, above the tab
+// bar on phones (the Toaster is mounted in src/app/providers.tsx, for the auth pages too).
 export function AppLayout({
   mode,
   isLoading,
@@ -72,7 +71,6 @@ export function AppLayout({
         badges={badges}
         onProtectedNav={onProtectedNav}
       />
-      <Toaster />
     </div>
   )
 }
