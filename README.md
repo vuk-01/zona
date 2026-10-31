@@ -25,6 +25,20 @@ pnpm dev              # http://localhost:5173
 Other commands: `pnpm typecheck`, `pnpm lint` (oxlint and the boundary check between features),
 `pnpm build`, `pnpm format`.
 
+### Backend
+
+The dev server proxies `/api` to the backend on port 8000. Set the backend up once (Python 3.13 and
+Poetry, see `backend/README.md`), then run it next to `pnpm dev`, in a second terminal:
+
+```bash
+cd backend && poetry install && poetry run migrate && poetry run seed   # once
+pnpm dev:api          # http://localhost:8000/docs
+```
+
+A token lives 60 minutes; for development, a longer `ACCESS_TOKEN_EXPIRE_MINUTES` in `backend/.env`
+saves logging in again. The frontend moves from the mock to the API step by step, see
+`docs/specs/frontend-wiring.md`.
+
 ## Demo users
 
 The mock data lives in `frontend/src/lib/mock-db.ts` and resets on every page reload.

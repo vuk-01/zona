@@ -4,6 +4,7 @@
   "packageManager": "pnpm@12.14.0",
   "scripts": {
     "dev": "pnpm --filter frontend dev",
+    "dev:api": "cd backend && poetry run start",
     "typecheck": "pnpm --filter frontend typecheck",
     "lint": "pnpm --filter frontend lint",
     "build": "pnpm --filter frontend build",

@@ -14,7 +14,8 @@ You may talk to me in any language.
 
 ## Commands (run from the repo root)
 - `pnpm install`: installs dependencies for every package in the workspace
-- `pnpm dev`: frontend dev server at http://localhost:5173
+- `pnpm dev`: frontend dev server at http://localhost:5173 (proxies `/api` to port 8000)
+- `pnpm dev:api`: backend at http://localhost:8000 (`poetry run start` in `backend/`)
 - `pnpm typecheck`: TypeScript check
 - `pnpm lint`: oxlint and the boundary check between features
 - `pnpm build`: production build
