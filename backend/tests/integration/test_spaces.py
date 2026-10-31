@@ -697,6 +697,25 @@ def test_delete_with_active_bookings_is_409_and_keeps_everything(
     assert bookings_of(space_id) == len(statuses)
 
 
+def test_delete_by_other_user_is_403_before_the_active_bookings_count(
+    client: TestClient,
+    host_auth_headers: dict[str, str],
+    other_auth_headers: dict[str, str],
+    set_now: Callable[[datetime], None],
+) -> None:
+    # The owner check comes first: a stranger learns nothing about the space's bookings (no 409).
+    set_now(WEDNESDAY_10_LOCAL)
+    space_id = create(client, host_auth_headers)["id"]
+    book(client, register(client, "guest@example.com"), space_id, "10:00", "12:00")
+
+    response = client.delete(f"/api/spaces/{space_id}", headers=other_auth_headers)
+
+    assert response.status_code == 403
+    assert response.json() == NOT_SPACE_OWNER
+    assert client.get(f"/api/spaces/{space_id}").status_code == 200
+    assert bookings_of(space_id) == 1
+
+
 def test_delete_deletes_the_bookings_that_are_no_longer_active_and_only_those(
     client: TestClient,
     host_auth_headers: dict[str, str],
