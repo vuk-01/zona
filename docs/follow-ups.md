@@ -157,7 +157,7 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
 
 PR 2 delivered `availableDesks`, `bookingCounts`, `DELETE /api/spaces` `409 space_has_active_bookings`
 (ADR-025, ADR-026, ADR-027) and `GET /api/bookings/availability` (ADR-028); none of them is open here.
-These four stay open:
+These stay open:
 
 - **Postgres run of `test_bookings_concurrency.py` and `test_spaces_concurrency.py` (open since PR 1).**
   Both files in `backend/tests/integration/` passed on SQLite only; the Postgres command is in the
@@ -207,6 +207,20 @@ These four stay open:
   When the frontend is connected: take the count from `bookingCounts.active` of the host's list
   (`delete-space-dialog.tsx` already falls back to it), or agree on a field in the contract; do not
   parse `detail` (ADR-018, ADR-005).
+- **A possible index for `booking_counts`.** `IBookingRepository.booking_counts` (host's list and
+  `DELETE /api/spaces`) filters `space_id IN (...)` and the status as returned, which depends on
+  `status`, `date` and `end_time`; the only composite index is `(space_id, date)`. Measure with
+  `EXPLAIN` on Postgres with realistic data before adding one (for example `(space_id, status, date)`);
+  a new index is a migration (ADR-004).
+- **`ISpaceService.get` computes `availableDesks` for callers that never read it.** Bookings
+  (`POST`, `availability`, `popular-times`) and favorites (`POST`) call it for the visibility check
+  and the space's fields; `_to_response` also counts the confirmed bookings of the current hour, one
+  `SELECT` too many per request. Options: a `get_visible` on the Protocol that returns the space
+  without the computed fields, or a flag; keep the 404 for someone else's draft in one place (ADR-020).
+- **Frontend wiring also covers `frontend/src/features/spaces/api/spaces-api.ts`.** `list` sends
+  `hostId` and gets `bookingCounts` only when it is the signed-in user's own id (left out of the
+  response otherwise, so the type is optional); `remove` handles `409 space_has_active_bookings`
+  (the count: the item above). Add both to "Frontend: connect bookings to the backend".
 
 ## From bookings PR 3 (left out of `feat/bookings-popular-times` on purpose)
 
