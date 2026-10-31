@@ -24,12 +24,11 @@ export function HostSpaceNew() {
       </HeroPanel>
       <SpaceForm
         isPending={createSpace.isPending}
-        error={createSpace.error}
+        // The backend takes the host from the token. mutateAsync: the form shows a failure itself.
         onSubmit={(input) =>
-          // The backend takes the host from the token
-          createSpace.mutate(input, {
-            onSuccess: (space) => navigate('/host/spaces', { state: savedNotice(space, true) }),
-          })
+          createSpace
+            .mutateAsync(input)
+            .then((space) => navigate('/host/spaces', { state: savedNotice(space, true) }))
         }
       />
     </section>

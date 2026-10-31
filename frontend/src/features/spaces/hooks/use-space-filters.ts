@@ -13,14 +13,17 @@ import {
 
 type FilterParam = 'q' | 'city' | 'category' | 'price'
 
+// GET /spaces answers 422 for a longer search or city, so a longer one from the URL is cut
+const MAX_SEARCH_LENGTH = 80
+
 // Explore's filters live in the URL (?q=&city=&category=&price=), so a search from Home, a refresh and the
 // Back button all keep them. Changing one filter keeps the others. The search is either a city picked from
 // the list (?city=, the exact name) or free text that matches a space's name or city (?q=).
 export function useSpaceFilters() {
   const [params, setParams] = useSearchParams()
 
-  const q = params.get('q') ?? ''
-  const city = params.get('city') ?? ''
+  const q = (params.get('q') ?? '').slice(0, MAX_SEARCH_LENGTH)
+  const city = (params.get('city') ?? '').slice(0, MAX_SEARCH_LENGTH)
   const categoryParam = params.get('category')
   const category = isSpaceCategory(categoryParam) ? categoryParam : undefined
   const priceParam = params.get('price')

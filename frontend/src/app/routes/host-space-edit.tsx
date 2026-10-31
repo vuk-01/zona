@@ -69,12 +69,11 @@ export function HostSpaceEdit() {
       <SpaceForm
         space={space}
         isPending={updateSpace.isPending}
-        error={updateSpace.error}
+        // mutateAsync: the form shows a failure itself
         onSubmit={(changes) =>
-          updateSpace.mutate(
-            { id: space.id, changes },
-            { onSuccess: (saved) => navigate('/host/spaces', { state: savedNotice(saved, false) }) },
-          )
+          updateSpace
+            .mutateAsync({ id: space.id, changes })
+            .then((saved) => navigate('/host/spaces', { state: savedNotice(saved, false) }))
         }
       />
     )
