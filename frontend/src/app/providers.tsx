@@ -18,7 +18,7 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry } } })
 // add it twice; the fixed toast id shows one toast for several refused requests at once.
 onSessionExpired(() => {
   queryClient.setQueryData(currentUserQueryKey, null)
-  void queryClient.invalidateQueries()
+  void queryClient.resetQueries()
   toast('Your session ended. Log in again.', { id: 'session-expired' })
 })
 
