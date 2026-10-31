@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Collection
 from datetime import UTC, date, datetime
 from typing import Protocol
 
-from sqlalchemy import ColumnElement, case, delete, or_, select, update
+from sqlalchemy import ColumnElement, Integer, case, delete, func, or_, select, type_coerce, update
 from sqlalchemy.orm import contains_eager, joinedload
 
 from app.bookings.models.booking import Booking, BookingStatus
@@ -33,6 +34,12 @@ class IBookingRepository(Protocol):
     def confirmed_per_hour(
         self, space_id: int, day: date, exclude_id: int | None = None
     ) -> dict[int, int]: ...
+
+    def confirmed_at(self, space_ids: Collection[int], day: date, hour: int) -> dict[int, int]: ...
+
+    def booking_counts(
+        self, space_ids: Collection[int], now: datetime
+    ) -> dict[int, tuple[int, int]]: ...
 
     def set_status(self, booking: Booking, new: str) -> bool: ...
 
@@ -130,6 +137,61 @@ class BookingRepository(IBookingRepository):
         for start_hour, end_hour in db.execute(query):
             taken.update(range(start_hour, end_hour))
         return dict(taken)
+
+    def confirmed_at(self, space_ids: Collection[int], day: date, hour: int) -> dict[int, int]:
+        """Confirmed bookings per space that cover the local `hour` of `day`: `{7: 2}`.
+
+        One query for a whole page of spaces, never one per space (ADR-027); a space without
+        such a booking is not in the result.
+        """
+        if not space_ids:
+            return {}
+        db = self._session_factory()
+        rows = db.execute(
+            select(Booking.space_id, func.count())
+            .where(
+                Booking.space_id.in_(space_ids),
+                Booking.date == day,
+                Booking.status == BookingStatus.CONFIRMED,
+                # The slot is [start, end): 10:00-12:00 covers 10 and 11, not 12.
+                Booking.start_hour <= hour,
+                Booking.end_hour > hour,
+            )
+            .group_by(Booking.space_id)
+        )
+        # A Row unpacks like a typed tuple since SQLAlchemy 2.1 (`Result.tuples()` is deprecated).
+        return dict(rows.all())
+
+    def booking_counts(
+        self, space_ids: Collection[int], now: datetime
+    ) -> dict[int, tuple[int, int]]:
+        """`(active, pending)` per space: active is `pending` or `confirmed` as returned at `now`.
+
+        The status as returned, so a booking whose slot has ended (`finished`, `expired`) is not
+        active; one that is under way still is. One query for a whole page of spaces (ADR-027); a
+        space without active bookings is not in the result.
+        """
+        if not space_ids:
+            return {}
+        db = self._session_factory()
+        returned = _returned_status(now)
+        rows = db.execute(
+            select(
+                Booking.space_id,
+                func.count(),
+                # Typed as Integer for mypy only (no CAST in SQL): an untyped `sum` makes the row
+                # unpack as `object`.
+                type_coerce(
+                    func.sum(case((returned == BookingReturnedStatus.PENDING, 1), else_=0)), Integer
+                ),
+            )
+            .where(
+                Booking.space_id.in_(space_ids),
+                returned.in_((BookingReturnedStatus.PENDING, BookingReturnedStatus.CONFIRMED)),
+            )
+            .group_by(Booking.space_id)
+        )
+        return {space_id: (active, pending) for space_id, active, pending in rows}
 
     def set_status(self, booking: Booking, new: str) -> bool:
         """Compare-and-set: False when the row is gone or no longer has the status it was read with."""

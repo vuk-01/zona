@@ -25,6 +25,7 @@ from app.bookings.repositories.booking import IBookingRepository
 from app.bookings.schemas.booking import (
     POPULAR_FIRST_HOUR,
     POPULAR_HOURS,
+    AvailabilityResponseSchema,
     BookingCreateRequestSchema,
     BookingGuestSchema,
     BookingListFilters,
@@ -78,6 +79,10 @@ class IBookingService(Protocol):
     def create(
         self, data: BookingCreateRequestSchema, current_user: CurrentUser
     ) -> BookingResponseSchema: ...
+
+    def availability(
+        self, data: BookingCreateRequestSchema, current_user: CurrentUser | None
+    ) -> AvailabilityResponseSchema: ...
 
     def popular_times(
         self, space_id: int, current_user: CurrentUser | None
@@ -211,12 +216,7 @@ class BookingService(IBookingService):
         if space.host.id == current_user.id:
             raise CannotBookOwnSpaceException
         now = self._clock.now()
-        # Before the slot: the time helpers cannot reach a date in year 1 or 9999 (OverflowError).
-        _raise_if_outside_booking_window(data.date, now)
-        start_hour, end_hour = _slot_hours(space, data)
-        # A booking that starts exactly now has already started (ADR-022).
-        if local_hour_to_utc(data.date, start_hour) <= now:
-            raise BookingInPastException
+        start_hour, end_hour = _checked_slot(space, data, now)
         # Advice only: a pending booking takes no room, confirm checks again under the lock (ADR-023).
         self._raise_if_full(
             space_id=space.id,
@@ -248,6 +248,31 @@ class BookingService(IBookingService):
             raise  # both exist: a rule Pydantic lets through, a bug, not a client error
         return _to_response(booking, now)
 
+    def availability(
+        self, data: BookingCreateRequestSchema, current_user: CurrentUser | None
+    ) -> AvailabilityResponseSchema:
+        # The checks of POST and the count of confirm, so the answer is what confirm would say now
+        # (ADR-028). Without the lock: advice, like POST. A host may ask about their own space.
+        space = self._space_service.get(space_id=data.space_id, current_user=current_user)
+        start_hour, end_hour = _checked_slot(space, data, self._clock.now())
+        free, full_at = self._free_units(
+            space_id=space.id,
+            desk_count=space.desk_count,
+            day=data.date,
+            start_hour=start_hour,
+            end_hour=end_hour,
+        )
+        has_desks = space.desk_count is not None
+        return AvailabilityResponseSchema(
+            available=full_at is None,
+            free_desks=free if has_desks else None,
+            message=(
+                None
+                if full_at is None
+                else SlotFullException.at(_hh_mm(full_at), has_desks=has_desks).message
+            ),
+        )
+
     def _raise_if_full(
         self,
         space_id: int,
@@ -257,14 +282,39 @@ class BookingService(IBookingService):
         end_hour: int,
         exclude_id: int | None = None,
     ) -> None:
+        _, full_at = self._free_units(
+            space_id=space_id,
+            desk_count=desk_count,
+            day=day,
+            start_hour=start_hour,
+            end_hour=end_hour,
+            exclude_id=exclude_id,
+        )
+        if full_at is not None:
+            raise SlotFullException.at(_hh_mm(full_at), has_desks=desk_count is not None)
+
+    def _free_units(
+        self,
+        space_id: int,
+        desk_count: int | None,
+        day: date,
+        start_hour: int,
+        end_hour: int,
+        exclude_id: int | None = None,
+    ) -> tuple[int, int | None]:
+        """Units free in the busiest hour of the slot (never below 0), and the first full hour.
+
+        One count for POST, confirm and availability, so they cannot disagree (ADR-028).
+        """
         taken = self._booking_repository.confirmed_per_hour(
             space_id=space_id, day=day, exclude_id=exclude_id
         )
         # A database CHECK keeps desk_count NULL for every category but desk.
         units = desk_count or 1
-        for hour in range(start_hour, end_hour):
-            if taken.get(hour, 0) >= units:
-                raise SlotFullException.at(_hh_mm(hour), has_desks=desk_count is not None)
+        free = [units - taken.get(hour, 0) for hour in range(start_hour, end_hour)]
+        full_at = next((start_hour + i for i, left in enumerate(free) if left <= 0), None)
+        # A lowered deskCount can leave more confirmed bookings than desks (docs/follow-ups.md).
+        return max(min(free), 0), full_at
 
     def popular_times(
         self, space_id: int, current_user: CurrentUser | None
@@ -280,6 +330,23 @@ class BookingService(IBookingService):
             space_id=space.id, first_day=first_day, last_day=last_day
         )
         return PopularTimesResponseSchema(days=_popular_days(space, taken, first_day, last_day))
+
+
+def _checked_slot(
+    space: SpaceResponseSchema, data: BookingCreateRequestSchema, now: datetime
+) -> tuple[int, int]:
+    """The slot checks of POST and availability, in the contract's order (ADR-028).
+
+    The booking window, then the slot, then a start strictly after now; the caller has already
+    checked that the user can view the space. Returns the slot as local hours.
+    """
+    # Before the slot: the time helpers cannot reach a date in year 1 or 9999 (OverflowError).
+    _raise_if_outside_booking_window(data.date, now)
+    start_hour, end_hour = _slot_hours(space, data)
+    # A booking that starts exactly now has already started (ADR-022).
+    if local_hour_to_utc(data.date, start_hour) <= now:
+        raise BookingInPastException
+    return start_hour, end_hour
 
 
 def _raise_if_outside_booking_window(day: date, now: datetime) -> None:

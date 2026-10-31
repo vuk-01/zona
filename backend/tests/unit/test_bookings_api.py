@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, get_args
 from unittest.mock import Mock
 
 import pytest
+from fastapi import params
 from fastapi.testclient import TestClient
 
 from app.auth.exceptions.auth import InvalidTokenException
+from app.bookings.api.booking import get_availability_slot
 from app.bookings.exceptions.booking import (
     BookingInPastException,
     BookingNotFoundException,
@@ -24,6 +27,8 @@ from app.bookings.exceptions.booking import (
     SlotFullException,
 )
 from app.bookings.schemas.booking import (
+    AvailabilityResponseSchema,
+    BookingCreateRequestSchema,
     BookingGuestSchema,
     BookingListFilters,
     BookingResponseSchema,
@@ -39,6 +44,13 @@ pytestmark = pytest.mark.unit
 
 AUTH = {"Authorization": "Bearer token"}
 BODY = {"spaceId": 7, "date": "2026-11-04", "startTime": "10:00", "endTime": "12:00"}
+# The same slot as query parameters of GET /availability.
+QUERY: dict[str, str | int] = {
+    "spaceId": 7,
+    "date": "2026-11-04",
+    "startTime": "10:00",
+    "endTime": "12:00",
+}
 
 BOOKING = BookingResponseSchema(
     id=3,
@@ -133,17 +145,21 @@ def test_create_with_invalid_body_is_422_with_field_errors(
     booking_service.create.assert_not_called()
 
 
+# "2026-11-04\n": `$` in a regex also matches before a trailing newline, `fullmatch` does not.
+@pytest.mark.parametrize("value", [1793836800, "2026-11-04T00:00:00", "2026-11-04\n"])
 def test_a_date_that_is_not_yyyy_mm_dd_says_the_format(
-    client: TestClient, booking_service: Mock
+    client: TestClient, booking_service: Mock, value: int | str
 ) -> None:
-    created = client.post("/api/bookings", json=BODY | {"date": 1793836800}, headers=AUTH)
-    listed = client.get("/api/bookings?date=1793836800", headers=AUTH)
+    created = client.post("/api/bookings", json=BODY | {"date": value}, headers=AUTH)
+    listed = client.get("/api/bookings", params={"date": value}, headers=AUTH)
+    checked = client.get("/api/bookings/availability", params=QUERY | {"date": value})
 
-    for response in (created, listed):
+    for response in (created, listed, checked):
         assert response.status_code == 422
         assert response.json()["fieldErrors"]["date"] == "Use the format YYYY-MM-DD"
     booking_service.create.assert_not_called()
     booking_service.list.assert_not_called()
+    booking_service.availability.assert_not_called()
 
 
 @pytest.mark.parametrize("missing", ["spaceId", "date", "startTime", "endTime"])
@@ -605,3 +621,184 @@ def test_popular_times_without_a_valid_space_id_is_422(
     assert response.json()["code"] == "validation_error"
     assert set(response.json()["fieldErrors"]) == {"spaceId"}
     booking_service.popular_times.assert_not_called()
+
+
+# --- GET /api/bookings/availability ---
+
+FREE = AvailabilityResponseSchema(available=True, free_desks=2, message=None)
+
+
+def test_availability_is_public_and_not_caught_by_the_booking_id_route(
+    client: TestClient, booking_service: Mock
+) -> None:
+    booking_service.availability.return_value = FREE
+
+    response = client.get("/api/bookings/availability", params=QUERY)
+
+    assert response.status_code == 200
+    assert response.json() == {"available": True, "freeDesks": 2, "message": None}
+    kwargs = booking_service.availability.call_args.kwargs
+    assert kwargs["current_user"] is None
+    assert kwargs["data"].model_dump() == {
+        "space_id": 7,
+        "date": date(2026, 11, 4),
+        "start_time": "10:00",
+        "end_time": "12:00",
+    }
+    booking_service.get.assert_not_called()
+
+
+def test_availability_returns_the_slot_full_message(
+    client: TestClient, booking_service: Mock
+) -> None:
+    booking_service.availability.return_value = AvailabilityResponseSchema(
+        available=False, free_desks=None, message="This space is already booked at 10:00"
+    )
+
+    response = client.get("/api/bookings/availability", params=QUERY)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "available": False,
+        "freeDesks": None,
+        "message": "This space is already booked at 10:00",
+    }
+
+
+def test_availability_passes_the_signed_in_user(client: TestClient, booking_service: Mock) -> None:
+    booking_service.availability.return_value = FREE
+
+    response = client.get("/api/bookings/availability", params=QUERY, headers=AUTH)
+
+    assert response.status_code == 200
+    assert booking_service.availability.call_args.kwargs["current_user"].id == 1
+
+
+def test_availability_with_an_invalid_token_is_401(
+    client: TestClient, booking_service: Mock, auth_service: Mock
+) -> None:
+    auth_service.get_current_user.side_effect = InvalidTokenException()
+
+    response = client.get("/api/bookings/availability", params=QUERY, headers=AUTH)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid or expired token", "code": "invalid_token"}
+    booking_service.availability.assert_not_called()
+
+
+def test_availability_query_has_the_same_limits_as_the_post_body() -> None:
+    # A limit added only to the schema would pass the Query check and then fail inside the
+    # dependency's BookingCreateRequestSchema(...) as a 500, not a 422 with fieldErrors.
+    def limits(base: Any, metadata: list[Any]) -> tuple[Any, list[str]]:
+        return base, [repr(item) for item in metadata]
+
+    query: dict[str, tuple[Any, list[str]]] = {}
+    for parameter in inspect.signature(get_availability_slot, eval_str=True).parameters.values():
+        base, *extras = get_args(parameter.annotation)
+        (param,) = [extra for extra in extras if isinstance(extra, params.Query)]
+        others = [extra for extra in extras if extra is not param]
+        assert param.alias is not None
+        query[param.alias] = limits(base, [*others, *param.metadata])
+    body = {
+        field.alias or name: limits(field.annotation, field.metadata)
+        for name, field in BookingCreateRequestSchema.model_fields.items()
+    }
+
+    assert query == body
+
+
+@pytest.mark.parametrize(
+    ("error", "status_code", "body"),
+    [
+        (SpaceNotFoundException(), 404, {"detail": "Space not found", "code": "space_not_found"}),
+        (
+            InvalidSlotException.closed("Glass Room"),
+            422,
+            {
+                "detail": "Glass Room is closed on that day",
+                "code": "invalid_slot",
+                "fieldErrors": {"date": "Glass Room is closed on that day"},
+            },
+        ),
+        (
+            BookingInPastException(),
+            422,
+            {
+                "detail": _NOT_STARTED,
+                "code": "booking_in_past",
+                "fieldErrors": {"startTime": _NOT_STARTED},
+            },
+        ),
+        (
+            BookingTooFarAheadException(),
+            422,
+            {
+                "detail": "Pick a date within the next 365 days",
+                "code": "booking_too_far_ahead",
+                "fieldErrors": {"date": "Pick a date within the next 365 days"},
+            },
+        ),
+    ],
+)
+def test_availability_maps_the_service_errors(
+    client: TestClient,
+    booking_service: Mock,
+    error: Exception,
+    status_code: int,
+    body: dict[str, Any],
+) -> None:
+    booking_service.availability.side_effect = error
+
+    response = client.get("/api/bookings/availability", params=QUERY)
+
+    assert response.status_code == status_code
+    assert response.json() == body
+
+
+@pytest.mark.parametrize(
+    ("changes", "field"),
+    [
+        ({"spaceId": "abc"}, "spaceId"),
+        ({"spaceId": "0"}, "spaceId"),
+        ({"spaceId": "2147483648"}, "spaceId"),
+        ({"startTime": "9:00"}, "startTime"),
+        ({"startTime": "24:00"}, "startTime"),
+        ({"endTime": "25:00"}, "endTime"),
+        ({"endTime": "24:30"}, "endTime"),
+    ],
+)
+def test_availability_with_an_invalid_query_is_422_with_camel_case_field_errors(
+    client: TestClient, booking_service: Mock, changes: dict[str, str | int], field: str
+) -> None:
+    response = client.get("/api/bookings/availability", params=QUERY | changes)
+
+    assert response.status_code == 422
+    body = response.json()
+    assert (body["detail"], body["code"]) == ("Validation failed", "validation_error")
+    assert set(body["fieldErrors"]) == {field}
+    booking_service.availability.assert_not_called()
+
+
+@pytest.mark.parametrize("missing", ["spaceId", "date", "startTime", "endTime"])
+def test_availability_without_a_parameter_is_422(
+    client: TestClient, booking_service: Mock, missing: str
+) -> None:
+    params = {key: value for key, value in QUERY.items() if key != missing}
+
+    response = client.get("/api/bookings/availability", params=params)
+
+    assert response.status_code == 422
+    assert response.json()["fieldErrors"] == {missing: "Field required"}
+    booking_service.availability.assert_not_called()
+
+
+def test_availability_with_a_time_off_the_whole_hour_reaches_the_service(
+    client: TestClient, booking_service: Mock
+) -> None:
+    """10:30 has the `HH:mm` shape: the service answers it with `invalid_slot`, as on POST."""
+    booking_service.availability.return_value = FREE
+
+    response = client.get("/api/bookings/availability", params=QUERY | {"startTime": "10:30"})
+
+    assert response.status_code == 200
+    assert booking_service.availability.call_args.kwargs["data"].start_time == "10:30"

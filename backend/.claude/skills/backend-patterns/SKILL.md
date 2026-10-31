@@ -5,7 +5,7 @@ description: Patterns for FastAPI endpoints, services, repositories, SQLAlchemy 
 
 # Backend patterns
 
-Every snippet below is copied from `app/listings/`, the reference domain, except §10 and §11, which come from
+Every snippet below is copied from `app/listings/`, the reference domain, except §10 to §12, which come from
 `app/bookings/` and `app/spaces/`. Copy the shape, rename the entity. All paths are relative to the repo root. A domain has no `__init__.py`; file names are the singular entity.
 
 ```
@@ -377,15 +377,16 @@ hour without this one. Under the lock the count is the truth (on `POST` the same
 `pending` booking takes no room):
 
 ```python
-# app/bookings/services/booking.py
+# app/bookings/services/booking.py (_free_units; _raise_if_full raises SlotFullException.at(full_at))
 taken = self._booking_repository.confirmed_per_hour(
     space_id=space_id, day=day, exclude_id=exclude_id
 )
 # A database CHECK keeps desk_count NULL for every category but desk.
 units = desk_count or 1
-for hour in range(start_hour, end_hour):
-    if taken.get(hour, 0) >= units:
-        raise SlotFullException.at(_hh_mm(hour), has_desks=desk_count is not None)
+free = [units - taken.get(hour, 0) for hour in range(start_hour, end_hour)]
+full_at = next((start_hour + i for i, left in enumerate(free) if left <= 0), None)
+# A lowered deskCount can leave more confirmed bookings than desks (docs/follow-ups.md).
+return max(min(free), 0), full_at
 ```
 
 The write is a compare-and-set, which also guards cancel, decline and delete (no lock there):
@@ -422,6 +423,102 @@ read is in the identity map: no row → `404 booking_not_found`, another status 
 (`_raise_lost_race`). It never assumes the row is still there. On SQLite this works only in pysqlite's legacy
 transaction mode (ADR-023).
 
+### `DELETE /api/spaces`: the same lock, also against a new booking (ADR-025, ADR-026)
+
+Deleting a space deletes its bookings (CASCADE), so the count of active bookings must not change between the count
+and the DELETE. A new `pending` booking changes it, and `POST /api/bookings` takes no lock: its INSERT only checks
+the foreign key. `lock(space_id)` is therefore the no-op `UPDATE` first (SQLite's write lock, which the INSERT waits
+for) and `FOR UPDATE` right after it (on Postgres the no-op `UPDATE` is only `FOR NO KEY UPDATE`, which the
+foreign-key check's `FOR KEY SHARE` passes; SQLite leaves `FOR UPDATE` out):
+
+```python
+# app/spaces/repositories/space.py
+def lock(self, space_id: int) -> int | None:
+    db = self._session_factory()
+    locked_id = db.execute(
+        update(Space)
+        .where(Space.id == space_id)
+        .values(id=Space.id)
+        .returning(Space.id)
+        .execution_options(synchronize_session=False)
+    ).scalar_one_or_none()
+    if locked_id is None:
+        return None
+    return db.scalar(select(Space.id).where(Space.id == locked_id).with_for_update())
+```
+
+The service checks the owner before the lock, from columns (`get_owner`: `host_id` never changes, `status` only picks
+`404` or `403` for someone who is refused anyway), and counts after it:
+
+```python
+# app/spaces/services/space.py
+owner = self._space_repository.get_owner(space_id)
+if owner is None:
+    raise SpaceNotFoundException
+_raise_unless_owner(*owner, current_user=current_user)
+if self._space_repository.lock(space_id) is None:
+    raise SpaceNotFoundException  # deleted by a parallel request after the check
+active, _ = self._booking_repository.booking_counts(
+    space_ids=[space_id], now=self._clock.now()
+).get(space_id, (0, 0))
+if active:
+    raise SpaceHasActiveBookingsException(active)
+if not self._space_repository.delete(space_id):
+    raise SpaceNotFoundException
+```
+
+`booking_counts` is the same grouped query the host's list uses (§12), so "active" (`pending` or `confirmed` as
+returned) is defined once.
+
+### A read that answers what a write would: the same functions, not a copy (ADR-028)
+
+`GET /api/bookings/availability` asks "would a confirm of this slot go through now?". It calls the same two
+functions as `POST` and confirm, so the question and the write cannot drift apart: `_checked_slot` holds the
+checks of `POST` in their order, `_free_units` the count of confirm. Only what the contract leaves out differs:
+no "not own" check, no lock (advice, like `POST`), no write.
+
+```python
+# app/bookings/services/booking.py
+def _checked_slot(
+    space: SpaceResponseSchema, data: BookingCreateRequestSchema, now: datetime
+) -> tuple[int, int]:
+    # Before the slot: the time helpers cannot reach a date in year 1 or 9999 (OverflowError).
+    _raise_if_outside_booking_window(data.date, now)
+    start_hour, end_hour = _slot_hours(space, data)
+    # A booking that starts exactly now has already started (ADR-022).
+    if local_hour_to_utc(data.date, start_hour) <= now:
+        raise BookingInPastException
+    return start_hour, end_hour
+```
+
+```python
+# app/bookings/services/booking.py (BookingService.availability)
+space = self._space_service.get(space_id=data.space_id, current_user=current_user)
+start_hour, end_hour = _checked_slot(space, data, self._clock.now())
+free, full_at = self._free_units(
+    space_id=space.id,
+    desk_count=space.desk_count,
+    day=data.date,
+    start_hour=start_hour,
+    end_hour=end_hour,
+)
+has_desks = space.desk_count is not None
+return AvailabilityResponseSchema(
+    available=full_at is None,
+    free_desks=free if has_desks else None,
+    message=None
+    if full_at is None
+    else SlotFullException.at(_hh_mm(full_at), has_desks=has_desks).message,
+)
+```
+
+The query parameters reuse the body's limits (`START_TIME_PATTERN`, `END_TIME_PATTERN`, `IsoDate`, `MAX_ID`) in a
+dependency with `Query(alias="startTime", ...)` that builds `BookingCreateRequestSchema`. Not a query model
+(`Annotated[BookingCreateRequestSchema, Query()]`): with the camelCase alias generator FastAPI 0.115 reports some
+`fieldErrors` in snake_case (`space_id`, `start_time`). The route sits above `/{booking_id}`. The integration test
+asks availability and then confirms the same slot, and expects the same answer
+(`test_availability_answers_what_a_confirm_of_the_slot_answers` in `tests/integration/test_bookings_availability.py`).
+
 ## 11. Local time (ADR-022)
 
 Booking slots are wall-clock hours in Europe/Podgorica: `date` + `start_hour`/`end_hour`, not timestamps. "Now"
@@ -439,7 +536,58 @@ In Python the same rule reads `ends_at` back naive on SQLite and aware on Postgr
 service adds `tzinfo=UTC` to a naive value before it compares. Tests fix the time with `FixedClock`
 (`tests/utils.py`).
 
-## 12. File uploads: metadata before bytes
+## 12. Fields computed from another domain's rows: one query per page (ADR-027)
+
+`availableDesks` and `bookingCounts` are not stored; they count `bookings`. The bookings repository counts for the
+whole page in one grouped query each, and the space service calls it once, never per space:
+
+```python
+# app/spaces/services/space.py
+def _to_responses(
+    self, spaces: Sequence[Space], with_booking_counts: bool = False
+) -> Sequence[SpaceResponseSchema]:
+    now = self._clock.now()
+    local_now = now.astimezone(LOCAL_TIMEZONE)
+    # Only desk spaces open right now have free desks; the others are `null` without a query.
+    taken = self._booking_repository.confirmed_at(
+        space_ids=[space.id for space in spaces if _desk_count_now(space, local_now)],
+        day=local_now.date(),
+        hour=local_now.hour,
+    )
+    if not with_booking_counts:
+        return [_response(space, local_now, taken) for space in spaces]
+    counts = self._booking_repository.booking_counts(
+        space_ids=[space.id for space in spaces], now=now
+    )
+    return [
+        _response(space, local_now, taken, counts.get(space.id, (0, 0))) for space in spaces
+    ]
+```
+
+```python
+# app/bookings/repositories/booking.py
+returned = _returned_status(now)  # the one SQL definition of the status as returned (ADR-022)
+rows = db.execute(
+    select(
+        Booking.space_id,
+        func.count(),
+        func.sum(case((returned == BookingReturnedStatus.PENDING, 1), else_=0)),
+    )
+    .where(
+        Booking.space_id.in_(space_ids),
+        returned.in_((BookingReturnedStatus.PENDING, BookingReturnedStatus.CONFIRMED)),
+    )
+    .group_by(Booking.space_id)
+)
+```
+
+`get`, `POST` and `PATCH` use the same `_to_responses` with one space (`_to_response`), so every route computes the
+fields the same way. The count reaches the space service through `IBookingRepository` (ADR-020); the repository
+returns a `dict` keyed by space id and an empty one for no ids, without a query. `availableDesks` is
+`max(desk_count - taken.get(space.id, 0), 0)`: a `PATCH` can still lower `deskCount` below the confirmed bookings
+of the hour.
+
+## 13. File uploads: metadata before bytes
 
 The database never stores file contents. An upload endpoint saves the file outside the database (a folder
 such as `data/uploads/`, or object storage) and the row keeps only the path or URL (`image_url`),

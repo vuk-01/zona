@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.utils.exceptions import (
+    ConflictException,
     ForbiddenException,
     NotFoundException,
     UnprocessableEntityException,
@@ -25,6 +26,14 @@ class NotAHostException(ForbiddenException):
 class NotOwnFavoritesException(ForbiddenException):
     def __init__(self) -> None:
         super().__init__(message="You can only list your own favorites", code="not_own_favorites")
+
+
+class SpaceHasActiveBookingsException(ConflictException):
+    def __init__(self, active: int) -> None:
+        bookings = "booking" if active == 1 else "bookings"
+        super().__init__(
+            message=f"This space has {active} active {bookings}", code="space_has_active_bookings"
+        )
 
 
 class InvalidSpaceException(UnprocessableEntityException):

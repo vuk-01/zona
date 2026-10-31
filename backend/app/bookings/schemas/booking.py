@@ -17,9 +17,11 @@ MAX_ID = 2**31 - 1
 # `HH:mm`. A time that is not on a whole hour (10:30) has the right shape: the service answers
 # it with `invalid_slot`, not `validation_error` (docs/entities.md). "24:00" is midnight, an end only.
 # [0-9], not \d: Pydantic's regex engine reads \d as any Unicode digit ("1\u0660:00").
-_START_TIME = r"^([01][0-9]|2[0-3]):[0-5][0-9]$"
-_END_TIME = r"^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$"
-_ISO_DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+# Public: the `availability` query parameters reuse them.
+START_TIME_PATTERN = r"^([01][0-9]|2[0-3]):[0-5][0-9]$"
+END_TIME_PATTERN = r"^(([01][0-9]|2[0-3]):[0-5][0-9]|24:00)$"
+# fullmatch, not match: `$` also matches before a trailing newline ("2026-11-04\n").
+_ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
 
 def _iso_date_only(value: object) -> object:
@@ -27,7 +29,7 @@ def _iso_date_only(value: object) -> object:
     # brings a string; a `date` object only comes from Python code.
     if type(value) is dt.date:
         return value
-    if not isinstance(value, str) or not _ISO_DATE.match(value):
+    if not isinstance(value, str) or not _ISO_DATE.fullmatch(value):
         raise PydanticCustomError("date_format", "Use the format YYYY-MM-DD")
     return value
 
@@ -54,8 +56,8 @@ class BookingCreateRequestSchema(CamelCaseModel):
     # Local wall-clock date and hours in Europe/Podgorica (ADR-022); the service checks that the
     # date is today or at most 365 days ahead, because "today" comes from `IClock`.
     date: IsoDate
-    start_time: str = Field(pattern=_START_TIME, examples=["10:00"])
-    end_time: str = Field(pattern=_END_TIME, examples=["12:00"])
+    start_time: str = Field(pattern=START_TIME_PATTERN, examples=["10:00"])
+    end_time: str = Field(pattern=END_TIME_PATTERN, examples=["12:00"])
 
 
 class BookingStatusChange(StrEnum):
@@ -107,6 +109,16 @@ class BookingResponseSchema(CamelCaseResponseModel):
     total_price: float
     status: BookingReturnedStatus
     created_at: UtcDatetime
+
+
+class AvailabilityResponseSchema(CamelCaseResponseModel):
+    """Counts only, never anyone's bookings: what a confirm of this slot would answer now."""
+
+    available: bool
+    # Desks free in the busiest hour of the slot, never below 0; null for a space booked whole.
+    free_desks: int | None
+    # Null when the slot is free, else the `detail` of `409 slot_full` ("No desks left at 10:00").
+    message: str | None
 
 
 # Popular times cover the local hours 08:00-21:00, one value per hour (docs/entities.md).

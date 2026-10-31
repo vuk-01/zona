@@ -70,19 +70,12 @@ still uses the mock. When the frontend is connected:
   give it the same two checks, and map `booking_too_far_ahead` to `InvalidBookingError` on `date`.
   The date picker allows 60 days (`BOOKABLE_DAYS` in `hooks/use-booking-slot.ts`), so the UI never
   reaches the limit today; decide whether the picker stays at 60 or follows the backend's 365.
+- **Since bookings PR 2:** `GET /api/bookings/availability` answers `{available, freeDesks, message}`
+  for a slot before it is sent; `availability` in `bookings-api.ts` (mock, same shape) becomes a
+  `fetch` of that route.
 
 ## From bookings PR 1 (left out of `feat/bookings` on purpose)
 
-- **Bookings PR 2: remove the temporary sentence in `entities.md`.** The Booking "Built so far" note
-  in both copies says that `/api/bookings/availability` matches `GET /api/bookings/:id` and fails as an
-  invalid id (bookings PR 3 built `/popular-times` and took it out of that sentence). When PR 2
-  registers `/availability` before `/{booking_id}` in `backend/app/bookings/api/booking.py`, delete the
-  sentence from both copies in the same PR.
-- **`PATCH /api/spaces` against confirmed bookings.** A lower `deskCount`, a change of category or
-  new opening hours can leave confirmed bookings that no longer fit. The check takes
-  `ISpaceRepository.lock(space_id)` as its first statement, the lock `DELETE /api/spaces` takes in
-  bookings PR 2 (ADR-023). Until then PR 2 computes `availableDesks` as `max(…, 0)`, so a lowered
-  `deskCount` never shows a negative number.
 - **Confirm after the space became a draft.** The contract does not say what happens; today the host
   can still confirm (`200`, pinned by `test_confirm_after_the_space_became_a_draft_is_200_today` in
   `backend/tests/integration/test_bookings.py`). Decide, then change the contract and that test together.
@@ -101,14 +94,6 @@ still uses the mock. When the frontend is connected:
 - **`backend/app/database/__init__.py`** goes against `backend/CLAUDE.md` and ADR-014 (no
   `__init__.py` below `app/` except `app/__init__.py`). It only re-exports `Base`, for
   `alembic/env.py`; import `Base` from `app.database.base` there and delete the file.
-- **Postgres run of the concurrency tests (still open after the PR 1 review).**
-  `backend/tests/integration/test_bookings_concurrency.py` passed on SQLite only; the Postgres command
-  is in its docstring (not run on 2026-10-30, Docker was not running). The lock (ADR-023) and the
-  `403` before it (ADR-024) are proven on SQLite only, so bookings is not done until this runs. Run the
-  whole `test_bookings.py` on Postgres in the same go: the lost-race tests and
-  `test_cancel_or_delete_never_reaches_a_new_booking_with_the_same_id` insert and change rows over a
-  second connection, which behaves differently under Postgres' READ COMMITTED. Update the docstring
-  with the result.
 - **A host can confirm a booking whose slot has already started.** A `pending` booking turns
   `expired` only once its slot has ended, so between the start and the end the host can still
   confirm it (`200`), although the guest could no longer book that start (`booking_in_past`). The
@@ -135,10 +120,9 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
   `not_booking_participant` on `PATCH`/`DELETE` and the `DELETE` `404` in `test_bookings.py` too. This
   breaks the `*_maps_the_service_errors` entry in `.claude/frequent-mistakes.md` that this PR added:
   sharpen that entry so it names the full body (ADR-011, ADR-005).
-- **`"2026-11-04\n"` gets Pydantic's message, not "Use the format YYYY-MM-DD".** `_ISO_DATE.match` in
-  `backend/app/bookings/schemas/booking.py` uses `$`, which also matches before a trailing newline:
-  use `fullmatch` and add the case to the unit test. `entities.md` should also say that a well-formed
-  but impossible date (`2026-02-30`) is `422 validation_error` with Pydantic's message (ADR-002).
+- **`entities.md` does not say what an impossible date answers.** A well-formed but impossible date
+  (`2026-02-30`) is `422 validation_error` with Pydantic's message, not "Use the format YYYY-MM-DD";
+  say so in both copies (ADR-002).
 - **A cancel that loses to a confirm after the slot ended says "confirmed meanwhile".**
   `_raise_lost_race` in `backend/app/bookings/services/booking.py` builds the message from the stored
   status; the contract asks for the status as returned (`finished`). Pass it through
@@ -149,9 +133,6 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
 - **`entities.md` does not say the order for a date of today:** the slot rules come before
   `booking_in_past` (`now` 10:00, a slot 07:00–09:00 at a space opening at 08:00 answers
   `invalid_slot`). Add the sentence to both copies (ADR-002).
-- **No test for the "Built so far" behaviour of `/availability`** (`401` without or with a bad token,
-  `422 validation_error` with a valid one; `/popular-times` is built since bookings PR 3). Add a test
-  for that path; it goes away with the sentence in bookings PR 2 (ADR-011).
 - **`not_booking_participant` says "see" on `PATCH` and `DELETE`.** "Only the guest or the host can see
   this booking" is written for `GET`. Optional wording change in the code and both copies of
   `entities.md` (ADR-005).
@@ -171,6 +152,75 @@ fixed in the PR (`sqlite_autoincrement` on `bookings`); these stay open.
   the ids kept, `PRAGMA foreign_key_check` before commit, then on again; tried on a copy of a
   database with rows in every child table and counted before and after. Decide whether the
   stale-tab case is worth that, or whether the frontend handles it (ADR-024, ADR-003, ADR-004).
+
+## From bookings PR 2 (found in `feat/bookings-spaces`, left out on purpose)
+
+PR 2 delivered `availableDesks`, `bookingCounts`, `DELETE /api/spaces` `409 space_has_active_bookings`
+(ADR-025, ADR-026, ADR-027) and `GET /api/bookings/availability` (ADR-028); none of them is open here.
+These stay open:
+
+- **Postgres run of `test_bookings_concurrency.py` and `test_spaces_concurrency.py` (open since PR 1).**
+  Both files in `backend/tests/integration/` passed on SQLite only; the Postgres command is in the
+  docstring of `test_bookings_concurrency.py` (not run on 2026-10-30, Docker was not running). The
+  lock (ADR-023) and the `403` before it (ADR-024) are proven on SQLite only, so bookings is not done
+  until this runs. Run the whole `test_bookings.py` on Postgres in the same go: the lost-race tests and
+  `test_cancel_or_delete_never_reaches_a_new_booking_with_the_same_id` insert and change rows over a
+  second connection, which behaves differently under Postgres' READ COMMITTED.
+  **ADR-025 has to be measured, not only reasoned:** on Postgres the no-op `UPDATE` alone does not
+  hold back a new booking's foreign-key check (`FOR NO KEY UPDATE` vs `FOR KEY SHARE`), and
+  `lock(space_id)` relies on the `FOR UPDATE` after it, which comes from the Postgres docs. Expected
+  on Postgres: every test green, and in `test_post_first_and_the_parallel_delete_is_409_with_the_booking_kept`
+  `delete_got_through` is `False` (DELETE waits for the POST's transaction); on SQLite it is `True`
+  (the SAVEPOINT item below). Then run `test_spaces_concurrency.py` once with `lock` reduced to the
+  no-op `UPDATE` (no `FOR UPDATE`): the POST ↔ DELETE tests must fail on Postgres, which is what
+  proves ADR-025. Write the results into both docstrings.
+- **`PATCH /api/spaces` against confirmed bookings.** A lower `deskCount`, a change of category or
+  new opening hours can leave confirmed bookings that no longer fit (out of scope in
+  `backend/docs/specs/bookings.md`). The check takes `ISpaceRepository.lock(space_id)` as its first
+  statement, the lock `DELETE /api/spaces` takes since PR 2 (the no-op `UPDATE` plus `FOR UPDATE`,
+  ADR-025). Product decision first: which code answers it, and what happens to a booking outside new
+  opening hours. Until then `availableDesks` is `max(…, 0)` (ADR-027), so a lowered `deskCount` never
+  shows a negative number (`test_available_desks_never_go_below_0_when_the_desk_count_is_lowered` in
+  `backend/tests/integration/test_spaces.py`), and `entities.md` says the `PATCH` "does not check
+  bookings yet".
+- **Team decision: on SQLite a `POST` commits its row when `add()` releases its SAVEPOINT, before the
+  request ends.**
+  `add()` in `spaces`, `favorites`, `bookings` and `listings` inserts inside `db.begin_nested()`. When
+  that is the request's first write, pysqlite's legacy mode (ADR-023) has no transaction open: the
+  `SAVEPOINT` starts one, and SQLite treats the `RELEASE` of the outermost savepoint as a `COMMIT`.
+  The row is visible to other connections right after `add()` returns, and the endpoint's rollback
+  on a later error no longer removes it, so ADR-009 ("one transaction per endpoint") does not hold
+  for these `POST`s on SQLite. Checked with a script on a temporary database (read, `begin_nested()`
+  + INSERT, then another connection sees the row, and `rollback()` leaves it). No wrong answer found
+  today: nothing after `add()` raises in those services. It shows in
+  `test_post_first_and_the_parallel_delete_is_409_with_the_booking_kept`
+  (`backend/tests/integration/test_spaces_concurrency.py`): DELETE does not wait for the POST,
+  because the booking is already committed. Postgres is not affected (the SAVEPOINT is inside the
+  request's transaction). To decide: accept it as a SQLite-only exception to ADR-009 (written into
+  ADR-009 or a new ADR), or fix it. A fix must keep ADR-023's legacy mode for the `SELECT`s before a
+  lock, for example a `BEGIN` before the first SAVEPOINT of a session that has no transaction yet;
+  check it against `test_bookings_concurrency.py` and `test_spaces_concurrency.py`, and the
+  engine-dependent assertion in that test then flips to `False` (ADR-009, ADR-019, ADR-023).
+- **Frontend: the `409 space_has_active_bookings` count is only in `detail`.**
+  `SpaceHasActiveBookingsError.activeBookings` in `frontend/src/features/spaces/api/spaces-api.ts`
+  needs the number; the contract body is `{"detail": "This space has 2 active bookings", "code"}`.
+  When the frontend is connected: take the count from `bookingCounts.active` of the host's list
+  (`delete-space-dialog.tsx` already falls back to it), or agree on a field in the contract; do not
+  parse `detail` (ADR-018, ADR-005).
+- **A possible index for `booking_counts`.** `IBookingRepository.booking_counts` (host's list and
+  `DELETE /api/spaces`) filters `space_id IN (...)` and the status as returned, which depends on
+  `status`, `date` and `end_time`; the only composite index is `(space_id, date)`. Measure with
+  `EXPLAIN` on Postgres with realistic data before adding one (for example `(space_id, status, date)`);
+  a new index is a migration (ADR-004).
+- **`ISpaceService.get` computes `availableDesks` for callers that never read it.** Bookings
+  (`POST`, `availability`, `popular-times`) and favorites (`POST`) call it for the visibility check
+  and the space's fields; `_to_response` also counts the confirmed bookings of the current hour, one
+  `SELECT` too many per request. Options: a `get_visible` on the Protocol that returns the space
+  without the computed fields, or a flag; keep the 404 for someone else's draft in one place (ADR-020).
+- **Frontend wiring also covers `frontend/src/features/spaces/api/spaces-api.ts`.** `list` sends
+  `hostId` and gets `bookingCounts` only when it is the signed-in user's own id (left out of the
+  response otherwise, so the type is optional); `remove` handles `409 space_has_active_bookings`
+  (the count: the item above). Add both to "Frontend: connect bookings to the backend".
 
 ## From bookings PR 3 (left out of `feat/bookings-popular-times` on purpose)
 

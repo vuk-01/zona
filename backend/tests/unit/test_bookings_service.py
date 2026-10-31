@@ -19,6 +19,7 @@ from app.bookings.exceptions.booking import (
     BookingNotFoundException,
     BookingTooFarAheadException,
     CannotBookOwnSpaceException,
+    InvalidSlotException,
     InvalidStatusChangeException,
     NotBookingGuestException,
     NotBookingHostException,
@@ -862,3 +863,104 @@ def test_popular_times_of_a_space_exactly_14_days_old_starts_the_day_after_it_wa
     assert result is not None
     assert result.days.mon is not None
     assert result.days.mon[TEN] == 50
+
+
+# --- availability: the checks of POST, the count of confirm (ADR-028) ----------------------------
+
+
+def test_availability_checks_the_space_through_the_space_service_without_a_user(
+    service: BookingService, space_service: Mock, booking_repository: Mock
+) -> None:
+    result = service.availability(WEDNESDAY_10_TO_12, None)
+
+    assert (result.available, result.free_desks, result.message) == (True, 20, None)
+    space_service.get.assert_called_once_with(space_id=7, current_user=None)
+    # The count of confirm, without a booking to leave out; nothing is written.
+    booking_repository.confirmed_per_hour.assert_called_once_with(
+        space_id=7, day=date(2026, 11, 4), exclude_id=None
+    )
+    booking_repository.add.assert_not_called()
+
+
+def test_availability_of_the_hosts_own_space_is_answered(service: BookingService) -> None:
+    """POST refuses the host with 403; availability is only a question, and the contract has no 403."""
+    result = service.availability(WEDNESDAY_10_TO_12, create_current_user(HOST_ID))
+
+    assert result.available is True
+
+
+@pytest.mark.parametrize(
+    ("changes", "taken", "expected"),
+    [
+        # Desks free in the busiest hour of the slot.
+        ({}, {10: 15, 11: 19}, (True, 1, None)),
+        ({}, {10: 19, 11: 20}, (False, 0, "No desks left at 11:00")),
+        # A lowered deskCount can leave more confirmed bookings than desks: 0, never negative.
+        ({}, {10: 25}, (False, 0, "No desks left at 10:00")),
+        ({"category": "meeting-room", "deskCount": None}, {}, (True, None, None)),
+        (
+            {"category": "meeting-room", "deskCount": None},
+            {11: 1},
+            (False, None, "This space is already booked at 11:00"),
+        ),
+    ],
+)
+def test_availability_counts_like_confirm(
+    service: BookingService,
+    space_service: Mock,
+    booking_repository: Mock,
+    changes: dict[str, Any],
+    taken: dict[int, int],
+    expected: tuple[bool, int | None, str | None],
+) -> None:
+    space_service.get.return_value = space(**changes)
+    booking_repository.confirmed_per_hour.return_value = taken
+
+    result = service.availability(WEDNESDAY_10_TO_12, None)
+
+    assert (result.available, result.free_desks, result.message) == expected
+
+
+@pytest.mark.parametrize(
+    ("request_", "error"),
+    [
+        (all_day_on(date(2027, 10, 29)), BookingTooFarAheadException),
+        (all_day_on(date(9999, 12, 31)), BookingTooFarAheadException),
+        (all_day_on(date(1, 1, 1)), BookingInPastException),
+        # Sunday 2026-10-25: closed, but the date is gone; the window comes before the slot.
+        (
+            WEDNESDAY_10_TO_12.model_copy(update={"date": date(2026, 10, 25)}),
+            BookingInPastException,
+        ),
+        (WEDNESDAY_10_TO_12.model_copy(update={"start_time": "10:30"}), InvalidSlotException),
+        (WEDNESDAY_10_TO_12.model_copy(update={"end_time": "21:00"}), InvalidSlotException),
+        # Today 10:00 in Podgorica is now: already started.
+        (
+            WEDNESDAY_10_TO_12.model_copy(update={"date": date(2026, 10, 28)}),
+            BookingInPastException,
+        ),
+    ],
+)
+def test_availability_refuses_a_slot_as_post_does_before_counting(
+    service: BookingService,
+    booking_repository: Mock,
+    request_: BookingCreateRequestSchema,
+    error: type[Exception],
+) -> None:
+    with pytest.raises(error):
+        service.availability(request_, None)
+    with pytest.raises(error):
+        service.create(request_, GUEST)
+
+    booking_repository.confirmed_per_hour.assert_not_called()
+
+
+def test_availability_of_an_unknown_space_or_someone_elses_draft_is_404(
+    service: BookingService, space_service: Mock, booking_repository: Mock
+) -> None:
+    space_service.get.side_effect = SpaceNotFoundException()
+
+    with pytest.raises(SpaceNotFoundException):
+        service.availability(WEDNESDAY_10_TO_12, GUEST)
+
+    booking_repository.confirmed_per_hour.assert_not_called()
