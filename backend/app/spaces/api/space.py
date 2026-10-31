@@ -163,7 +163,7 @@ def update_space(
         *CURRENT_USER_ERRORS,
         NotSpaceOwnerException(),
         SpaceNotFoundException(),
-        SpaceHasActiveBookingsException(),
+        SpaceHasActiveBookingsException(2),
         _INVALID_ID,
     ),
 )

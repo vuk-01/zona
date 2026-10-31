@@ -29,7 +29,7 @@ class NotOwnFavoritesException(ForbiddenException):
 
 
 class SpaceHasActiveBookingsException(ConflictException):
-    def __init__(self, active: int = 2) -> None:
+    def __init__(self, active: int) -> None:
         bookings = "booking" if active == 1 else "bookings"
         super().__init__(
             message=f"This space has {active} active {bookings}", code="space_has_active_bookings"

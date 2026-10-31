@@ -445,6 +445,14 @@ def test_delete_maps_the_service_errors(
     assert response.json() == body
 
 
+def test_space_has_active_bookings_needs_the_count() -> None:
+    # No default count: a raise without the real number would tell the host a made-up one.
+    factory: Any = SpaceHasActiveBookingsException
+
+    with pytest.raises(TypeError):
+        factory()
+
+
 @pytest.mark.parametrize("method", ["patch", "delete"])
 @pytest.mark.parametrize("space_id", ["abc", "0", str(2**31)])
 def test_write_with_invalid_id_is_422(
