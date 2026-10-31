@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
+import { Toaster } from '@/components/ui/sonner'
 import { ApiError } from '@/lib/api-client'
 import { onSessionChanged, onSessionExpired } from '@/lib/auth-token'
 import { currentUserQueryKey } from '@/lib/user'
@@ -32,7 +33,13 @@ type ProvidersProps = {
   children: ReactNode
 }
 
-// All global providers in one place: the data cache, with its retry rule and the session end above.
+// All global providers in one place: the data cache, with its retry rule and the session end above,
+// and the Toaster, mounted once for every page (the session-end toast can come on /login too).
 export function Providers({ children }: ProvidersProps) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <Toaster />
+    </QueryClientProvider>
+  )
 }

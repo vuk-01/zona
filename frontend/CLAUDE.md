@@ -40,7 +40,7 @@ Dependency direction: shared code -> features -> app, never the other way around
 - `src/components/form/`: `FormField`, `FormAlert` and `TimeSelect` (a whole hour, on `ui/select.tsx`)
 - `src/components/feedback/`: `EmptyState` (every empty list and "not found" page) and `StatusNotice`
   (the visible result of an action); quick actions in a list (Approve / Decline) use a toast instead
-  (`toast` from `sonner`, `Toaster` in `src/components/ui/sonner.tsx`, mounted in `AppLayout`)
+  (`toast` from `sonner`, `Toaster` in `src/components/ui/sonner.tsx`, mounted in `src/app/providers.tsx`)
 - `src/components/user-avatar.tsx`: a user's photo or initials (profile, side menu, the guest on a
   host's reservation)
 - `src/app/app-shell.tsx`: reads the signed-in user and passes the guest/host `mode`, the account menu
