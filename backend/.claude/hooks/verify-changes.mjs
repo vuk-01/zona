@@ -61,7 +61,9 @@ process.stdin.on('end', () => {
     if (py.length > 0 && has('poetry')) {
       const files = py.map((file) => path.join(root, file))
       const poetry = ['--directory', backend, 'run']
-      const ruff = run('poetry', [...poetry, 'ruff', 'check', ...files], { cwd: backend })
+      // --force-exclude: files passed by name still honour the excludes in pyproject.toml (alembic/versions);
+      // black reads its force-exclude from pyproject.toml.
+      const ruff = run('poetry', [...poetry, 'ruff', 'check', '--force-exclude', ...files], { cwd: backend })
       if (ruff) failures.push(ruff)
       const black = run('poetry', [...poetry, 'black', '--check', '-q', ...files], { cwd: backend })
       if (black) failures.push(black)

@@ -99,13 +99,6 @@ still uses the mock. When the frontend is connected:
   `app/favorites/repositories/favorite.py` leave it on `"auto"`. No wrong answer was found: their
   `WHERE` is on the id only, not a compare-and-set. The fix would be `"fetch"`, for consistency with
   the bookings repository and `.claude/frequent-mistakes.md` (ADR-023).
-- **The `format` hook ignores `extend-exclude` and deletes new imports.** `backend/.claude/hooks/format.mjs`
-  passes the edited file to `ruff check --fix` and `black` by name, and both apply `extend-exclude`
-  (`alembic/versions` in `pyproject.toml`) only to files they find themselves, unless `--force-exclude`
-  is given. `--fix` also removes an import (F401) added in an edit before its first use, so the entry
-  about it in `.claude/frequent-mistakes.md` keeps coming back: the cause is the hook, not the agent.
-  Fix: `--force-exclude` for both commands and `--extend-unfixable F401` for ruff, then remove that
-  frequent-mistakes entry.
 - **`backend/app/database/__init__.py`** goes against `backend/CLAUDE.md` and ADR-014 (no
   `__init__.py` below `app/` except `app/__init__.py`). It only re-exports `Base`, for
   `alembic/env.py`; import `Base` from `app.database.base` there and delete the file.
