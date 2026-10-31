@@ -3,6 +3,8 @@
 // Reads the hook payload as JSON on stdin and looks at `tool_input.command`.
 // Exit 0 lets the command run. Exit 2 blocks it and sends the stderr message back to the agent.
 // Any parse or runtime failure exits 0, so a broken hook can never wedge the agent.
+// Wired in backend/.claude/settings.json and in the root .claude/settings.json, so a session started at
+// the repo root is guarded too.
 
 // Each rule is tested against one command segment (the text between `&&`, `||`, `;`, `|` or a newline),
 // anchored at the command position, so "git commit -m 'never run git reset --hard'" is not a false positive:

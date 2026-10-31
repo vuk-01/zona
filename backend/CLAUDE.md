@@ -66,6 +66,7 @@ Protocols (ADR-020).
 ## How the agent is kept honest
 Rules in markdown are requests. These are guarantees, wired in `.claude/settings.json` (Node hooks, so they run on every OS):
 `guard-bash` blocks `git push --force`, `git reset --hard`, `rm -rf` on source trees, `alembic downgrade`, `docker compose down -v`, destructive SQL, reading `.env` and `poetry add` (a dependency needs my approval; I run it); `guard-edits` blocks editing a committed migration, `.env` and `poetry.lock`; `format` runs ruff + black after every edit; `verify-changes` runs ruff + black + mypy + pytest when you stop and sends you back once if red; `/review-changes` runs `api-reviewer`, `security-reviewer` and `migration-reviewer` in parallel for one verdict.
+`guard-bash` and `guard-edits` are also wired in the root `.claude/settings.json`, so a session started at the repo root is guarded too; `format`, `verify-changes` and `session-start` run only in a session started in `backend/`.
 
 ## Done when
 - `poetry run lint && poetry run typecheck && poetry run test` pass (the Stop hook runs them too)
