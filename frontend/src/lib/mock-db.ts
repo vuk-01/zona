@@ -2,7 +2,6 @@
 // and the functions in src/features/<name>/api/ start calling the real backend.
 
 import type { Booking, BookingGuest } from './booking'
-import type { Favorite } from './favorite'
 import type { User } from './user'
 
 const DELAY_MS = 400
@@ -336,27 +335,10 @@ const bookings: Booking[] = [
   },
 ]
 
-// Saved spaces of the demo guests. Space 5 is a draft, so nobody has it; the Favorites page only shows
-// listed spaces anyway.
-const favorites: Favorite[] = [
-  { userId: ANA.id, spaceId: 1, createdAt: '2026-10-12T08:40:00Z' },
-  { userId: ANA.id, spaceId: 6, createdAt: '2026-10-15T19:05:00Z' },
-  { userId: ANA.id, spaceId: 3, createdAt: '2026-10-20T11:30:00Z' },
-  { userId: JELENA.id, spaceId: 4, createdAt: '2026-10-08T14:10:00Z' },
-  { userId: JELENA.id, spaceId: 2, createdAt: '2026-10-17T09:20:00Z' },
-  { userId: 5, spaceId: 1, createdAt: '2026-10-11T16:45:00Z' },
-  { userId: 5, spaceId: 2, createdAt: '2026-10-19T10:00:00Z' },
-  { userId: LUKA.id, spaceId: 6, createdAt: '2026-09-30T18:15:00Z' },
-  { userId: 8, spaceId: 1, createdAt: '2026-09-12T07:55:00Z' },
-  { userId: 8, spaceId: 3, createdAt: '2026-10-02T13:25:00Z' },
-]
-
 // One users table for auth (login, sign-up) and users (profile), so a profile change is seen by the
-// signed-in session right away. One bookings table for bookings (the overlap rule) and spaces (free
-// desks). One favorites table for favorites (the hearts) and spaces (the Favorites page). Every demo
-// account uses the password "zona1234".
-export const db: { users: StoredUser[]; bookings: Booking[]; favorites: Favorite[] } = {
+// signed-in session right away. One bookings table for bookings (the overlap rule). Every demo account uses
+// the password "zona1234".
+export const db: { users: StoredUser[]; bookings: Booking[] } = {
   users,
   bookings,
-  favorites,
 }

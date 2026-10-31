@@ -1,34 +1,19 @@
-import type { Favorite } from '@/lib/favorite'
-import { db, delay } from '@/lib/mock-db'
+import { type Page, api } from '@/lib/api-client'
 
-const newestFirst = (a: Favorite, b: Favorite) => b.createdAt.localeCompare(a.createdAt)
+import type { Favorite } from '../types'
 
-const isPair = (favorite: Favorite, userId: number, spaceId: number) =>
-  favorite.userId === userId && favorite.spaceId === spaceId
-
-// The rows live in src/lib/mock-db.ts, because the spaces mock reads them for GET /spaces?favoriteOf=.
-// The mock takes the user's id; the backend takes it from the session. There is no get or update: a
-// favorite is only saved or removed.
+// The signed-in user's favorites (docs/entities.md, Favorite); the backend takes the user from the
+// token. There is no get or update: a favorite is only saved or removed, and both are idempotent.
 export const favoritesApi = {
-  // GET /favorites: the signed-in user's favorites, newest first
-  list: async (userId: number) => {
-    await delay(undefined)
-    return db.favorites.filter((f) => f.userId === userId).toSorted(newestFirst)
+  // GET /favorites, newest first. The hearts need every saved space, so the largest page (500).
+  list: async (signal?: AbortSignal) => {
+    const page = await api.get<Page<Favorite>>('/favorites', { params: { size: 500 }, signal })
+    return page.items
   },
 
-  // POST /favorites { spaceId }. Saving a space twice changes nothing, so quick repeated clicks are safe.
-  create: async (userId: number, spaceId: number) => {
-    await delay(undefined)
-    const saved = db.favorites.find((f) => isPair(f, userId, spaceId))
-    if (saved) return saved
-    const favorite: Favorite = { userId, spaceId, createdAt: new Date().toISOString() }
-    db.favorites = [...db.favorites, favorite]
-    return favorite
-  },
+  // 201 when it is new, 200 when it was already saved: both are success, so quick repeated clicks are safe
+  create: (spaceId: number) => api.post<Favorite>('/favorites', { spaceId }),
 
-  // DELETE /favorites/:spaceId, also fine when the space was not saved
-  remove: async (userId: number, spaceId: number) => {
-    await delay(undefined)
-    db.favorites = db.favorites.filter((f) => !isPair(f, userId, spaceId))
-  },
+  // 204, also when the space was not saved
+  remove: (spaceId: number) => api.delete(`/favorites/${spaceId}`),
 }
