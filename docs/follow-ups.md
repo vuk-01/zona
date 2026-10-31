@@ -31,20 +31,13 @@ reference domain. Remove it once favorites and bookings are done, in this order,
 downgrade brings back an empty table); users and spaces are not touched. Everyone who pulls `main`
 should back up `data/app.db` first.
 
-## Frontend: connect favorites to the backend
+## Frontend: "Load more" on Explore
 
-The backend has `GET/POST/DELETE /api/favorites` and `GET /api/spaces?favoriteOf=` (branch
-`feat/favorites`); the frontend still uses the mock. When the frontend is connected:
-
-- `frontend/src/features/favorites/api/favorites-api.ts`: `list`, `create` and `remove` take a
-  `userId`; the real API takes the user from the token, so the parameter goes. `list` reads `items`
-  from the paginated answer.
-- `create` answers `201` or `200` (already saved); both are success. `remove` is `204` either way.
-- `list` leaves out a saved space the user can no longer view (another host's space that became a
-  draft), the same as `favoriteOf`; the hearts then show it as not saved until it is listed again.
-- `frontend/src/features/spaces/api/spaces-api.ts`: `favoriteOf` comes back newest saved first from the
-  backend; a `403 not_own_favorites` or `401` means the page asked with the wrong id or no token.
-- `frontend/src/lib/favorite.ts` and the rows in `frontend/src/lib/mock-db.ts` go with the mock.
+`GET /api/spaces` returns 50 spaces per page by default (`{total, items, pages}`). Explore shows the
+first page and counts all matches from `total` (`spaces-list.tsx`), so past 50 spaces the rest cannot
+be reached. Add a "Load more" button (`useInfiniteQuery` with `page`) under the grid. The bookings
+join, the category stats and My spaces ask for the largest page, 500 (`MAX_PAGE_SIZE` in
+`spaces-api.ts`); they need more pages once a list grows past that.
 
 ## Frontend: connect bookings to the backend
 

@@ -30,7 +30,8 @@ Dependency direction: shared code -> features -> app, never the other way around
 - `src/app/router.tsx`: all routes; `src/app/providers.tsx`: global providers (TanStack Query)
 - `src/app/routes/`: one file per route, only combines features and layout
 - `src/features/<name>/types.ts`: entity types of that feature
-- `src/features/<name>/api/<name>-api.ts`: the only place that fetches data (mock for now)
+- `src/features/<name>/api/<name>-api.ts`: the only place that fetches data, through `api` from `src/lib/api-client.ts`
+  (spaces and favorites; the others are still a mock)
 - `src/features/<name>/api/use-<name>.ts`: TanStack Query hooks around the API
 - `src/features/<name>/components/`: components of that feature (e.g. `space-card.tsx`)
 - `src/components/ui/`: shadcn/ui components, added with `pnpm dlx shadcn@latest add <name>` (run inside `frontend/`)
@@ -59,7 +60,7 @@ Dependency direction: shared code -> features -> app, never the other way around
   layout as `onProtectedNav` (nav items with `requiresAuth`); `/login` stays for direct links and
   `RequireAuth`'s redirects
 - Protected routes are wrapped in `RequireAuth` (`mode="host"` for `/host/*`) in `src/app/router.tsx`
-- `src/lib/`: `utils.ts` (`cn`), `mock-db.ts` (mock database and delay), `auth-token.ts` (the API
+- `src/lib/`: `utils.ts` (`cn`), `mock-db.ts` (the mock rows of the features not yet on the API, `delay`, `NotFoundError`), `auth-token.ts` (the API
   token in `localStorage`, `onSessionExpired` and `onSessionChanged` for `src/app`; tested in `auth-token.test.ts`), `api-client.ts` (`api.get/post/patch/delete`
   on `/api`, `ApiError`, `Page<T>`, `isNotFound`, `isTransient`, `errorMessage`; tested in `api-client.test.ts`) and `form-errors.ts` (`applyFieldErrors`, tested in `form-errors.test.ts`: the
   backend's `fieldErrors` on react-hook-form fields)
