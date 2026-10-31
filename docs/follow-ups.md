@@ -420,16 +420,30 @@ These stay open:
   `op.get_bind()` returns a `MockConnection`, not `None`. If the guard is ever needed, the right
   check is `context.is_offline_mode()`.
 
-## Backend: hooks only run in a session started in `backend/`
+## Backend: format and Stop hooks only run in a session started in `backend/`
 
-The backend hooks are wired in `backend/.claude/settings.json`; the root `.claude/settings.json` has
-only the frontend's Prettier hook. A Claude Code session started at the repo root therefore runs none
-of them: no ruff and black after an edit (`format.mjs`), no Stop check (`verify-changes.mjs`), and also
-no `guard-bash` / `guard-edits`, so a committed migration, `.env` or `poetry.lock` can be edited and
-`alembic downgrade` run from the root. The scripts also assume `CLAUDE_PROJECT_DIR` is `backend/`
-(`const backend = root`), so registering them in the root settings as they are would not work:
-`format.mjs` would treat the repo root as the backend, and `verify-changes.mjs` would run poetry
-outside `backend/`. Fix: resolve `backend` as the `backend/` folder of the git top level (or of
-`CLAUDE_PROJECT_DIR` when it is the root), register the five hooks in the root settings too, and check
-both entry points by hand: a session in `backend/` and one at the root, each with an unused import in
-a modified file (Stop hook exit 2) and an edit to a committed migration (blocked).
+`guard-bash` and `guard-edits` are wired in the root `.claude/settings.json` too (tested in
+`backend/.claude/hooks/guards.test.mjs`). `format.mjs` (ruff + black after an edit) and
+`verify-changes.mjs` (the Stop check) are still wired only in `backend/.claude/settings.json`, so a
+session at the repo root leaves edited `.py` files unformatted and unchecked until CI. Both assume
+`CLAUDE_PROJECT_DIR` is `backend/` (`const backend = root`): registered in the root settings as they
+are, `format.mjs` would treat the repo root as the backend and `verify-changes.mjs` would run poetry
+outside `backend/`. Fix: `const backend = path.resolve(import.meta.dirname, '../..')` in both, run
+`verify-changes`' git commands with `cwd: backend` (so `--relative` lists only `backend/` files), then
+register both in the root settings. Cost to weigh first: from the root the Stop hook runs mypy and
+pytest (up to 180 s) whenever any `.py` file is modified, also one this session did not touch.
+`session-start.mjs` stays backend-only. Check both entry points by hand: an unused import in a
+modified file (Stop hook exit 2) from `backend/` and from the root.
+
+## Backend: guard-bash cannot catch every way to write a protected file
+
+`guard-bash` blocks writing `.env*` (except `.env.example`) and `poetry.lock` from the shell through
+`>` / `>>`, `tee`, `sed -i`, `cp` and `mv`. A pattern on the command text cannot see every way to write
+a file: `python -c "open('.env', 'w')..."`, `node -e`, `perl -pi`, `dd of=`, `install`, a script
+file that writes it, a path built from a variable (`f=.env; echo x > $f`), or `cp x backend/` when the
+source is named `.env`. These rules stop the agent's usual commands, not a determined bypass; the real
+line is that `.env` is gitignored and holds only local values. Committed migrations are not protected
+from the shell at all: `guard-edits` blocks the Edit and Write tools, but `sed -i` or a redirect into
+`alembic/versions/*.py` passes, because `guard-bash` would need to ask git whether each target is
+committed. If that is ever needed, it can reuse `isCommitted` from `guard-edits.mjs` for every write
+target under `alembic/versions/`.
