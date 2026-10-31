@@ -34,8 +34,9 @@ export const authApi = {
 
   signup: async (input: SignupInput) => startSession(await api.post<AuthResponse>('/auth/register', input)),
 
-  // The backend has no logout route: forgetting the token ends the session.
-  logout: async () => {
+  // The backend has no logout route: forgetting the token ends the session. useLogout calls it only
+  // after the user is cleared, so no request goes out without the token in between.
+  logout: () => {
     clearToken()
   },
 }
