@@ -17,9 +17,41 @@ Prerequisites: Python 3.13 and [Poetry](https://python-poetry.org/docs/#installa
 ```bash
 poetry install            # creates .venv (in the project) and installs everything from poetry.lock
 poetry run migrate        # creates data/app.db with all tables (alembic upgrade head)
-poetry run seed           # demo user demo@example.com / demo1234 and 3 listings
+poetry run seed           # demo accounts (below), 6 spaces, favorites, bookings and 3 listings
 poetry run start          # http://localhost:8000/docs
 ```
+
+### Demo accounts
+
+**Local development only, never on a server:** the passwords are public. Every `@zona.app` account has
+the password `zona1234`; `demo@example.com` has `demo1234`. The seed refuses to run unless
+`ENVIRONMENT` is `dev` (the default in `app/config/settings.py`), so set any other value on a server.
+
+| Account              | Mode               | What it has                                                                 |
+| -------------------- | ------------------ | --------------------------------------------------------------------------- |
+| `marko@zona.app`     | host               | Hub Morača (24 desks), Njegoševa (2 desks), Hercegovačka (draft), Event Loft; 3 pending requests |
+| `milica@zona.app`    | host               | Glass Room, Riverside Boardroom; 2 pending requests                         |
+| `ivana@zona.app`     | host               | no spaces                                                                   |
+| `teodora@zona.app`   | guest (`isHost`)   | a host in guest mode; favorites and past bookings                           |
+| `ana@zona.app`       | guest              | confirmed, cancelled, declined, expired and finished bookings; 3 favorites  |
+| `jelena@zona.app`    | guest              | confirmed, pending, cancelled and finished bookings; 2 favorites            |
+| `nikola@zona.app`    | guest              | a pending booking at Njegoševa, finished bookings; 2 favorites              |
+| `luka@zona.app`      | guest              | today's confirmed desk at Hub Morača, a pending Event Loft request, finished bookings; 1 favorite (Event Loft) |
+| `demo@example.com`   | guest              | past bookings, 1 favorite, the 3 starter listings                           |
+
+Dates are relative to the day the seed runs: the spaces were created 8–10 weeks earlier, past
+confirmed bookings fill the last 8 weeks (so popular times has data), upcoming ones fall in the next
+two weeks, and Luka's confirmed booking at Hub Morača is for the day of the seed, from opening to
+closing (so Hub Morača shows "23 desks available" while it is open; none on a Sunday, when it is
+closed). After Hub Morača closes that day Luka's booking is `finished` and all 24 desks are free
+again, so seed a new database to get it back.
+
+The seed skips what exists (users by email, spaces by host, bookings when Marko already has some).
+It runs as one transaction: a seed that fails halfway rolls back as a whole, so running it again is
+safe. When a demo email is already registered with another password, the seed stops with that
+email and writes nothing. Start from a new database (delete `data/app.db`, then `poetry run migrate && poetry run seed`)
+when you want fresh dates, or after a seed from before these accounts (its spaces belong to
+`demo@example.com`).
 
 Configuration is read from `.env` (copy `.env.example`); every variable has a working default.
 The frontend dev server proxies `/api` to port 8000, so run both at once.
