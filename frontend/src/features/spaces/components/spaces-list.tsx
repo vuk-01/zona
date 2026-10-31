@@ -78,9 +78,12 @@ export function SpacesList({
   const { data: spaces, isLoading, error, refetch, isRefetching } = useSpaces(filters)
   // "Clear filters" disappears once it is used, so focus moves to the results instead of <body>.
   const resultsRef = useRef<HTMLDivElement>(null)
-  const shown = spaces?.slice(0, limit)
+  const shown = spaces?.items.slice(0, limit)
   const isRemoved = (space: Space) => only !== undefined && !only.has(space.id)
   const visibleCount = shown?.filter((space) => !isRemoved(space)).length
+  // "5 spaces" counts every match (total), not only this page, minus the cards removed just now (only)
+  const foundCount =
+    spaces && shown && visibleCount !== undefined ? spaces.total - (shown.length - visibleCount) : undefined
 
   // A removed card takes its focused heart with it (the last one takes the whole grid): focus moves to
   // the results, whose status line announces the new count (DESIGN.md "Accessibility").
@@ -166,7 +169,7 @@ export function SpacesList({
       // A new key per filter set: the cards come in again on every change, also from the cache
       <div key={JSON.stringify(filters)} className="flex flex-col gap-4">
         {showCount && !allRemoved && (
-          <p className={`text-sm text-muted-foreground ${fadeIn}`}>{spacesFound(visibleCount ?? 0)}</p>
+          <p className={`text-sm text-muted-foreground ${fadeIn}`}>{spacesFound(foundCount ?? 0)}</p>
         )}
         <ul className={grid}>
           {shown.map((space, index) => (
@@ -190,7 +193,7 @@ export function SpacesList({
     <div ref={resultsRef} tabIndex={-1} className="outline-none">
       {/* Always rendered, so screen readers hear the result of every filter change, not the whole grid */}
       <p role="status" className="sr-only">
-        {isLoading || error ? '' : visibleCount ? `${spacesFound(visibleCount)} found` : 'No spaces found'}
+        {isLoading || error ? '' : foundCount ? `${spacesFound(foundCount)} found` : 'No spaces found'}
       </p>
       {chips.length > 0 && (
         // Wraps onto a new row when the chips do not fit (phones)

@@ -16,19 +16,19 @@ import { SpaceGallery } from '@/features/spaces/components/space-gallery'
 import { SpaceSummary } from '@/features/spaces/components/space-summary'
 import { canView } from '@/features/spaces/types'
 import { HostCard } from '@/features/users/components/host-card'
-import { NotFoundError } from '@/lib/mock-db'
+import { isNotFound } from '@/lib/api-client'
 
 // A space: gallery, details, opening hours and host on the left; booking on the right (fixed bar on phones).
 export function SpaceDetail() {
   const { id } = useParams()
-  // "/spaces/abc" gives NaN, which the API answers with 404 like any unknown id
+  // "/spaces/abc" gives NaN, which the API answers with 422; isNotFound treats it like an unknown id (404)
   const { data: space, isLoading, error, refetch, isRefetching } = useSpace(Number(id))
   const { data: user, isPending: userPending } = useCurrentUser()
   const openLogin = useLoginDialog()
 
   if (isLoading || (space && space.status === 'draft' && userPending)) return <SpaceDetailSkeleton />
 
-  if (error instanceof NotFoundError || (space && !canView(space, user?.id))) {
+  if (isNotFound(error) || (space && !canView(space, user?.id))) {
     return (
       <EmptyState
         icon={MapPinOff}

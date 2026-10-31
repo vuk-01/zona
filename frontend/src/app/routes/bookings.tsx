@@ -4,6 +4,7 @@ import { HeroPanel } from '@/components/layout/hero-panel'
 import { PageTitle } from '@/components/layout/page-title'
 import { useCurrentUser } from '@/features/auth/api/use-auth'
 import { BookingsList } from '@/features/bookings/components/bookings-list'
+import { MAX_PAGE_SIZE } from '@/features/spaces/api/spaces-api'
 import { useSpaces } from '@/features/spaces/api/use-spaces'
 import type { Space } from '@/features/spaces/types'
 
@@ -13,11 +14,11 @@ import type { Space } from '@/features/spaces/types'
 // next to the tabs.
 export function Bookings() {
   const { data: user } = useCurrentUser()
-  const { data: spaces, isError } = useSpaces()
+  const { data: spaces, isError } = useSpaces({}, { size: MAX_PAGE_SIZE })
 
   const spacesById = useMemo(() => {
     if (isError) return new Map<number, Space>()
-    return spaces && new Map(spaces.map((space) => [space.id, space]))
+    return spaces && new Map(spaces.items.map((space) => [space.id, space]))
   }, [spaces, isError])
 
   const title = <PageTitle>My bookings</PageTitle>

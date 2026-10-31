@@ -12,7 +12,7 @@ import { BackToSpacesLink } from '@/features/spaces/components/back-to-spaces-li
 import { SpaceForm } from '@/features/spaces/components/space-form'
 import { SpaceFormSkeleton } from '@/features/spaces/components/space-form-skeleton'
 import { savedNotice } from '@/features/spaces/hooks/use-saved-notice'
-import { NotFoundError } from '@/lib/mock-db'
+import { isNotFound } from '@/lib/api-client'
 
 // Wrapped in RequireAuth mode="host", so the user is signed in once the page renders. The back link and
 // the title share the hero panel in every state, so the title stays mounted (and keeps focus) when the
@@ -20,13 +20,13 @@ import { NotFoundError } from '@/lib/mock-db'
 export function HostSpaceEdit() {
   const { id } = useParams()
   const navigate = useNavigate()
-  // "/host/spaces/abc/edit" gives NaN, which the API answers with 404 like any unknown id
+  // "/host/spaces/abc/edit" gives NaN, which the API answers with 422; isNotFound treats it like an unknown id (404)
   const { data: space, isLoading, error, refetch, isRefetching } = useSpace(Number(id))
   const { data: user } = useCurrentUser()
   const updateSpace = useUpdateSpace()
 
   // Someone else's space is "not found" too: a host only ever edits their own
-  if (error instanceof NotFoundError || (space && space.host.id !== user?.id)) {
+  if (isNotFound(error) || (space && space.host.id !== user?.id)) {
     return (
       <EmptyState
         icon={MapPinOff}
